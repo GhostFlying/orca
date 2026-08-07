@@ -233,7 +233,7 @@ describe('createWorktreeSymlinks', () => {
     expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
   })
 
-  it('reports a deadline crossed by the final materialization operation', async () => {
+  it('does not report a deadline when the final materialization operation completed', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
     let now = 100
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
@@ -254,7 +254,7 @@ describe('createWorktreeSymlinks', () => {
       nowSpy.mockRestore()
     }
 
-    expect(onDeadlineExceeded).toHaveBeenCalledOnce()
+    expect(onDeadlineExceeded).not.toHaveBeenCalled()
     expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('SECRET=1\n')
   })
 

@@ -1546,7 +1546,7 @@ export class OrcaRuntimeRpcServer {
 
     try {
       return await this.dispatcher.dispatch(request, {
-        signal: longPoll ? context?.signal : undefined
+        signal: longPoll || request.method === 'worktree.create' ? context?.signal : undefined
       })
     } finally {
       this.releaseLongPoll(longPoll)

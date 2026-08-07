@@ -111,7 +111,39 @@ describe('addWorktreeOp', () => {
     )
   })
 
-  it.each([Number.NaN, Number.POSITIVE_INFINITY, 999, 7_200_001])(
+  it('does not reuse a cancelled request signal for post-add metadata', async () => {
+    const controller = new AbortController()
+    const git = vi.fn<GitExec>(async (args, _cwd, options) => {
+      if (args[0] === 'worktree' && args[1] === 'add') {
+        controller.abort()
+        return { stdout: '', stderr: '' }
+      }
+      if (options?.signal?.aborted) {
+        throw Object.assign(new Error('cancelled'), { name: 'AbortError' })
+      }
+      return { stdout: args[1] === '--get' ? 'true\n' : '', stderr: '' }
+    })
+
+    await addWorktreeOp(
+      git,
+      {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        base: 'origin/main',
+        timeoutMs: 420_000
+      },
+      { signal: controller.signal }
+    )
+
+    const postAddCalls = git.mock.calls.filter(([args]) => args[0] === 'config')
+    expect(postAddCalls).toHaveLength(2)
+    for (const [, , options] of postAddCalls) {
+      expect(options?.signal).toBeUndefined()
+    }
+  })
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, 7_200_001])(
     'rejects an invalid worktree add timeout: %s',
     async (timeoutMs) => {
       const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))

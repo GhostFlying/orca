@@ -4113,6 +4113,133 @@ describe('OrcaRuntimeService', () => {
     expect(setWorktreeMeta).not.toHaveBeenCalled()
   })
 
+  it('removes a runtime-created push remote after registration rollback', async () => {
+    const createdPath = '/tmp/workspaces/push-remote-registration-timeout'
+    const remoteName = 'pr-contributor-orca'
+    const remoteUrl = 'git@github.com:contributor/orca.git'
+    const runtime = new OrcaRuntimeService(store)
+    computeWorktreePathMock.mockReturnValue(createdPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdPath)
+    listWorktreesStrictMock.mockRejectedValueOnce(new Error('git timed out.'))
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'remote' && args.length === 1) {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return {
+          stdout: args[2] === remoteName ? `${remoteUrl}\n` : 'git@github.com:stablyai/orca.git\n',
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    try {
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: 'id:repo-1',
+          name: 'push-remote-registration-timeout',
+          baseBranch: 'abc123',
+          pushTarget: {
+            remoteName,
+            branchName: 'contributor/runtime-timeout',
+            remoteUrl
+          }
+        })
+      ).rejects.toThrow('git timed out.')
+
+      expect(rollbackFailedWorktreeCreateMock).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdPath,
+        'push-remote-registration-timeout',
+        false,
+        {}
+      )
+      expect(gitSpy).toHaveBeenCalledWith(['remote', 'add', remoteName, remoteUrl], {
+        cwd: TEST_REPO_PATH
+      })
+      expect(gitSpy).toHaveBeenCalledWith(['remote', 'remove', remoteName], {
+        cwd: TEST_REPO_PATH
+      })
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
+  it('does not reuse an aborted create signal for local rollback', async () => {
+    const createdPath = '/tmp/workspaces/cancelled-registration'
+    const controller = new AbortController()
+    const runtime = new OrcaRuntimeService(store)
+    computeWorktreePathMock.mockReturnValue(createdPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdPath)
+    listWorktreesStrictMock.mockImplementationOnce(async (_repoPath, options) => {
+      expect((options as { signal?: AbortSignal } | undefined)?.signal).toBe(controller.signal)
+      controller.abort()
+      throw Object.assign(new Error('cancelled'), { name: 'AbortError' })
+    })
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'cancelled-registration',
+        signal: controller.signal
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      createdPath,
+      'cancelled-registration',
+      expect.any(String),
+      expect.any(Boolean),
+      false,
+      expect.objectContaining({ signal: controller.signal })
+    )
+    expect(rollbackFailedWorktreeCreateMock).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      createdPath,
+      'cancelled-registration',
+      false,
+      {}
+    )
+  })
+
+  it('does not bind a shared base refresh to one create caller signal', async () => {
+    const createdPath = '/tmp/workspaces/cancelled-refresh'
+    const controller = new AbortController()
+    const refresh = deferred<{ ok: true }>()
+    const runtime = new OrcaRuntimeService(store)
+    computeWorktreePathMock.mockReturnValue(createdPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdPath)
+    vi.spyOn(runtime, 'resolveRemoteTrackingBase').mockResolvedValue({
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    })
+    vi.spyOn(runtime, 'hasRemoteTrackingRef').mockResolvedValue(true)
+    const refreshSpy = vi
+      .spyOn(runtime, 'getOrStartRemoteTrackingBaseRefresh')
+      .mockReturnValue(refresh.promise)
+
+    const create = runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'cancelled-refresh',
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(refreshSpy).toHaveBeenCalledTimes(1))
+    controller.abort()
+
+    await expect(create).rejects.toMatchObject({ name: 'AbortError' })
+    expect(refreshSpy.mock.calls[0]?.[2]).toEqual({
+      timeout: expect.any(Number)
+    })
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+
+    refresh.resolve({ ok: true })
+    await expect(refresh.promise).resolves.toEqual({ ok: true })
+  })
+
   it('creates additional workspace metadata for folder-mode repos through runtime create', async () => {
     const folderRepo = {
       id: 'folder-repo',

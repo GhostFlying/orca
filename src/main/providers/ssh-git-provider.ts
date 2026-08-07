@@ -761,15 +761,22 @@ export class SshGitProvider implements IGitProvider {
   async removeWorktree(
     worktreePath: string,
     force?: boolean,
-    options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
+    options?: { deleteBranch?: boolean; forceBranchDelete?: boolean; timeoutMs?: number }
   ): Promise<RemoveWorktreeResult> {
+    const { timeoutMs, ...requestOptions } = options ?? {}
+    const request = {
+      worktreePath,
+      force,
+      ...requestOptions,
+      ...(timeoutMs ? { timeoutMs } : {})
+    }
     return this.runWithDiffDedupeClear(
       async () =>
-        ((await this.mux.request('git.removeWorktree', {
-          worktreePath,
-          force,
-          ...options
-        })) ?? {}) as RemoveWorktreeResult
+        ((await (timeoutMs
+          ? this.mux.request('git.removeWorktree', request, {
+              timeoutMs: timeoutMs + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
+            })
+          : this.mux.request('git.removeWorktree', request))) ?? {}) as RemoveWorktreeResult
     )
   }
 

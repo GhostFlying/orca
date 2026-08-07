@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   WORKTREE_CREATE_TIMEOUT_DEFAULTS,
+  getMaximumWorktreeCreateTransportTimeoutMs,
+  getWorktreeCreateTransportTimeoutMs,
   normalizeWorktreeCreateTimeoutOverrides,
   normalizeWorktreeCreateTimeouts,
   resolveWorktreeCreateTimeouts
@@ -79,5 +81,10 @@ describe('worktree create timeouts', () => {
       registrationMs: 40_000,
       materializationMs: 600_000
     })
+  })
+
+  it('adds transport headroom to resolved and maximum stage budgets', () => {
+    expect(getWorktreeCreateTransportTimeoutMs(WORKTREE_CREATE_TIMEOUT_DEFAULTS)).toBe(600_000)
+    expect(getMaximumWorktreeCreateTransportTimeoutMs()).toBe(28_830_000)
   })
 })

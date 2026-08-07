@@ -206,10 +206,11 @@ async function materializeWorktreePaths(
   // are refused for the same reason one `node_modules` entry is.
   const copyBudget = createWorktreeCopyBudgetTracker(options.copyBudget)
   const skipped: SkippedWorktreeCopyPath[] = []
+  let stoppedEarly = false
 
   for (const rawPath of paths) {
     if (effectiveOptions.deadlineAt !== undefined && Date.now() >= effectiveOptions.deadlineAt) {
-      effectiveOptions.onDeadlineExceeded?.()
+      stoppedEarly = true
       break
     }
     const safePath = getSafeRelativePath(rawPath)
@@ -310,7 +311,7 @@ async function materializeWorktreePaths(
       )
     }
   }
-  if (effectiveOptions.deadlineAt !== undefined && Date.now() >= effectiveOptions.deadlineAt) {
+  if (stoppedEarly) {
     effectiveOptions.onDeadlineExceeded?.()
   }
   return skipped

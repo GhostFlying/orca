@@ -43,7 +43,7 @@ describe('refreshLocalBaseRefForWorktreeCreateOp timeout', () => {
     ])
   })
 
-  it('fails when a completed subprocess has exhausted the refresh stage', async () => {
+  it('keeps a completed subprocess result and fails before the next command', async () => {
     let now = 1_000
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
     const git = vi.fn<GitExec>().mockImplementationOnce(async () => {
@@ -71,4 +71,33 @@ describe('refreshLocalBaseRefForWorktreeCreateOp timeout', () => {
       refreshLocalBaseRefForWorktreeCreateOp(git, params, new GitCapabilityCache())
     ).rejects.toThrow('Worktree base ref refresh timed out.')
   })
+
+  it('preserves timeout-shaped Git errors when no refresh deadline was requested', async () => {
+    const error = Object.assign(new Error('proxy timed out.'), { code: 'ETIMEDOUT' })
+    const git = vi.fn<GitExec>().mockRejectedValue(error)
+
+    await expect(
+      refreshLocalBaseRefForWorktreeCreateOp(
+        git,
+        { ...params, timeoutMs: undefined },
+        new GitCapabilityCache()
+      )
+    ).rejects.toBe(error)
+  })
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, 7_200_001])(
+    'rejects an invalid local base ref refresh timeout: %s',
+    async (timeoutMs) => {
+      const git = vi.fn<GitExec>()
+
+      await expect(
+        refreshLocalBaseRefForWorktreeCreateOp(
+          git,
+          { ...params, timeoutMs },
+          new GitCapabilityCache()
+        )
+      ).rejects.toThrow('Invalid local base ref refresh timeout.')
+      expect(git).not.toHaveBeenCalled()
+    }
+  )
 })

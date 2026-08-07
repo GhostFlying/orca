@@ -913,6 +913,7 @@ import {
   configureCreatedWorktreePushTarget,
   prepareWorktreePushTarget
 } from '../ipc/worktree-remote'
+import { acquireWorktreePushTargetPreparationLease } from '../ipc/worktree-push-target-setup'
 import {
   getBranchNameOverrideCandidate,
   getWorktreeCreateCandidate,
@@ -21577,6 +21578,7 @@ export class OrcaRuntimeService {
   async createManagedWorktree(args: {
     repoSelector: string
     name: string
+    signal?: AbortSignal
     timeouts?: WorktreeCreateTimeoutOverrides
     baseBranch?: string
     compareBaseRef?: string
@@ -21844,8 +21846,43 @@ export class OrcaRuntimeService {
     const settings = createSettings
     const worktreePathSettings = getWorktreePathSettings(repo, settings)
     const localGitExecOptions = getLocalProjectGitExecOptions(this.requireStore(), repo)
-    const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
-    const hasLocalWorktreeGitOptions = hasLocalGitOptions(localWorktreeGitOptions)
+    const localWorktreeCleanupGitOptions = getLocalProjectWorktreeGitOptions(
+      this.requireStore(),
+      repo
+    )
+    const localWorktreeGitOptions = {
+      ...localWorktreeCleanupGitOptions,
+      ...(args.signal ? { signal: args.signal } : {})
+    }
+    const waitForSharedFetch = <T>(operation: Promise<T>): Promise<T> => {
+      if (!args.signal) {
+        return operation
+      }
+      if (args.signal.aborted) {
+        return Promise.reject(
+          Object.assign(new Error('Worktree creation was cancelled.'), { name: 'AbortError' })
+        )
+      }
+      return new Promise<T>((resolve, reject) => {
+        const onAbort = (): void => {
+          reject(
+            Object.assign(new Error('Worktree creation was cancelled.'), { name: 'AbortError' })
+          )
+        }
+        args.signal?.addEventListener('abort', onAbort, { once: true })
+        void operation.then(
+          (result) => {
+            args.signal?.removeEventListener('abort', onAbort)
+            resolve(result)
+          },
+          (error: unknown) => {
+            args.signal?.removeEventListener('abort', onAbort)
+            reject(error)
+          }
+        )
+      })
+    }
+    const hasLocalWorktreeGitOptions = hasLocalGitOptions(localWorktreeCleanupGitOptions)
     const localWorktreeGitOptionArgs: [] | [{ wslDistro?: string }] = hasLocalWorktreeGitOptions
       ? [localWorktreeGitOptions]
       : []
@@ -22064,13 +22101,11 @@ export class OrcaRuntimeService {
       if (!hadRemoteTrackingBaseRef && hasLocalBaseRef) {
         remoteTrackingBase = null
       } else {
-        const refreshResult = await this.getOrStartRemoteTrackingBaseRefresh(
-          repo.path,
-          remoteTrackingBase,
-          {
-            ...localWorktreeGitOptions,
+        const refreshResult = await waitForSharedFetch(
+          this.getOrStartRemoteTrackingBaseRefresh(repo.path, remoteTrackingBase, {
+            ...localWorktreeCleanupGitOptions,
             timeout: remainingRefreshMs()
-          }
+          })
         )
         if (!refreshResult.ok && !hadRemoteTrackingBaseRef) {
           remainingRefreshMs()
@@ -22106,12 +22141,17 @@ export class OrcaRuntimeService {
       // Why: local bases keep legacy best-effort fetch behavior. Verified PR
       // SHA bases already have the commit object needed by `git worktree add`.
       try {
-        await this.fetchRemoteWithCache(repo.path, 'origin', {
-          ...localWorktreeGitOptions,
-          timeout: remainingRefreshMs()
-        })
+        await waitForSharedFetch(
+          this.fetchRemoteWithCache(repo.path, 'origin', {
+            ...localWorktreeCleanupGitOptions,
+            timeout: remainingRefreshMs()
+          })
+        )
         remainingRefreshMs()
-      } catch {
+      } catch (error) {
+        if (args.signal?.aborted) {
+          throw error
+        }
         // Why: belt-and-suspenders. fetchRemoteWithCache already logs and does
         // not throw; the outer try/catch guarantees create-path tolerance even
         // if future refactors change that contract.
@@ -22126,17 +22166,25 @@ export class OrcaRuntimeService {
     }
 
     let preparedPushTarget: GitPushTarget | undefined
+    const releasePushTargetPreparation = args.pushTarget
+      ? await acquireWorktreePushTargetPreparationLease(repo.path, args.pushTarget)
+      : undefined
     if (args.pushTarget) {
       // Why: fork-PR worktrees created through a remote runtime need the same
       // upstream target setup as local desktop creates, or Push would publish
       // to the wrong remote after the client/server split.
-      preparedPushTarget = await prepareWorktreePushTarget(
-        repo.path,
-        args.pushTarget,
-        this.store,
-        repo.id,
-        localWorktreeGitOptions
-      )
+      try {
+        preparedPushTarget = await prepareWorktreePushTarget(
+          repo.path,
+          args.pushTarget,
+          this.store,
+          repo.id,
+          localWorktreeGitOptions
+        )
+      } catch (error) {
+        releasePushTargetPreparation?.()
+        throw error
+      }
     }
 
     const suggestLocalBaseRefUpdate =
@@ -22150,19 +22198,11 @@ export class OrcaRuntimeService {
       ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
     }
     const defaultAddWorktreeOption = addProjectGitOptions()
-    const addResult: AddWorktreeResult =
-      (await (sparseDirectories.length > 0
-        ? checkoutExistingBranch
-          ? addSparseWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              sparseDirectories,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              addProjectGitOptions(existingBranchOption)
-            )
-          : suggestLocalBaseRefUpdate
+    let addResult: AddWorktreeResult
+    try {
+      addResult =
+        (await (sparseDirectories.length > 0
+          ? checkoutExistingBranch
             ? addSparseWorktree(
                 repo.path,
                 worktreePath,
@@ -22170,9 +22210,9 @@ export class OrcaRuntimeService {
                 sparseDirectories,
                 baseBranch,
                 settings.refreshLocalBaseRefOnWorktreeCreate,
-                addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
+                addProjectGitOptions(existingBranchOption)
               )
-            : remoteTrackingBaseOption
+            : suggestLocalBaseRefUpdate
               ? addSparseWorktree(
                   repo.path,
                   worktreePath,
@@ -22180,9 +22220,9 @@ export class OrcaRuntimeService {
                   sparseDirectories,
                   baseBranch,
                   settings.refreshLocalBaseRefOnWorktreeCreate,
-                  addProjectGitOptions(remoteTrackingBaseOption)
+                  addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
                 )
-              : defaultAddWorktreeOption
+              : remoteTrackingBaseOption
                 ? addSparseWorktree(
                     repo.path,
                     worktreePath,
@@ -22190,27 +22230,27 @@ export class OrcaRuntimeService {
                     sparseDirectories,
                     baseBranch,
                     settings.refreshLocalBaseRefOnWorktreeCreate,
-                    defaultAddWorktreeOption
+                    addProjectGitOptions(remoteTrackingBaseOption)
                   )
-                : addSparseWorktree(
-                    repo.path,
-                    worktreePath,
-                    branchName,
-                    sparseDirectories,
-                    baseBranch,
-                    settings.refreshLocalBaseRefOnWorktreeCreate
-                  )
-        : checkoutExistingBranch
-          ? addWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              false,
-              addProjectGitOptions(existingBranchOption)
-            )
-          : suggestLocalBaseRefUpdate
+                : defaultAddWorktreeOption
+                  ? addSparseWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      sparseDirectories,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate,
+                      defaultAddWorktreeOption
+                    )
+                  : addSparseWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      sparseDirectories,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate
+                    )
+          : checkoutExistingBranch
             ? addWorktree(
                 repo.path,
                 worktreePath,
@@ -22218,9 +22258,9 @@ export class OrcaRuntimeService {
                 baseBranch,
                 settings.refreshLocalBaseRefOnWorktreeCreate,
                 false,
-                addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
+                addProjectGitOptions(existingBranchOption)
               )
-            : remoteTrackingBaseOption
+            : suggestLocalBaseRefUpdate
               ? addWorktree(
                   repo.path,
                   worktreePath,
@@ -22228,9 +22268,9 @@ export class OrcaRuntimeService {
                   baseBranch,
                   settings.refreshLocalBaseRefOnWorktreeCreate,
                   false,
-                  addProjectGitOptions(remoteTrackingBaseOption)
+                  addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
                 )
-              : defaultAddWorktreeOption
+              : remoteTrackingBaseOption
                 ? addWorktree(
                     repo.path,
                     worktreePath,
@@ -22238,15 +22278,36 @@ export class OrcaRuntimeService {
                     baseBranch,
                     settings.refreshLocalBaseRefOnWorktreeCreate,
                     false,
-                    defaultAddWorktreeOption
+                    addProjectGitOptions(remoteTrackingBaseOption)
                   )
-                : addWorktree(
-                    repo.path,
-                    worktreePath,
-                    branchName,
-                    baseBranch,
-                    settings.refreshLocalBaseRefOnWorktreeCreate
-                  ))) ?? {}
+                : defaultAddWorktreeOption
+                  ? addWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate,
+                      false,
+                      defaultAddWorktreeOption
+                    )
+                  : addWorktree(
+                      repo.path,
+                      worktreePath,
+                      branchName,
+                      baseBranch,
+                      settings.refreshLocalBaseRefOnWorktreeCreate
+                    ))) ?? {}
+    } catch (error) {
+      await cleanupUnusedWorktreePushTargetRemote(
+        repo.path,
+        `${repo.id}::${worktreePath}`,
+        preparedPushTarget,
+        this.store,
+        localWorktreeCleanupGitOptions
+      )
+      releasePushTargetPreparation?.()
+      throw error
+    }
 
     let configuredPushTarget: GitPushTarget | undefined
     let gitWorktrees: GitWorktreeInfo[]
@@ -22256,18 +22317,6 @@ export class OrcaRuntimeService {
         createTimeouts.registrationMs,
         `Worktree registration timed out after ${createTimeouts.registrationMs}ms.`
       )
-      if (preparedPushTarget) {
-        configuredPushTarget = await configureCreatedWorktreePushTarget(
-          worktreePath,
-          branchName,
-          preparedPushTarget,
-          {
-            ...localWorktreeGitOptions,
-            timeout: registrationDeadline.remainingMs()
-          }
-        )
-      }
-
       gitWorktrees = hasLocalWorktreeGitOptions
         ? await listWorktreesStrict(repo.path, {
             ...localWorktreeGitOptions,
@@ -22275,6 +22324,7 @@ export class OrcaRuntimeService {
             detectSparseCheckout: false
           })
         : await listWorktreesStrict(repo.path, {
+            ...(args.signal ? { signal: args.signal } : {}),
             timeout: registrationDeadline.remainingMs(),
             detectSparseCheckout: false
           })
@@ -22284,6 +22334,17 @@ export class OrcaRuntimeService {
         throw new Error('Worktree created but not found in listing')
       }
       created = reconciled
+      if (preparedPushTarget) {
+        configuredPushTarget = await configureCreatedWorktreePushTarget(
+          created.path,
+          branchName,
+          preparedPushTarget,
+          {
+            ...localWorktreeGitOptions,
+            timeout: registrationDeadline.remainingMs()
+          }
+        )
+      }
     } catch (error) {
       try {
         await rollbackFailedWorktreeCreate(
@@ -22291,14 +22352,23 @@ export class OrcaRuntimeService {
           worktreePath,
           branchName,
           checkoutExistingBranch,
-          localWorktreeGitOptions
+          localWorktreeCleanupGitOptions
         )
       } catch (cleanupError) {
         const wrapped = error instanceof Error ? error : new Error(String(error))
         wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${worktreePath}" may need manual removal)`
         console.warn(`[worktree-create] Failed to roll back "${worktreePath}"`, cleanupError)
+        releasePushTargetPreparation?.()
         throw wrapped
       }
+      await cleanupUnusedWorktreePushTargetRemote(
+        repo.path,
+        `${repo.id}::${worktreePath}`,
+        preparedPushTarget,
+        this.store,
+        localWorktreeCleanupGitOptions
+      )
+      releasePushTargetPreparation?.()
       throw error
     }
 
@@ -22312,7 +22382,7 @@ export class OrcaRuntimeService {
       : shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)
         ? { displayName: effectiveRequestedName }
         : {}
-    const meta = this.store.setWorktreeMeta(worktreeId, {
+    const metaUpdates: Partial<WorktreeMeta> = {
       // Why: worktree IDs are path-derived. If a path is deleted outside Orca
       // and later recreated, creation must mint a fresh instance identity so
       // stale lineage records tied to the old occupant fail validation.
@@ -22373,7 +22443,13 @@ export class OrcaRuntimeService {
       ...(args.comment !== undefined ? { comment: args.comment } : {}),
       ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
       ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
-    })
+    }
+    let meta: WorktreeMeta
+    try {
+      meta = this.store.setWorktreeMeta(worktreeId, metaUpdates)
+    } finally {
+      releasePushTargetPreparation?.()
+    }
     const worktree = {
       ...mergeWorktree(repo.id, created, meta),
       hostId: meta.hostId ?? getRepoExecutionHostId(repo)
@@ -22769,6 +22845,7 @@ export class OrcaRuntimeService {
     repo: Repo,
     args: {
       name: string
+      signal?: AbortSignal
       timeouts?: WorktreeCreateTimeoutOverrides
       baseBranch?: string
       compareBaseRef?: string
@@ -22861,7 +22938,8 @@ export class OrcaRuntimeService {
       },
       repo,
       this.store as unknown as Store,
-      headlessWindow
+      headlessWindow,
+      { signal: args.signal }
     )
 
     if (args.comment !== undefined) {
@@ -23196,6 +23274,9 @@ export class OrcaRuntimeService {
     }
 
     const promise = this.enqueueRemoteFetch(key, () => {
+      if (this.getFreshFetchCompletedAt(key) !== null) {
+        return Promise.resolve({ ok: true })
+      }
       const remaining = deadlineAt - Date.now()
       if (remaining <= 0) {
         return Promise.resolve({ ok: false, errorKind: 'git_error' })

@@ -8,6 +8,51 @@ import type { GitPushTarget } from '../../shared/types'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { GitRemoteExec } from './worktree-push-target-cleanup'
 
+const pushTargetPreparationTails = new Map<string, Promise<void>>()
+
+function pushTargetPreparationKey(repoPath: string, target: GitPushTarget): string | null {
+  if (!target.remoteUrl) {
+    return null
+  }
+  const parsed = parseGitHubOwnerRepo(target.remoteUrl)
+  const remoteKey = parsed
+    ? `${parsed.owner.toLowerCase()}/${parsed.repo.toLowerCase()}`
+    : target.remoteUrl
+  return `${repoPath}\0${remoteKey}`
+}
+
+export async function acquireWorktreePushTargetPreparationLease(
+  repoPath: string,
+  target: GitPushTarget
+): Promise<() => void> {
+  const key = pushTargetPreparationKey(repoPath, target)
+  if (!key) {
+    return () => {}
+  }
+  const previous = pushTargetPreparationTails.get(key) ?? Promise.resolve()
+  let releaseSlot!: () => void
+  const slot = new Promise<void>((resolve) => {
+    releaseSlot = resolve
+  })
+  const tail = previous.catch(() => {}).then(() => slot)
+  pushTargetPreparationTails.set(key, tail)
+  await previous.catch(() => {})
+
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    releaseSlot()
+    void tail.finally(() => {
+      if (pushTargetPreparationTails.get(key) === tail) {
+        pushTargetPreparationTails.delete(key)
+      }
+    })
+  }
+}
+
 export async function findRemoteForUrl(
   execGit: GitRemoteExec,
   repoPath: string,
@@ -76,11 +121,13 @@ export async function prepareWorktreePushTargetWithExec(
   execGit: GitRemoteExec,
   repoPath: string,
   target: GitPushTarget,
-  isRemoteCreatedByKnownWorktree: (existingRemote: string) => boolean
+  isRemoteCreatedByKnownWorktree: (existingRemote: string) => boolean,
+  cleanupExecGit: GitRemoteExec = execGit
 ): Promise<GitPushTarget> {
   const { remoteCreated: _ignoredRemoteCreated, ...sanitizedTarget } = target
   let remoteName = target.remoteName
   let remoteCreated = false
+  let createdThisCall = false
   if (target.remoteUrl) {
     const existingRemote = await findRemoteForUrl(execGit, repoPath, target.remoteUrl)
     if (existingRemote) {
@@ -92,17 +139,29 @@ export async function prepareWorktreePushTargetWithExec(
       remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
       await execGit(['remote', 'add', remoteName, target.remoteUrl], repoPath)
       remoteCreated = true
+      createdThisCall = true
     }
   }
 
-  await execGit(
-    [
-      'fetch',
-      remoteName,
-      `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
-    ],
-    repoPath
-  )
+  try {
+    await execGit(
+      [
+        'fetch',
+        remoteName,
+        `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
+      ],
+      repoPath
+    )
+  } catch (error) {
+    if (createdThisCall) {
+      try {
+        await cleanupExecGit(['remote', 'remove', remoteName], repoPath)
+      } catch {
+        // Keep the fetch failure actionable; later retries can reuse or disambiguate the remote.
+      }
+    }
+    throw error
+  }
   return {
     ...sanitizedTarget,
     remoteName,

@@ -1,15 +1,19 @@
 import * as path from 'node:path'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
-import {
-  WORKTREE_CREATE_TIMEOUT_MAX_MS,
-  WORKTREE_CREATE_TIMEOUT_MIN_MS
-} from '../shared/worktree-create-timeouts'
+import { WORKTREE_CREATE_TIMEOUT_MAX_MS } from '../shared/worktree-create-timeouts'
 import type { GitExec } from './git-handler-ops'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
 export { readRelayWorktreeList } from './git-handler-worktree-list'
 
 function remainingTimeout(deadlineAt: number | undefined, fallback: number | undefined) {
-  return deadlineAt === undefined ? fallback : Math.max(1, deadlineAt - Date.now())
+  if (deadlineAt === undefined) {
+    return fallback
+  }
+  const remaining = deadlineAt - Date.now()
+  if (remaining <= 0) {
+    throw new Error('Worktree add and checkout timed out.')
+  }
+  return remaining
 }
 
 function rethrowIfRequestAborted(signal: AbortSignal | undefined, error: unknown): void {
@@ -61,7 +65,7 @@ export async function addWorktreeOp(
     timeoutValue !== undefined &&
     (typeof timeoutValue !== 'number' ||
       !Number.isFinite(timeoutValue) ||
-      timeoutValue < WORKTREE_CREATE_TIMEOUT_MIN_MS ||
+      timeoutValue <= 0 ||
       timeoutValue > WORKTREE_CREATE_TIMEOUT_MAX_MS)
   ) {
     throw new Error('Invalid worktree add timeout.')
@@ -134,7 +138,16 @@ export async function addWorktreeOp(
   }
 
   if (effectiveBase) {
-    await persistRelayWorktreeCreationBase(stageGit, targetDir, branchName, effectiveBase, signal)
+    const metadataGit: GitExec = (args, cwd, childOptions) => {
+      if (deadlineAt === undefined && childOptions === undefined) {
+        return git(args, cwd)
+      }
+      return git(args, cwd, {
+        ...childOptions,
+        ...(deadlineAt === undefined ? {} : { timeout: Math.max(1_000, deadlineAt - Date.now()) })
+      })
+    }
+    await persistRelayWorktreeCreationBase(metadataGit, targetDir, branchName, effectiveBase)
   }
 
   // Why: best-effort write so a deliberate user value (any scope) is
@@ -146,10 +159,13 @@ export async function addWorktreeOp(
   try {
     let alreadySet = false
     try {
-      await stageGit(['config', '--get', 'push.autoSetupRemote'], targetDir)
+      await git(
+        ['config', '--get', 'push.autoSetupRemote'],
+        targetDir,
+        deadlineAt === undefined ? undefined : { timeout: Math.max(1_000, deadlineAt - Date.now()) }
+      )
       alreadySet = true
     } catch (readError) {
-      rethrowIfRequestAborted(signal, readError)
       // Why: `git config --get` exits 1 only when the key is unset at every
       // scope. Any other code is a real read failure (corrupt config,
       // locked file) — surface it via the outer catch instead of falling
@@ -160,10 +176,13 @@ export async function addWorktreeOp(
       }
     }
     if (!alreadySet) {
-      await stageGit(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir)
+      await git(
+        ['config', '--local', 'push.autoSetupRemote', 'true'],
+        targetDir,
+        deadlineAt === undefined ? undefined : { timeout: Math.max(1_000, deadlineAt - Date.now()) }
+      )
     }
   } catch (error) {
-    rethrowIfRequestAborted(signal, error)
     console.warn(`relay addWorktree: failed to set push.autoSetupRemote for ${targetDir}`, error)
   }
 }

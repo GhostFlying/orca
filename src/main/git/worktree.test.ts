@@ -783,6 +783,32 @@ describe('addWorktree', () => {
     ])
   })
 
+  it('does not reuse a cancelled create signal for post-add metadata', async () => {
+    const controller = new AbortController()
+    gitExecFileAsyncMock.mockImplementation(
+      async (args: string[], options?: { signal?: AbortSignal }) => {
+        if (args[0] === 'worktree' && args[1] === 'add') {
+          controller.abort()
+          return { stdout: '' }
+        }
+        if (options?.signal?.aborted) {
+          throw Object.assign(new Error('cancelled'), { name: 'AbortError' })
+        }
+        return { stdout: args[1] === '--get' ? 'true\n' : '' }
+      }
+    )
+
+    await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', false, false, {
+      signal: controller.signal
+    })
+
+    const postAddCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'config')
+    expect(postAddCalls).toHaveLength(2)
+    for (const [, options] of postAddCalls) {
+      expect(options.signal).toBeUndefined()
+    }
+  })
+
   it('checks out a selected existing local branch without creating a new branch', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
 
@@ -1086,6 +1112,23 @@ describe('addWorktree', () => {
       '-D',
       '--',
       'feature/test'
+    ])
+  })
+
+  it('does not roll back the same branch from a different path', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'worktree /repo-other\nHEAD abc123\nbranch refs/heads/feature/test\n'
+    })
+
+    await expect(
+      rollbackFailedWorktreeCreate('/repo', '/repo-feature', 'feature/test', false)
+    ).resolves.toBe(false)
+
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'worktree',
+      'remove',
+      '--force',
+      '/repo-other'
     ])
   })
 

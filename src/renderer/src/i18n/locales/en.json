@@ -6380,6 +6380,7 @@
             "timeout": "timeout",
             "seconds": "seconds",
             "slowNetwork": "slow network",
+            "refreshBase": "refresh base",
             "gitWorktreeAdd": "git worktree add",
             "registration": "registration",
             "materialization": "materialization"
@@ -9111,6 +9112,7 @@
             "worktreeCreationTimeoutsDescription": "Override worktree creation stage timeouts for this project.",
             "timeout": "timeout",
             "slowNetwork": "slow network",
+            "refreshBase": "refresh base",
             "gitWorktreeAdd": "git worktree add",
             "registration": "registration",
             "materialization": "materialization",

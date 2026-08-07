@@ -1,6 +1,7 @@
 import type { GitExec } from './git-handler-ops'
 import { areRelayWorktreePathsEqual, readRelayWorktreeList } from './git-handler-worktree-ops'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
+import { WORKTREE_CREATE_TIMEOUT_MAX_MS } from '../shared/worktree-create-timeouts'
 
 class RelayWorktreeCreateRefreshTimeoutError extends Error {
   constructor() {
@@ -36,12 +37,17 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
   const remoteTrackingRef = params.remoteTrackingRef as string
   const ownerWorktreePath = params.ownerWorktreePath as string | undefined
   const checkOnly = params.checkOnly === true
-  const timeout =
-    typeof params.timeoutMs === 'number' &&
-    Number.isFinite(params.timeoutMs) &&
-    params.timeoutMs > 0
-      ? params.timeoutMs
-      : undefined
+  const timeoutValue = params.timeoutMs
+  if (
+    timeoutValue !== undefined &&
+    (typeof timeoutValue !== 'number' ||
+      !Number.isFinite(timeoutValue) ||
+      timeoutValue <= 0 ||
+      timeoutValue > WORKTREE_CREATE_TIMEOUT_MAX_MS)
+  ) {
+    throw new Error('Invalid local base ref refresh timeout.')
+  }
+  const timeout = timeoutValue as number | undefined
   const deadlineAt = timeout === undefined ? undefined : Date.now() + timeout
   const execute: GitExec = async (args, cwd, options) => {
     const remaining = deadlineAt === undefined ? undefined : deadlineAt - Date.now()
@@ -52,19 +58,14 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
       if (remaining === undefined && options === undefined) {
         return await git(args, cwd)
       }
-      const result = await git(args, cwd, {
+      return await git(args, cwd, {
         ...options,
         ...(remaining === undefined ? {} : { timeout: remaining })
       })
-      if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
-        throw new RelayWorktreeCreateRefreshTimeoutError()
-      }
-      return result
     } catch (error) {
       if (
         error instanceof RelayWorktreeCreateRefreshTimeoutError ||
-        isGitCommandTimeout(error) ||
-        (deadlineAt !== undefined && Date.now() >= deadlineAt)
+        (deadlineAt !== undefined && (isGitCommandTimeout(error) || Date.now() >= deadlineAt))
       ) {
         throw new RelayWorktreeCreateRefreshTimeoutError()
       }

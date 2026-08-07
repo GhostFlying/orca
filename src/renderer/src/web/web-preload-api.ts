@@ -162,6 +162,7 @@ import {
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
+const BROWSER_LOCAL_RUNTIME_SETTINGS_STORAGE_KEY = `${SETTINGS_STORAGE_KEY}.runtime:browser-local`
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
 const SESSION_STORAGE_KEY = 'orca.web.workspaceSession.v1'
 const ONBOARDING_STORAGE_KEY = 'orca.web.onboarding.v1'
@@ -731,8 +732,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
             ? captureStoredWorktreeCreateTimeoutShadow(environment.id)
             : undefined
         writeStoredSettings(next)
-        if (environment && sanitizedUpdates.worktreeCreateTimeouts !== undefined) {
-          writeStoredWorktreeCreateTimeouts(environment.id, next.worktreeCreateTimeouts)
+        if (sanitizedUpdates.worktreeCreateTimeouts !== undefined) {
+          writeStoredWorktreeCreateTimeouts(environment?.id ?? null, next.worktreeCreateTimeouts)
         }
         return syncRuntimeBackedSettings(sanitizedUpdates, next, timeoutShadowSnapshot)
       },
@@ -3774,9 +3775,7 @@ function getStoredSettings(): GlobalSettings {
       // Keep readJson's invalid-JSON fallback non-destructive.
     }
   }
-  const runtimeStored = activeEnvironment
-    ? readStoredWorktreeCreateTimeouts(activeEnvironment.id)
-    : undefined
+  const runtimeStored = readStoredWorktreeCreateTimeouts(activeEnvironment?.id ?? null)
   return mergeSettings(
     {
       ...defaults,
@@ -3815,18 +3814,24 @@ function runtimeSettingsStorageKey(environmentId: string): string {
 }
 
 function readStoredWorktreeCreateTimeouts(
-  environmentId: string
+  environmentId: string | null
 ): GlobalSettings['worktreeCreateTimeouts'] | undefined {
-  const stored = readJson<Partial<GlobalSettings>>(runtimeSettingsStorageKey(environmentId), {})
+  const storageKey = environmentId
+    ? runtimeSettingsStorageKey(environmentId)
+    : BROWSER_LOCAL_RUNTIME_SETTINGS_STORAGE_KEY
+  const stored = readJson<Partial<GlobalSettings>>(storageKey, {})
   const normalized = normalizeWorktreeCreateTimeoutOverrides(stored.worktreeCreateTimeouts)
   return normalized ? normalizeWorktreeCreateTimeouts(normalized) : undefined
 }
 
 function writeStoredWorktreeCreateTimeouts(
-  environmentId: string,
+  environmentId: string | null,
   timeouts: GlobalSettings['worktreeCreateTimeouts']
 ): void {
-  writeJson(runtimeSettingsStorageKey(environmentId), {
+  const storageKey = environmentId
+    ? runtimeSettingsStorageKey(environmentId)
+    : BROWSER_LOCAL_RUNTIME_SETTINGS_STORAGE_KEY
+  writeJson(storageKey, {
     worktreeCreateTimeouts: normalizeWorktreeCreateTimeouts(timeouts)
   })
 }

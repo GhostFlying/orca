@@ -106,6 +106,13 @@ class WorktreeCreateRefreshTimeoutError extends Error {
   }
 }
 
+class WorktreeCreateAddCheckoutTimeoutError extends Error {
+  constructor() {
+    super('Worktree add and checkout timed out.')
+    this.name = 'WorktreeCreateAddCheckoutTimeoutError'
+  }
+}
+
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
 const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
@@ -217,22 +224,17 @@ function createWorktreeRefreshStage(options: GitWorktreeExecOptions): WorktreeCr
       throw new WorktreeCreateRefreshTimeoutError()
     }
     try {
-      const result = await gitExecFileAsync(
+      return await gitExecFileAsync(
         args,
         gitExecOptions(cwd, {
           ...options,
           ...(remaining === undefined ? {} : { timeout: remaining })
         })
       )
-      if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
-        throw new WorktreeCreateRefreshTimeoutError()
-      }
-      return result
     } catch (error) {
       if (
         error instanceof WorktreeCreateRefreshTimeoutError ||
-        isGitCommandTimeout(error) ||
-        (deadlineAt !== undefined && Date.now() >= deadlineAt)
+        (deadlineAt !== undefined && (isGitCommandTimeout(error) || Date.now() >= deadlineAt))
       ) {
         throw new WorktreeCreateRefreshTimeoutError()
       }
@@ -875,7 +877,14 @@ function remainingStageTimeout(
   deadlineAt: number | undefined,
   fallback: number | undefined
 ): number | undefined {
-  return deadlineAt === undefined ? fallback : Math.max(1, deadlineAt - Date.now())
+  if (deadlineAt === undefined) {
+    return fallback
+  }
+  const remaining = deadlineAt - Date.now()
+  if (remaining <= 0) {
+    throw new WorktreeCreateAddCheckoutTimeoutError()
+  }
+  return remaining
 }
 
 function mayHaveCompletedWorktreeAdd(error: unknown): boolean {
@@ -1098,7 +1107,10 @@ async function performAddWorktree(
           return true
         } catch (error) {
           if (error instanceof WorktreeCreateRefreshTimeoutError) {
-            throw error
+            if (refreshLocalBaseRef) {
+              throw error
+            }
+            return options.remoteTrackingBase?.ref === qualifiedRef
           }
           return false
         }
@@ -1114,14 +1126,20 @@ async function performAddWorktree(
           refreshStage
         )
       } else if (options.suggestLocalBaseRefUpdate) {
-        localBaseRefUpdateSuggestion = await getLocalBaseRefUpdateSuggestionForWorktreeCreate(
-          repoPath,
-          baseBranch,
-          effectiveBase,
-          options.remoteTrackingBase,
-          refreshOptions,
-          refreshStage
-        )
+        try {
+          localBaseRefUpdateSuggestion = await getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+            repoPath,
+            baseBranch,
+            effectiveBase,
+            options.remoteTrackingBase,
+            refreshOptions,
+            refreshStage
+          )
+        } catch (error) {
+          if (!(error instanceof WorktreeCreateRefreshTimeoutError)) {
+            throw error
+          }
+        }
       }
       args.push(effectiveBase)
     }
@@ -1151,7 +1169,7 @@ async function performAddWorktree(
         worktreePath,
         branch,
         options.checkoutExistingBranch === true,
-        options
+        options.wslDistro ? { wslDistro: options.wslDistro } : {}
       )
     } catch (cleanupError) {
       const wrapped = error instanceof Error ? error : new Error(String(error))
@@ -1170,7 +1188,11 @@ async function performAddWorktree(
   }
 
   if (effectiveBase) {
-    await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, addStageOptions())
+    const remaining = addDeadlineAt === undefined ? options.timeout : addDeadlineAt - Date.now()
+    await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, {
+      ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+      timeout: remaining === undefined ? undefined : Math.max(1_000, remaining)
+    })
   }
 
   // SSH parity: relay's addWorktreeOp (src/relay/git-handler-worktree-ops.ts) mirrors this — change both in lockstep.
@@ -1183,7 +1205,10 @@ async function performAddWorktree(
     let alreadySet = false
     try {
       await gitExecFileAsync(['config', '--get', 'push.autoSetupRemote'], {
-        ...gitExecOptions(worktreePath, addStageOptions())
+        ...gitExecOptions(worktreePath, {
+          ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+          timeout: remainingStageTimeout(addDeadlineAt, options.timeout)
+        })
       })
       alreadySet = true
     } catch (readError) {
@@ -1195,7 +1220,10 @@ async function performAddWorktree(
     }
     if (!alreadySet) {
       await gitExecFileAsync(['config', '--local', 'push.autoSetupRemote', 'true'], {
-        ...gitExecOptions(worktreePath, addStageOptions())
+        ...gitExecOptions(worktreePath, {
+          ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+          timeout: remainingStageTimeout(addDeadlineAt, options.timeout)
+        })
       })
     }
   } catch (error) {

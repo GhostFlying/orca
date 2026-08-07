@@ -248,7 +248,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.commitDiff', (p, context) => this.commitDiff(p, context))
     this.dispatcher.onRequest('git.listWorktrees', (p, context) => this.listWorktrees(p, context))
     this.dispatcher.onRequest('git.addWorktree', (p, context) => this.addWorktree(p, context))
-    this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
+    this.dispatcher.onRequest('git.removeWorktree', (p, context) => this.removeWorktree(p, context))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
     this.dispatcher.onRequest('git.refreshLocalBaseRefForWorktreeCreate', (p) =>
       this.refreshLocalBaseRefForWorktreeCreate(p)
@@ -910,7 +910,9 @@ export class GitHandler {
     const ref = params.ref
     const skipAutoMaintenance = params.skipAutoMaintenance
     const timeout =
-      typeof params.timeoutMs === 'number' && Number.isFinite(params.timeoutMs)
+      typeof params.timeoutMs === 'number' &&
+      Number.isFinite(params.timeoutMs) &&
+      params.timeoutMs > 0
         ? params.timeoutMs
         : undefined
     try {
@@ -1204,7 +1206,9 @@ export class GitHandler {
     const args = params.args as string[]
     const cwd = params.cwd as string
     const timeout =
-      typeof params.timeoutMs === 'number' && Number.isFinite(params.timeoutMs)
+      typeof params.timeoutMs === 'number' &&
+      Number.isFinite(params.timeoutMs) &&
+      params.timeoutMs > 0
         ? params.timeoutMs
         : undefined
 
@@ -1408,7 +1412,12 @@ export class GitHandler {
   private async listWorktrees(params: Record<string, unknown>, context?: RequestContext) {
     const repoPath = params.repoPath as string
     const strict = params.strict === true
-    const timeout = typeof params.timeoutMs === 'number' ? params.timeoutMs : undefined
+    const timeout =
+      typeof params.timeoutMs === 'number' &&
+      Number.isFinite(params.timeoutMs) &&
+      params.timeoutMs > 0
+        ? params.timeoutMs
+        : undefined
     const scan = this.gitCapabilities.runWithFallback(
       'worktree-list-z',
       async () => {
@@ -1452,10 +1461,12 @@ export class GitHandler {
     )
   }
 
-  private async removeWorktree(params: Record<string, unknown>) {
+  private async removeWorktree(params: Record<string, unknown>, context?: RequestContext) {
     const remove = () =>
       this.runWithGitReadCacheClear(() =>
-        removeWorktreeOp(this.git.bind(this), params, this.gitCapabilities)
+        removeWorktreeOp(this.git.bind(this), params, this.gitCapabilities, {
+          signal: context?.signal
+        })
       )
     const worktreePath = params.worktreePath
     return this.watcherRegistry && typeof worktreePath === 'string'

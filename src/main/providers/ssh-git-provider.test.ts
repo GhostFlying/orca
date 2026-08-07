@@ -1523,6 +1523,24 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('removeWorktree keeps the transport alive past the relay deadline', async () => {
+    await provider.removeWorktree('/home/user/feat', true, {
+      deleteBranch: true,
+      timeoutMs: 30_000
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.removeWorktree',
+      {
+        worktreePath: '/home/user/feat',
+        force: true,
+        deleteBranch: true,
+        timeoutMs: 30_000
+      },
+      { timeoutMs: 35_000 }
+    )
+  })
+
   it('worktreeIsClean sends git.worktreeIsClean request', async () => {
     const cleanResult = { clean: false, stdout: '?? scratch.txt\n' }
     mux.request.mockResolvedValue(cleanResult)

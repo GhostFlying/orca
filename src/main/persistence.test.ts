@@ -4728,7 +4728,8 @@ describe('Store', () => {
     })
 
     store.updateRepo('r1', { worktreeCreateTimeouts: null })
-    expect(store.getRepo('r1')?.worktreeCreateTimeouts).toBeUndefined()
+    store.flush()
+    expect((await createStore()).getRepo('r1')?.worktreeCreateTimeouts).toBeUndefined()
   })
 
   it('updateRepo ignores invalid fork sync mode updates', async () => {
