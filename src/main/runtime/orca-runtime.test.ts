@@ -4156,7 +4156,8 @@ describe('OrcaRuntimeService', () => {
         {}
       )
       expect(gitSpy).toHaveBeenCalledWith(['remote', 'add', remoteName, remoteUrl], {
-        cwd: TEST_REPO_PATH
+        cwd: TEST_REPO_PATH,
+        timeout: expect.any(Number)
       })
       expect(gitSpy).toHaveBeenCalledWith(['remote', 'remove', remoteName], {
         cwd: TEST_REPO_PATH
@@ -5147,8 +5148,14 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        TEST_WORKTREE_CREATE_GIT_OPTIONS
+        {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          refreshTimeout: expect.any(Number)
+        }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
     } finally {
       gitSpy.mockRestore()
     }
@@ -5206,8 +5213,14 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        TEST_WORKTREE_CREATE_GIT_OPTIONS
+        {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          refreshTimeout: expect.any(Number)
+        }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
     } finally {
       gitSpy.mockRestore()
     }
@@ -45694,7 +45707,7 @@ describe('OrcaRuntimeService', () => {
       expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
       expect(gitSpy).toHaveBeenCalledWith(
         ['check-ref-format', '--branch', 'contributor/runtime-wsl'],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
+        { cwd: TEST_REPO_PATH, timeout: expect.any(Number), wslDistro: 'Ubuntu' }
       )
       expect(gitSpy).toHaveBeenCalledWith(
         [

@@ -22167,7 +22167,10 @@ export class OrcaRuntimeService {
 
     let preparedPushTarget: GitPushTarget | undefined
     const releasePushTargetPreparation = args.pushTarget
-      ? await acquireWorktreePushTargetPreparationLease(repo.path, args.pushTarget)
+      ? await acquireWorktreePushTargetPreparationLease(repo.path, args.pushTarget, {
+          remainingTimeoutMs: remainingRefreshMs,
+          signal: args.signal
+        })
       : undefined
     if (args.pushTarget) {
       // Why: fork-PR worktrees created through a remote runtime need the same
@@ -22179,10 +22182,8 @@ export class OrcaRuntimeService {
           args.pushTarget,
           this.store,
           repo.id,
-          {
-            ...localWorktreeGitOptions,
-            timeout: remainingRefreshMs()
-          }
+          localWorktreeGitOptions,
+          remainingRefreshMs
         )
       } catch (error) {
         releasePushTargetPreparation?.()

@@ -361,8 +361,76 @@ describe('SshGitProvider', () => {
       },
       {
         signal: controller.signal,
-        timeoutMs: 60_000
+        timeoutMs: 65_000
       }
+    )
+  })
+
+  it('exec routes push-target remote mutations through narrow relay methods', async () => {
+    const controller = new AbortController()
+
+    await provider.exec(
+      ['remote', 'add', 'fork', 'git@github.com:contributor/orca.git'],
+      '/home/user/repo',
+      { signal: controller.signal, timeoutMs: 60_000 }
+    )
+    await provider.exec(['remote', 'remove', 'fork'], '/home/user/repo', {
+      timeoutMs: 30_000
+    })
+
+    expect(mux.request).toHaveBeenNthCalledWith(
+      1,
+      'git.addPushTargetRemote',
+      {
+        repoPath: '/home/user/repo',
+        remoteName: 'fork',
+        remoteUrl: 'git@github.com:contributor/orca.git',
+        timeoutMs: 60_000
+      },
+      { signal: controller.signal, timeoutMs: 65_000 }
+    )
+    expect(mux.request).toHaveBeenNthCalledWith(
+      2,
+      'git.removePushTargetRemote',
+      {
+        repoPath: '/home/user/repo',
+        remoteName: 'fork',
+        timeoutMs: 30_000
+      },
+      { timeoutMs: 35_000 }
+    )
+  })
+
+  it('waits for push-target remote settlement before preserving the mutation error', async () => {
+    const mutationError = new Error('Git command timed out after 60000ms.')
+    mux.request.mockRejectedValueOnce(mutationError).mockResolvedValueOnce(undefined)
+
+    await expect(
+      provider.exec(
+        ['remote', 'add', 'fork', 'git@github.com:contributor/orca.git'],
+        '/home/user/repo',
+        { timeoutMs: 60_000 }
+      )
+    ).rejects.toBe(mutationError)
+
+    expect(mux.request).toHaveBeenNthCalledWith(
+      2,
+      'git.awaitPushTargetRemoteMutation',
+      { repoPath: '/home/user/repo' },
+      { timeoutMs: 66_000 }
+    )
+  })
+
+  it('awaitPushTargetRemoteMutations ignores old relays and propagates other errors', async () => {
+    mux.request.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: -32601 }))
+    await expect(
+      provider.awaitPushTargetRemoteMutations('/home/user/repo')
+    ).resolves.toBeUndefined()
+
+    const connectionError = new Error('connection lost')
+    mux.request.mockRejectedValueOnce(connectionError)
+    await expect(provider.awaitPushTargetRemoteMutations('/home/user/repo')).rejects.toBe(
+      connectionError
     )
   })
 
@@ -988,12 +1056,13 @@ describe('SshGitProvider', () => {
   })
 
   it('fetchRemoteTrackingRef forwards the deadline to the relay and transport', async () => {
+    const controller = new AbortController()
     await provider.fetchRemoteTrackingRef(
       '/home/user/repo',
       'origin',
       'main',
       'refs/remotes/origin/main',
-      { timeoutMs: 75_000 }
+      { timeoutMs: 75_000, signal: controller.signal }
     )
 
     expect(mux.request).toHaveBeenCalledWith(
@@ -1005,7 +1074,7 @@ describe('SshGitProvider', () => {
         ref: 'refs/remotes/origin/main',
         timeoutMs: 75_000
       },
-      { timeoutMs: 75_000 }
+      { timeoutMs: 80_000, signal: controller.signal }
     )
   })
 

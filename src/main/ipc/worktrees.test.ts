@@ -2211,7 +2211,7 @@ describe('registerWorktreeHandlers', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['remote', 'add', 'pr-prateek-orca', 'git@github.com:prateek/orca.git'],
-      { cwd: '/workspace/repo' }
+      { cwd: '/workspace/repo', timeout: expect.any(Number) }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
@@ -2493,11 +2493,11 @@ describe('registerWorktreeHandlers', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['check-ref-format', '--branch', 'contributor/wsl-fork'],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      { cwd: '/workspace/repo', timeout: expect.any(Number), wslDistro: 'Ubuntu' }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['remote', 'add', 'pr-contributor-orca', 'git@github.com:contributor/orca.git'],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      { cwd: '/workspace/repo', timeout: expect.any(Number), wslDistro: 'Ubuntu' }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
@@ -5461,7 +5461,7 @@ describe('registerWorktreeHandlers', () => {
       'contributor',
       'feature/fix',
       'refs/remotes/contributor/feature/fix',
-      { timeoutMs: expect.any(Number) }
+      { timeoutMs: expect.any(Number), signal: undefined }
     )
     const pushTargetFetchOptions = provider.fetchRemoteTrackingRef.mock.calls.find(
       ([, remote]) => remote === 'contributor'

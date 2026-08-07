@@ -85,6 +85,37 @@ describe('prepareWorktreePushTargetWithExec', () => {
     firstRelease()
   })
 
+  it('removes an aborted waiter from the preparation queue', async () => {
+    const firstRelease = await acquireWorktreePushTargetPreparationLease(REPO, forkTarget())
+    const controller = new AbortController()
+    const second = acquireWorktreePushTargetPreparationLease(REPO, forkTarget(), {
+      signal: controller.signal
+    })
+
+    controller.abort()
+    await expect(second).rejects.toMatchObject({ name: 'AbortError' })
+
+    const third = acquireWorktreePushTargetPreparationLease(REPO, forkTarget())
+    firstRelease()
+    const thirdRelease = await third
+    thirdRelease()
+  })
+
+  it('uses the refresh deadline while waiting for the preparation lease', async () => {
+    const firstRelease = await acquireWorktreePushTargetPreparationLease(REPO, forkTarget())
+    const timeoutError = new Error('Worktree base ref refresh timed out after 60000ms.')
+
+    await expect(
+      acquireWorktreePushTargetPreparationLease(REPO, forkTarget(), {
+        remainingTimeoutMs: () => {
+          throw timeoutError
+        }
+      })
+    ).rejects.toBe(timeoutError)
+
+    firstRelease()
+  })
+
   it('adds a new fork remote and fetches its head when none matches', async () => {
     const exec = makeRepoExec({ origin: 'git@github.com:stablyai/orca.git' })
 
@@ -152,6 +183,38 @@ describe('prepareWorktreePushTargetWithExec', () => {
     expect(callsMatching(exec, ['fetch'])).toEqual([])
     expect(callsMatching(exec, ['remote', 'remove'])).toEqual([])
     expect(cleanupExec).toHaveBeenCalledWith(['remote', 'remove', 'pr-contributor-orca'], REPO)
+  })
+
+  it('reconciles and removes a remote whose add response timed out', async () => {
+    const remotes: Record<string, string> = { origin: 'git@github.com:stablyai/orca.git' }
+    const exec = makeRepoExec(remotes)
+    const baseExec = exec.getMockImplementation()!
+    exec.mockImplementation(async (args, cwd) => {
+      if (args[0] === 'remote' && args[1] === 'add') {
+        remotes[args[2]!] = args[3]!
+        throw Object.assign(new Error('Request "git.exec" timed out after 60000ms'), {
+          code: 'SSH_MUX_REQUEST_TIMEOUT'
+        })
+      }
+      return baseExec(args, cwd)
+    })
+    const cleanupExec = makeRepoExec(remotes)
+    const baseCleanupExec = cleanupExec.getMockImplementation()!
+    cleanupExec.mockImplementation(async (args, cwd) => {
+      if (args[0] === 'remote' && args[1] === 'remove') {
+        delete remotes[args[2]!]
+        return { stdout: '', stderr: '' }
+      }
+      return baseCleanupExec(args, cwd)
+    })
+
+    await expect(
+      prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false, cleanupExec)
+    ).rejects.toThrow('timed out')
+
+    expect(cleanupExec).toHaveBeenCalledWith(['remote', 'get-url', 'pr-contributor-orca'], REPO)
+    expect(cleanupExec).toHaveBeenCalledWith(['remote', 'remove', 'pr-contributor-orca'], REPO)
+    expect(remotes).toEqual({ origin: 'git@github.com:stablyai/orca.git' })
   })
 
   it('reuses an existing remote pointing at the same fork (SSH vs HTTPS) without adding', async () => {

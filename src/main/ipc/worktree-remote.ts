@@ -1165,13 +1165,17 @@ export async function prepareWorktreePushTarget(
   target: GitPushTarget,
   store?: WorktreePushTargetStore,
   repoId?: string,
-  gitOptions: { wslDistro?: string; signal?: AbortSignal; timeout?: number } = {}
+  gitOptions: { wslDistro?: string; signal?: AbortSignal } = {},
+  remainingTimeoutMs: () => number = () => CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS
 ): Promise<GitPushTarget> {
-  const { timeout: fetchTimeout = CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS, ...operationGitOptions } =
-    gitOptions
-  await validateGitPushTarget(repoPath, target, operationGitOptions)
+  const execGit: GitRemoteExec = (args, cwd) =>
+    gitExecFileAsync(args, { cwd, ...gitOptions, timeout: remainingTimeoutMs() })
+  await validateGitPushTarget(repoPath, target, {
+    ...gitOptions,
+    timeout: remainingTimeoutMs()
+  })
   return prepareWorktreePushTargetWithExec(
-    (args, cwd) => gitExecFileAsync(args, { cwd, ...operationGitOptions }),
+    execGit,
     repoPath,
     target,
     (existingRemote) =>
@@ -1185,6 +1189,7 @@ export async function prepareWorktreePushTarget(
     (args, cwd) =>
       gitExecFileAsync(args, {
         cwd,
+        timeout: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
         ...(gitOptions.wslDistro ? { wslDistro: gitOptions.wslDistro } : {})
       }),
     (remoteName) =>
@@ -1196,8 +1201,8 @@ export async function prepareWorktreePushTarget(
         ],
         {
           cwd: repoPath,
-          ...operationGitOptions,
-          timeout: fetchTimeout
+          ...gitOptions,
+          timeout: remainingTimeoutMs()
         }
       ).then(() => undefined)
   )
@@ -1266,11 +1271,19 @@ async function prepareWorktreePushTargetSsh(
   target: GitPushTarget,
   store?: WorktreePushTargetStore,
   repoId?: string,
-  fetchTimeoutMs = CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS
+  remainingTimeoutMs: () => number = () => CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS,
+  signal?: AbortSignal
 ): Promise<GitPushTarget> {
   assertGitPushTargetShape(target)
-  const execGit: GitRemoteExec = (args, cwd) => provider.exec(args, cwd)
-  await provider.exec(['check-ref-format', '--branch', target.branchName], repoPath)
+  await provider.awaitPushTargetRemoteMutations?.(repoPath, {
+    timeoutMs: remainingTimeoutMs(),
+    signal
+  })
+  const execGit: GitRemoteExec = (args, cwd) =>
+    provider.exec(args, cwd, { timeoutMs: remainingTimeoutMs(), signal })
+  const cleanupExecGit: GitRemoteExec = (args, cwd) =>
+    provider.exec(args, cwd, { timeoutMs: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS })
+  await execGit(['check-ref-format', '--branch', target.branchName], repoPath)
   return prepareWorktreePushTargetWithExec(
     execGit,
     repoPath,
@@ -1283,14 +1296,14 @@ async function prepareWorktreePushTargetSsh(
             repoId
           )
         : false,
-    execGit,
+    cleanupExecGit,
     (remoteName) =>
       provider.fetchRemoteTrackingRef(
         repoPath,
         remoteName,
         target.branchName,
         `refs/remotes/${remoteName}/${target.branchName}`,
-        { timeoutMs: fetchTimeoutMs }
+        { timeoutMs: remainingTimeoutMs(), signal }
       )
   )
 }
@@ -1945,7 +1958,10 @@ export async function createRemoteWorktree(
 
   let preparedPushTarget: GitPushTarget | undefined
   const releasePushTargetPreparation = args.pushTarget
-    ? await acquireWorktreePushTargetPreparationLease(repo.path, args.pushTarget)
+    ? await acquireWorktreePushTargetPreparationLease(repo.path, args.pushTarget, {
+        remainingTimeoutMs: remainingRefreshMs,
+        signal
+      })
     : undefined
   if (args.pushTarget) {
     // Why: fork-PR SSH worktrees need contributor-remote setup before create, else Push/Sync target origin.
@@ -1956,7 +1972,8 @@ export async function createRemoteWorktree(
         args.pushTarget,
         store,
         repo.id,
-        remainingRefreshMs()
+        remainingRefreshMs,
+        signal
       )
     } catch (error) {
       releasePushTargetPreparation?.()
@@ -2598,7 +2615,9 @@ export async function createLocalWorktree(
 
   let preparedPushTarget: GitPushTarget | undefined
   const releasePushTargetPreparation = args.pushTarget
-    ? await acquireWorktreePushTargetPreparationLease(repo.path, args.pushTarget)
+    ? await acquireWorktreePushTargetPreparationLease(repo.path, args.pushTarget, {
+        remainingTimeoutMs: remainingRefreshMs
+      })
     : undefined
   if (args.pushTarget) {
     // Why: validate/fetch the contributor remote before create so a failure doesn't leave a half-created worktree with conflicts on retry.
@@ -2608,10 +2627,8 @@ export async function createLocalWorktree(
         args.pushTarget,
         store,
         repo.id,
-        {
-          ...localWorktreeGitOptions,
-          timeout: remainingRefreshMs()
-        }
+        localWorktreeGitOptions,
+        remainingRefreshMs
       )
     } catch (error) {
       releasePushTargetPreparation?.()

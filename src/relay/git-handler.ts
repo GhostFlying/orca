@@ -95,6 +95,40 @@ import { streamRelayGitStdout } from './git-stdout-stream'
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
 const BULK_CHUNK_SIZE = 100
+const PUSH_TARGET_REMOTE_CLEANUP_TIMEOUT_MS = 30_000
+const PUSH_TARGET_REMOTE_RECONCILIATION_GRACE_MS = 1_000
+const PUSH_TARGET_REMOTE_RECONCILIATION_POLL_MS = 100
+
+function normalizeRelayGitTimeout(error: unknown, timeout: number | undefined): never {
+  const details = error as Error & { code?: unknown; killed?: unknown; signal?: unknown }
+  if (
+    timeout !== undefined &&
+    error instanceof Error &&
+    error.name !== 'AbortError' &&
+    (details.code === 'ETIMEDOUT' ||
+      details.killed === true ||
+      details.signal === 'SIGTERM' ||
+      details.signal === 'SIGKILL')
+  ) {
+    throw new Error(`Git command timed out after ${timeout}ms.`)
+  }
+  throw error
+}
+
+function mayHaveCompletedRelayGitMutation(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const details = error as Error & { code?: unknown; killed?: unknown; signal?: unknown }
+  return (
+    error.name === 'AbortError' ||
+    error.message.toLowerCase().includes('timed out') ||
+    details.code === 'ETIMEDOUT' ||
+    details.killed === true ||
+    details.signal === 'SIGTERM' ||
+    details.signal === 'SIGKILL'
+  )
+}
 
 function resolveSubmoduleStatusArea(
   params: Record<string, unknown>
@@ -176,6 +210,7 @@ function execFileWithStdin(
 export class GitHandler {
   private dispatcher: RelayDispatcher
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<unknown>()
+  private readonly pushTargetRemoteMutationTails = new Map<string, Promise<void>>()
   private readonly gitCapabilities = new GitCapabilityCache()
   // Why: use the bulk lane so large responses do not block interactive PTY echo.
   private readonly responseStreams = new GitResponseStreamRegistry()
@@ -225,7 +260,18 @@ export class GitHandler {
     this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
     this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
     this.dispatcher.onRequest('git.forkSync', (p, context) => this.forkSync(p, context))
-    this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
+    this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p, context) =>
+      this.fetchRemoteTrackingRef(p, context)
+    )
+    this.dispatcher.onRequest('git.addPushTargetRemote', (p, context) =>
+      this.addPushTargetRemote(p, context)
+    )
+    this.dispatcher.onRequest('git.removePushTargetRemote', (p, context) =>
+      this.removePushTargetRemote(p, context)
+    )
+    this.dispatcher.onRequest('git.awaitPushTargetRemoteMutation', (p) =>
+      this.awaitPushTargetRemoteMutation(p)
+    )
     this.dispatcher.onRequest('git.fetchGitHubPullRequestHead', (p) =>
       this.fetchGitHubPullRequestHead(p)
     )
@@ -311,6 +357,30 @@ export class GitHandler {
       return await run()
     } finally {
       this.clearGitMutationReadCaches()
+    }
+  }
+
+  private async acquirePushTargetRemoteMutation(repoPath: string): Promise<() => void> {
+    const previous = this.pushTargetRemoteMutationTails.get(repoPath) ?? Promise.resolve()
+    let releaseSlot!: () => void
+    const slot = new Promise<void>((resolve) => {
+      releaseSlot = resolve
+    })
+    const tail = previous.catch(() => {}).then(() => slot)
+    this.pushTargetRemoteMutationTails.set(repoPath, tail)
+    await previous.catch(() => {})
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      releaseSlot()
+      void tail.finally(() => {
+        if (this.pushTargetRemoteMutationTails.get(repoPath) === tail) {
+          this.pushTargetRemoteMutationTails.delete(repoPath)
+        }
+      })
     }
   }
 
@@ -902,7 +972,7 @@ export class GitHandler {
     })
   }
 
-  private async fetchRemoteTrackingRef(params: Record<string, unknown>) {
+  private async fetchRemoteTrackingRef(params: Record<string, unknown>, context?: RequestContext) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const remote = params.remote
@@ -930,7 +1000,16 @@ export class GitHandler {
       }
 
       try {
-        const { stdout } = await this.git(['remote'], worktreePath)
+        const requestGit = (args: string[], options?: { timeout?: number }) => {
+          if (!options && !context?.signal) {
+            return this.git(args, worktreePath)
+          }
+          return this.git(args, worktreePath, {
+            ...options,
+            ...(context?.signal ? { signal: context.signal } : {})
+          })
+        }
+        const { stdout } = await requestGit(['remote'])
         const remotes = stdout
           .split(/\r?\n/)
           .map((line) => line.trim())
@@ -938,8 +1017,8 @@ export class GitHandler {
         if (!remotes.includes(remote)) {
           throw new Error(`Remote "${remote}" is not configured.`)
         }
-        await this.git(['check-ref-format', `refs/heads/${branch}`], worktreePath)
-        await this.git(['check-ref-format', ref], worktreePath)
+        await requestGit(['check-ref-format', `refs/heads/${branch}`])
+        await requestGit(['check-ref-format', ref])
         const fetchArgs = [
           ...(skipAutoMaintenance ? GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS : []),
           'fetch',
@@ -947,9 +1026,7 @@ export class GitHandler {
           remote,
           `+refs/heads/${branch}:${ref}`
         ]
-        await (timeout === undefined
-          ? this.git(fetchArgs, worktreePath)
-          : this.git(fetchArgs, worktreePath, { timeout }))
+        await requestGit(fetchArgs, timeout === undefined ? undefined : { timeout })
       } catch (error) {
         // Why: create-worktree needs a write-capable fetch that generic git.exec rejects; narrow RPC keeps the allowlist tight.
         throw new Error(normalizeGitErrorMessage(error, 'fetch'))
@@ -1017,6 +1094,127 @@ export class GitHandler {
     } finally {
       this.clearGitMutationReadCaches()
     }
+  }
+
+  private async addPushTargetRemote(params: Record<string, unknown>, context?: RequestContext) {
+    const repoPath = params.repoPath
+    const remoteName = params.remoteName
+    const remoteUrl = params.remoteUrl
+    const timeout =
+      typeof params.timeoutMs === 'number' &&
+      Number.isFinite(params.timeoutMs) &&
+      params.timeoutMs > 0
+        ? params.timeoutMs
+        : undefined
+    assertGitPushTargetShape({
+      remoteName,
+      branchName: 'push-target-validation',
+      remoteUrl
+    })
+    if (typeof repoPath !== 'string' || repoPath.length === 0) {
+      throw new Error('Invalid push-target repository path.')
+    }
+    const releaseMutation = await this.acquirePushTargetRemoteMutation(repoPath)
+    let releaseOnResponseSettlement = false
+    const cleanupAddedRemote = async (): Promise<void> => {
+      const deadlineAt = Date.now() + PUSH_TARGET_REMOTE_RECONCILIATION_GRACE_MS
+      do {
+        try {
+          const { stdout } = await this.git(
+            ['config', '--get', `remote.${remoteName as string}.url`],
+            repoPath,
+            { timeout: PUSH_TARGET_REMOTE_CLEANUP_TIMEOUT_MS }
+          )
+          if (stdout.trim() === remoteUrl) {
+            await this.runWithGitReadCacheClear(() =>
+              this.git(['remote', 'remove', remoteName as string], repoPath, {
+                timeout: PUSH_TARGET_REMOTE_CLEANUP_TIMEOUT_MS
+              })
+            )
+          }
+          return
+        } catch {
+          // The canceled add may still be settling; retry briefly before client reconciliation takes over.
+        }
+        await new Promise((resolve) =>
+          setTimeout(
+            resolve,
+            Math.min(PUSH_TARGET_REMOTE_RECONCILIATION_POLL_MS, deadlineAt - Date.now())
+          )
+        )
+      } while (Date.now() < deadlineAt)
+    }
+    try {
+      await this.runWithGitReadCacheClear(() =>
+        this.git(['remote', 'add', remoteName as string, remoteUrl as string], repoPath, {
+          signal: context?.signal,
+          timeout
+        })
+      )
+      if (context?.onResponseSettled) {
+        context.onResponseSettled((result) => {
+          void (async () => {
+            try {
+              if (!result.ok) {
+                await cleanupAddedRemote()
+              }
+            } finally {
+              releaseMutation()
+            }
+          })()
+        })
+        releaseOnResponseSettlement = true
+      }
+    } catch (error) {
+      if (mayHaveCompletedRelayGitMutation(error)) {
+        await cleanupAddedRemote()
+      }
+      normalizeRelayGitTimeout(error, timeout)
+    } finally {
+      if (!releaseOnResponseSettlement) {
+        releaseMutation()
+      }
+    }
+  }
+
+  private async removePushTargetRemote(params: Record<string, unknown>, context?: RequestContext) {
+    const repoPath = params.repoPath
+    const remoteName = params.remoteName
+    const timeout =
+      typeof params.timeoutMs === 'number' &&
+      Number.isFinite(params.timeoutMs) &&
+      params.timeoutMs > 0
+        ? params.timeoutMs
+        : undefined
+    assertGitPushTargetShape({
+      remoteName,
+      branchName: 'push-target-validation'
+    })
+    if (typeof repoPath !== 'string' || repoPath.length === 0) {
+      throw new Error('Invalid push-target repository path.')
+    }
+    const releaseMutation = await this.acquirePushTargetRemoteMutation(repoPath)
+    try {
+      await this.runWithGitReadCacheClear(() =>
+        this.git(['remote', 'remove', remoteName as string], repoPath, {
+          signal: context?.signal,
+          timeout
+        })
+      )
+    } catch (error) {
+      normalizeRelayGitTimeout(error, timeout)
+    } finally {
+      releaseMutation()
+    }
+  }
+
+  private async awaitPushTargetRemoteMutation(params: Record<string, unknown>): Promise<void> {
+    const repoPath = params.repoPath
+    if (typeof repoPath !== 'string' || repoPath.length === 0) {
+      throw new Error('Invalid push-target repository path.')
+    }
+    const releaseMutation = await this.acquirePushTargetRemoteMutation(repoPath)
+    releaseMutation()
   }
 
   private async fetchGitHubPullRequestHead(params: Record<string, unknown>) {

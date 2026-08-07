@@ -10,6 +10,11 @@ import type { GitRemoteExec } from './worktree-push-target-cleanup'
 
 const pushTargetPreparationTails = new Map<string, Promise<void>>()
 
+type WorktreePushTargetPreparationLeaseOptions = {
+  remainingTimeoutMs?: () => number
+  signal?: AbortSignal
+}
+
 function pushTargetPreparationKey(repoPath: string, target: GitPushTarget): string | null {
   if (!target.remoteUrl) {
     return null
@@ -21,9 +26,91 @@ function pushTargetPreparationKey(repoPath: string, target: GitPushTarget): stri
   return `${repoPath}\0${remoteKey}`
 }
 
+function remoteUrlsMatch(leftUrl: string, rightUrl: string): boolean {
+  const left = parseGitHubOwnerRepo(leftUrl)
+  const right = parseGitHubOwnerRepo(rightUrl)
+  return left && right
+    ? left.owner.toLowerCase() === right.owner.toLowerCase() &&
+        left.repo.toLowerCase() === right.repo.toLowerCase()
+    : leftUrl === rightUrl
+}
+
+function mayHaveCompletedRemoteAdd(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const code = (error as Error & { code?: unknown }).code
+  return (
+    error.name === 'AbortError' ||
+    error.message.toLowerCase().includes('timed out') ||
+    code === 'ETIMEDOUT' ||
+    code === 'CONNECTION_LOST' ||
+    code === 'SSH_MUX_REQUEST_TIMEOUT'
+  )
+}
+
+async function waitForPushTargetPreparationTurn(
+  previous: Promise<void>,
+  options: WorktreePushTargetPreparationLeaseOptions
+): Promise<void> {
+  const { remainingTimeoutMs, signal } = options
+  if (!remainingTimeoutMs && !signal) {
+    await previous.catch(() => {})
+    return
+  }
+  await new Promise<void>((resolve, reject) => {
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const cleanup = (): void => {
+      if (timer) {
+        clearTimeout(timer)
+      }
+      signal?.removeEventListener('abort', onAbort)
+    }
+    const finish = (error?: unknown): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      if (error === undefined) {
+        resolve()
+      } else {
+        reject(error)
+      }
+    }
+    const onAbort = (): void =>
+      finish(Object.assign(new Error('Worktree creation was cancelled.'), { name: 'AbortError' }))
+    const armDeadline = (): void => {
+      if (!remainingTimeoutMs || settled) {
+        return
+      }
+      try {
+        const remaining = remainingTimeoutMs()
+        if (remaining <= 0) {
+          finish(new Error('Worktree push-target preparation timed out.'))
+          return
+        }
+        timer = setTimeout(armDeadline, remaining)
+        timer.unref?.()
+      } catch (error) {
+        finish(error)
+      }
+    }
+    if (signal?.aborted) {
+      onAbort()
+      return
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    void previous.catch(() => {}).then(() => finish())
+    armDeadline()
+  })
+}
+
 export async function acquireWorktreePushTargetPreparationLease(
   repoPath: string,
-  target: GitPushTarget
+  target: GitPushTarget,
+  options: WorktreePushTargetPreparationLeaseOptions = {}
 ): Promise<() => void> {
   const key = pushTargetPreparationKey(repoPath, target)
   if (!key) {
@@ -36,10 +123,9 @@ export async function acquireWorktreePushTargetPreparationLease(
   })
   const tail = previous.catch(() => {}).then(() => slot)
   pushTargetPreparationTails.set(key, tail)
-  await previous.catch(() => {})
 
   let released = false
-  return () => {
+  const release = (): void => {
     if (released) {
       return
     }
@@ -51,6 +137,13 @@ export async function acquireWorktreePushTargetPreparationLease(
       }
     })
   }
+  try {
+    await waitForPushTargetPreparationTurn(previous, options)
+  } catch (error) {
+    release()
+    throw error
+  }
+  return release
 }
 
 export async function findRemoteForUrl(
@@ -68,16 +161,10 @@ export async function findRemoteForUrl(
       try {
         const { stdout: urlStdout } = await execGit(['remote', 'get-url', remote], repoPath)
         const candidateUrl = urlStdout.trim()
-        const candidate = parseGitHubOwnerRepo(candidateUrl)
         if (
-          target &&
-          candidate &&
-          target.owner.toLowerCase() === candidate.owner.toLowerCase() &&
-          target.repo.toLowerCase() === candidate.repo.toLowerCase()
+          (target && remoteUrlsMatch(candidateUrl, remoteUrl)) ||
+          (!target && candidateUrl === remoteUrl)
         ) {
-          return remote
-        }
-        if (candidateUrl === remoteUrl) {
           return remote
         }
       } catch {
@@ -138,7 +225,21 @@ export async function prepareWorktreePushTargetWithExec(
       remoteCreated = isRemoteCreatedByKnownWorktree(existingRemote)
     } else {
       remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
-      await execGit(['remote', 'add', remoteName, target.remoteUrl], repoPath)
+      try {
+        await execGit(['remote', 'add', remoteName, target.remoteUrl], repoPath)
+      } catch (error) {
+        if (mayHaveCompletedRemoteAdd(error)) {
+          try {
+            const { stdout } = await cleanupExecGit(['remote', 'get-url', remoteName], repoPath)
+            if (remoteUrlsMatch(stdout.trim(), target.remoteUrl)) {
+              await cleanupExecGit(['remote', 'remove', remoteName], repoPath)
+            }
+          } catch {
+            // Preserve the mutation failure; retries can reconcile any surviving remote.
+          }
+        }
+        throw error
+      }
       remoteCreated = true
       createdThisCall = true
     }

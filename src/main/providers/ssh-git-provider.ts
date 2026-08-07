@@ -42,6 +42,9 @@ type NonInteractiveExecQueueEntry = {
 
 const NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS = 5_000
 const LEGACY_WORKTREE_ADD_TIMEOUT_MS = 180_000
+const PUSH_TARGET_REMOTE_CLEANUP_TIMEOUT_MS = 30_000
+const PUSH_TARGET_REMOTE_SETTLEMENT_TIMEOUT_MS =
+  PUSH_TARGET_REMOTE_CLEANUP_TIMEOUT_MS * 2 + 1_000 + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
 
 function isJsonRpcMethodNotFoundError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
@@ -585,7 +588,7 @@ export class SshGitProvider implements IGitProvider {
     remote: string,
     branch: string,
     ref: string,
-    options?: { skipAutoMaintenance?: boolean; timeoutMs?: number }
+    options?: { skipAutoMaintenance?: boolean; timeoutMs?: number; signal?: AbortSignal }
   ): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
       const request = {
@@ -598,10 +601,36 @@ export class SshGitProvider implements IGitProvider {
       }
       await (options?.timeoutMs
         ? this.mux.request('git.fetchRemoteTrackingRef', request, {
-            timeoutMs: options.timeoutMs
+            ...(options.signal ? { signal: options.signal } : {}),
+            timeoutMs: options.timeoutMs + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
           })
-        : this.mux.request('git.fetchRemoteTrackingRef', request))
+        : options?.signal
+          ? this.mux.request('git.fetchRemoteTrackingRef', request, { signal: options.signal })
+          : this.mux.request('git.fetchRemoteTrackingRef', request))
     })
+  }
+
+  async awaitPushTargetRemoteMutations(
+    repoPath: string,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<void> {
+    try {
+      await this.mux.request(
+        'git.awaitPushTargetRemoteMutation',
+        { repoPath },
+        {
+          ...(options.signal ? { signal: options.signal } : {}),
+          timeoutMs: Math.min(
+            options.timeoutMs ?? PUSH_TARGET_REMOTE_SETTLEMENT_TIMEOUT_MS,
+            PUSH_TARGET_REMOTE_SETTLEMENT_TIMEOUT_MS
+          )
+        }
+      )
+    } catch (error) {
+      if (!isJsonRpcMethodNotFoundError(error)) {
+        throw error
+      }
+    }
   }
 
   async fetchGitLabMergeRequestHead(
@@ -885,6 +914,54 @@ export class SshGitProvider implements IGitProvider {
     cwd: string,
     options?: { signal?: AbortSignal; timeoutMs?: number }
   ): Promise<{ stdout: string; stderr: string }> {
+    const pushTargetRemoteMethod =
+      args.length === 4 && args[0] === 'remote' && args[1] === 'add'
+        ? 'git.addPushTargetRemote'
+        : args.length === 3 && args[0] === 'remote' && args[1] === 'remove'
+          ? 'git.removePushTargetRemote'
+          : null
+    if (pushTargetRemoteMethod) {
+      try {
+        await this.runWithDiffDedupeClear(() =>
+          this.mux.request(
+            pushTargetRemoteMethod,
+            {
+              repoPath: cwd,
+              remoteName: args[2],
+              ...(pushTargetRemoteMethod === 'git.addPushTargetRemote'
+                ? { remoteUrl: args[3] }
+                : {}),
+              ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {})
+            },
+            {
+              ...(options?.signal ? { signal: options.signal } : {}),
+              ...(options?.timeoutMs
+                ? {
+                    timeoutMs: options.timeoutMs + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
+                  }
+                : {})
+            }
+          )
+        )
+        return { stdout: '', stderr: '' }
+      } catch (error) {
+        try {
+          await this.mux.request(
+            'git.awaitPushTargetRemoteMutation',
+            { repoPath: cwd },
+            { timeoutMs: PUSH_TARGET_REMOTE_SETTLEMENT_TIMEOUT_MS }
+          )
+        } catch {
+          // Preserve the mutation failure; old relays do not implement the settlement barrier.
+        }
+        if (isJsonRpcMethodNotFoundError(error)) {
+          throw new Error(
+            'This SSH host is running an older Orca relay that cannot configure worktree push-target remotes. Reconnect to deploy the latest relay, then try again.'
+          )
+        }
+        throw error
+      }
+    }
     const request = {
       args,
       cwd,
@@ -892,7 +969,14 @@ export class SshGitProvider implements IGitProvider {
     }
     const run = () =>
       options
-        ? requestGitStreamable(this.mux, 'git.exec', request, options)
+        ? requestGitStreamable(this.mux, 'git.exec', request, {
+            ...options,
+            ...(options.timeoutMs
+              ? {
+                  timeoutMs: options.timeoutMs + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
+                }
+              : {})
+          })
         : requestGitStreamable(this.mux, 'git.exec', request)
     const result = gitExecMutatesRepository(args)
       ? await this.runWithDiffDedupeClear(run)
