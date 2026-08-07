@@ -209,7 +209,17 @@ function parseRevListDrift(output: string): { ahead: number; behind: number } | 
 }
 
 function isGitCommandTimeout(error: unknown): boolean {
-  return getErrorCode(error) === 'ETIMEDOUT' || /\btimed out\b/i.test(getErrorText(error))
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+  const details = error as { killed?: unknown; signal?: unknown }
+  return (
+    getErrorCode(error) === 'ETIMEDOUT' ||
+    details.killed === true ||
+    details.signal === 'SIGTERM' ||
+    details.signal === 'SIGKILL' ||
+    /\btimed out\b/i.test(getErrorText(error))
+  )
 }
 
 function createWorktreeRefreshStage(options: GitWorktreeExecOptions): WorktreeCreateRefreshStage {
@@ -234,7 +244,7 @@ function createWorktreeRefreshStage(options: GitWorktreeExecOptions): WorktreeCr
     } catch (error) {
       if (
         error instanceof WorktreeCreateRefreshTimeoutError ||
-        (deadlineAt !== undefined && (isGitCommandTimeout(error) || Date.now() >= deadlineAt))
+        (deadlineAt !== undefined && isGitCommandTimeout(error))
       ) {
         throw new WorktreeCreateRefreshTimeoutError()
       }
@@ -1110,7 +1120,7 @@ async function performAddWorktree(
             if (refreshLocalBaseRef) {
               throw error
             }
-            return options.remoteTrackingBase?.ref === qualifiedRef
+            return hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
           }
           return false
         }

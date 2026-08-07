@@ -2219,8 +2219,13 @@ describe('registerWorktreeHandlers', () => {
         'pr-prateek-orca',
         '+refs/heads/prateek/fix-sidebar-agents-toggle:refs/remotes/pr-prateek-orca/prateek/fix-sidebar-agents-toggle'
       ],
-      { cwd: '/workspace/repo' }
+      { cwd: '/workspace/repo', timeout: expect.any(Number) }
     )
+    const fetchOptions = gitExecFileAsyncMock.mock.calls.find(
+      ([args]) => args[0] === 'fetch' && args[1] === 'pr-prateek-orca'
+    )?.[1]
+    expect(fetchOptions?.timeout).toBeGreaterThan(0)
+    expect(fetchOptions?.timeout).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'branch',
@@ -2500,8 +2505,17 @@ describe('registerWorktreeHandlers', () => {
         'pr-contributor-orca',
         '+refs/heads/contributor/wsl-fork:refs/remotes/pr-contributor-orca/contributor/wsl-fork'
       ],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      {
+        cwd: '/workspace/repo',
+        timeout: expect.any(Number),
+        wslDistro: 'Ubuntu'
+      }
     )
+    const fetchOptions = gitExecFileAsyncMock.mock.calls.find(
+      ([args]) => args[0] === 'fetch' && args[1] === 'pr-contributor-orca'
+    )?.[1]
+    expect(fetchOptions?.timeout).toBeGreaterThan(0)
+    expect(fetchOptions?.timeout).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/wsl-fork', 'wsl-fork'],
       { cwd: '/workspace/wsl-fork', timeout: expect.any(Number), wslDistro: 'Ubuntu' }
@@ -5250,9 +5264,10 @@ describe('registerWorktreeHandlers', () => {
       })
     ).rejects.toThrow('add request timed out')
 
-    const reconciliationTimeoutMs = provider.listWorktrees.mock.calls[0]?.[1]?.timeoutMs
-    expect(reconciliationTimeoutMs).toBeGreaterThan(0)
-    expect(reconciliationTimeoutMs).toBeLessThanOrEqual(1_000)
+    expect(provider.listWorktrees).toHaveBeenCalledWith('/remote/repo', {
+      timeoutMs: DEFAULT_CREATE_REGISTRATION_TIMEOUT_MS,
+      strict: true
+    })
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/repo-improve-dashboard', true, {
       deleteBranch: true,
       forceBranchDelete: true,
@@ -5307,6 +5322,12 @@ describe('registerWorktreeHandlers', () => {
     ).rejects.toThrow('add request timed out')
 
     expect(provider.listWorktrees).toHaveBeenCalledTimes(2)
+    for (const [, options] of provider.listWorktrees.mock.calls) {
+      expect(options).toEqual({
+        timeoutMs: DEFAULT_CREATE_REGISTRATION_TIMEOUT_MS,
+        strict: true
+      })
+    }
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/repo-improve-dashboard', true, {
       deleteBranch: true,
       forceBranchDelete: true,
@@ -5435,6 +5456,18 @@ describe('registerWorktreeHandlers', () => {
       forceBranchDelete: true,
       timeoutMs: 30_000
     })
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      '/remote/repo',
+      'contributor',
+      'feature/fix',
+      'refs/remotes/contributor/feature/fix',
+      { timeoutMs: expect.any(Number) }
+    )
+    const pushTargetFetchOptions = provider.fetchRemoteTrackingRef.mock.calls.find(
+      ([, remote]) => remote === 'contributor'
+    )?.[4]
+    expect(pushTargetFetchOptions?.timeoutMs).toBeGreaterThan(0)
+    expect(pushTargetFetchOptions?.timeoutMs).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
     expect(provider.exec).toHaveBeenCalledWith(['remote', 'remove', 'contributor'], '/remote/repo')
     expect(remoteExists).toBe(false)
   })

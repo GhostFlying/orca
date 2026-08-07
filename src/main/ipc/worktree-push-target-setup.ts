@@ -122,7 +122,8 @@ export async function prepareWorktreePushTargetWithExec(
   repoPath: string,
   target: GitPushTarget,
   isRemoteCreatedByKnownWorktree: (existingRemote: string) => boolean,
-  cleanupExecGit: GitRemoteExec = execGit
+  cleanupExecGit: GitRemoteExec = execGit,
+  fetchRemoteTrackingRef?: (remoteName: string) => Promise<void>
 ): Promise<GitPushTarget> {
   const { remoteCreated: _ignoredRemoteCreated, ...sanitizedTarget } = target
   let remoteName = target.remoteName
@@ -144,14 +145,16 @@ export async function prepareWorktreePushTargetWithExec(
   }
 
   try {
-    await execGit(
-      [
-        'fetch',
-        remoteName,
-        `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
-      ],
-      repoPath
-    )
+    await (fetchRemoteTrackingRef
+      ? fetchRemoteTrackingRef(remoteName)
+      : execGit(
+          [
+            'fetch',
+            remoteName,
+            `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
+          ],
+          repoPath
+        ))
   } catch (error) {
     if (createdThisCall) {
       try {

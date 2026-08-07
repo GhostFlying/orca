@@ -45702,8 +45702,13 @@ describe('OrcaRuntimeService', () => {
           'pr-contributor-orca',
           '+refs/heads/contributor/runtime-wsl:refs/remotes/pr-contributor-orca/contributor/runtime-wsl'
         ],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
+        { cwd: TEST_REPO_PATH, timeout: expect.any(Number), wslDistro: 'Ubuntu' }
       )
+      const pushTargetFetchOptions = gitSpy.mock.calls.find(
+        ([args]) => args[0] === 'fetch' && args[1] === 'pr-contributor-orca'
+      )?.[1]
+      expect(pushTargetFetchOptions?.timeout).toBeGreaterThan(0)
+      expect(pushTargetFetchOptions?.timeout).toBeLessThanOrEqual(60_000)
       expect(gitSpy).toHaveBeenCalledWith(
         [
           'branch',

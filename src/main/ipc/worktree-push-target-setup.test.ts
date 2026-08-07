@@ -132,6 +132,28 @@ describe('prepareWorktreePushTargetWithExec', () => {
     ])
   })
 
+  it('uses separate fetch and cleanup executors when provided', async () => {
+    const exec = makeRepoExec({ origin: 'git@github.com:stablyai/orca.git' })
+    const cleanupExec = vi.fn<GitRemoteExec>().mockResolvedValue({ stdout: '', stderr: '' })
+    const fetchRemoteTrackingRef = vi.fn().mockRejectedValue(new Error('fetch timed out'))
+
+    await expect(
+      prepareWorktreePushTargetWithExec(
+        exec,
+        REPO,
+        forkTarget(),
+        () => false,
+        cleanupExec,
+        fetchRemoteTrackingRef
+      )
+    ).rejects.toThrow('fetch timed out')
+
+    expect(fetchRemoteTrackingRef).toHaveBeenCalledWith('pr-contributor-orca')
+    expect(callsMatching(exec, ['fetch'])).toEqual([])
+    expect(callsMatching(exec, ['remote', 'remove'])).toEqual([])
+    expect(cleanupExec).toHaveBeenCalledWith(['remote', 'remove', 'pr-contributor-orca'], REPO)
+  })
+
   it('reuses an existing remote pointing at the same fork (SSH vs HTTPS) without adding', async () => {
     const exec = makeRepoExec({
       origin: 'git@github.com:stablyai/orca.git',

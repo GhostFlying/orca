@@ -176,9 +176,8 @@ describe('worktree RPC methods', () => {
       }),
       { signal }
     )
-    expect(runtime.createManagedWorktree).toHaveBeenLastCalledWith(
-      expect.not.objectContaining({ signal: expect.anything() })
-    )
+    const lastCreateOptions = vi.mocked(runtime.createManagedWorktree).mock.lastCall?.[0]
+    expect(lastCreateOptions).not.toHaveProperty('signal')
   })
 
   it('mints automation provenance from a valid dispatch request on worktree creation', async () => {

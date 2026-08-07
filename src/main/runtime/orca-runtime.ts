@@ -22179,7 +22179,10 @@ export class OrcaRuntimeService {
           args.pushTarget,
           this.store,
           repo.id,
-          localWorktreeGitOptions
+          {
+            ...localWorktreeGitOptions,
+            timeout: remainingRefreshMs()
+          }
         )
       } catch (error) {
         releasePushTargetPreparation?.()

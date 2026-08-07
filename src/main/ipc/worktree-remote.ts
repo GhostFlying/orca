@@ -111,8 +111,6 @@ import {
 import {
   acquireWorktreePushTargetPreparationLease,
   configureCreatedWorktreePushTargetWithExec,
-  ensureUniqueRemoteName,
-  findRemoteForUrl,
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
 import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
@@ -651,11 +649,8 @@ async function rollbackFailedRemoteWorktreeCreate(
     : Date.now()
   let created: GitWorktreeInfo | undefined
   do {
-    const remaining = Math.max(1, reconciliationDeadlineAt - Date.now())
     const worktrees = await provider.listWorktrees(repoPath, {
-      timeoutMs: waitForLateRegistration
-        ? Math.min(WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS, remaining)
-        : WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
+      timeoutMs: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
       strict: true
     })
     created = findRemoteWorktreeCreateIdentity(provider, worktrees, worktreePath, branchName)
@@ -1170,11 +1165,13 @@ export async function prepareWorktreePushTarget(
   target: GitPushTarget,
   store?: WorktreePushTargetStore,
   repoId?: string,
-  gitOptions: { wslDistro?: string } = {}
+  gitOptions: { wslDistro?: string; signal?: AbortSignal; timeout?: number } = {}
 ): Promise<GitPushTarget> {
-  await validateGitPushTarget(repoPath, target, gitOptions)
+  const { timeout: fetchTimeout = CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS, ...operationGitOptions } =
+    gitOptions
+  await validateGitPushTarget(repoPath, target, operationGitOptions)
   return prepareWorktreePushTargetWithExec(
-    (args, cwd) => gitExecFileAsync(args, { cwd, ...gitOptions }),
+    (args, cwd) => gitExecFileAsync(args, { cwd, ...operationGitOptions }),
     repoPath,
     target,
     (existingRemote) =>
@@ -1189,7 +1186,20 @@ export async function prepareWorktreePushTarget(
       gitExecFileAsync(args, {
         cwd,
         ...(gitOptions.wslDistro ? { wslDistro: gitOptions.wslDistro } : {})
-      })
+      }),
+    (remoteName) =>
+      gitExecFileAsync(
+        [
+          'fetch',
+          remoteName,
+          `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
+        ],
+        {
+          cwd: repoPath,
+          ...operationGitOptions,
+          timeout: fetchTimeout
+        }
+      ).then(() => undefined)
   )
 }
 
@@ -1255,55 +1265,34 @@ async function prepareWorktreePushTargetSsh(
   repoPath: string,
   target: GitPushTarget,
   store?: WorktreePushTargetStore,
-  repoId?: string
+  repoId?: string,
+  fetchTimeoutMs = CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS
 ): Promise<GitPushTarget> {
   assertGitPushTargetShape(target)
   const execGit: GitRemoteExec = (args, cwd) => provider.exec(args, cwd)
-  const { remoteCreated: _ignoredRemoteCreated, ...sanitizedTarget } = target
   await provider.exec(['check-ref-format', '--branch', target.branchName], repoPath)
-  let remoteName = target.remoteName
-  let remoteCreated = false
-  let createdThisCall = false
-  if (target.remoteUrl) {
-    const existingRemote = await findRemoteForUrl(execGit, repoPath, target.remoteUrl)
-    if (existingRemote) {
-      remoteName = existingRemote
-      remoteCreated = store
+  return prepareWorktreePushTargetWithExec(
+    execGit,
+    repoPath,
+    target,
+    (existingRemote) =>
+      store
         ? isPushTargetRemoteCreatedByKnownWorktree(
             store,
             { ...target, remoteName: existingRemote },
             repoId
           )
-        : false
-    } else {
-      remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
-      await provider.exec(['remote', 'add', remoteName, target.remoteUrl], repoPath)
-      remoteCreated = true
-      createdThisCall = true
-    }
-  }
-  try {
-    await provider.fetchRemoteTrackingRef(
-      repoPath,
-      remoteName,
-      target.branchName,
-      `refs/remotes/${remoteName}/${target.branchName}`
-    )
-  } catch (error) {
-    if (createdThisCall) {
-      try {
-        await provider.exec(['remote', 'remove', remoteName], repoPath)
-      } catch {
-        // Keep the fetch failure actionable; later retries can reuse or disambiguate the remote.
-      }
-    }
-    throw error
-  }
-  return {
-    ...sanitizedTarget,
-    remoteName,
-    ...(remoteCreated ? { remoteCreated: true } : {})
-  }
+        : false,
+    execGit,
+    (remoteName) =>
+      provider.fetchRemoteTrackingRef(
+        repoPath,
+        remoteName,
+        target.branchName,
+        `refs/remotes/${remoteName}/${target.branchName}`,
+        { timeoutMs: fetchTimeoutMs }
+      )
+  )
 }
 
 export async function cleanupUnusedWorktreePushTargetRemoteSsh(
@@ -1966,7 +1955,8 @@ export async function createRemoteWorktree(
         repo.path,
         args.pushTarget,
         store,
-        repo.id
+        repo.id,
+        remainingRefreshMs()
       )
     } catch (error) {
       releasePushTargetPreparation?.()
@@ -2618,7 +2608,10 @@ export async function createLocalWorktree(
         args.pushTarget,
         store,
         repo.id,
-        localWorktreeGitOptions
+        {
+          ...localWorktreeGitOptions,
+          timeout: remainingRefreshMs()
+        }
       )
     } catch (error) {
       releasePushTargetPreparation?.()
