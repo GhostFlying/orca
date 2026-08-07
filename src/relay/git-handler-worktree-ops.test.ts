@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import * as path from 'node:path'
 import { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
-import { addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
+import { addWorktreeOp, removeWorktreeOp, worktreeIsCleanOp } from './git-handler-worktree-ops'
 
 function removeWorktreeWithCapabilityCache(
   git: GitExec,
@@ -88,6 +88,70 @@ describe('addWorktreeOp', () => {
     ])
   })
 
+  it('applies the requested timeout to git worktree add', async () => {
+    const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))
+    const controller = new AbortController()
+
+    await addWorktreeOp(
+      git,
+      {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        checkoutExistingBranch: true,
+        timeoutMs: 420_000
+      },
+      { signal: controller.signal }
+    )
+
+    expect(git).toHaveBeenCalledWith(
+      ['worktree', 'add', '/repo-feature', 'feature/test'],
+      '/repo',
+      { signal: controller.signal, timeout: 420_000 }
+    )
+  })
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 999, 7_200_001])(
+    'rejects an invalid worktree add timeout: %s',
+    async (timeoutMs) => {
+      const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))
+
+      await expect(
+        addWorktreeOp(git, {
+          repoPath: '/repo',
+          branchName: 'feature/test',
+          targetDir: '/repo-feature',
+          checkoutExistingBranch: true,
+          timeoutMs
+        })
+      ).rejects.toThrow('Invalid worktree add timeout.')
+      expect(git).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not swallow a cancelled base-ref probe', async () => {
+    const controller = new AbortController()
+    const error = Object.assign(new Error('cancelled'), { name: 'AbortError' })
+    const git = vi.fn<GitExec>(async () => {
+      controller.abort()
+      throw error
+    })
+
+    await expect(
+      addWorktreeOp(
+        git,
+        {
+          repoPath: '/repo',
+          branchName: 'feature/test',
+          targetDir: '/repo-feature',
+          base: 'origin/main'
+        },
+        { signal: controller.signal }
+      )
+    ).rejects.toBe(error)
+    expect(git).toHaveBeenCalledTimes(1)
+  })
+
   it('does not write branch base config when SSH creation has no base', async () => {
     const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))
 
@@ -132,6 +196,24 @@ describe('addWorktreeOp', () => {
       'branch.feature/test.base'
     ])
     warnSpy.mockRestore()
+  })
+})
+
+describe('worktreeIsCleanOp', () => {
+  it('applies the requested timeout to the status child process', async () => {
+    const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }))
+
+    await worktreeIsCleanOp(git, {
+      worktreePath: '/repo-feature',
+      includeUntracked: false,
+      timeoutMs: 75_000
+    })
+
+    expect(git).toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=no'],
+      '/repo-feature',
+      { timeout: 75_000 }
+    )
   })
 })
 

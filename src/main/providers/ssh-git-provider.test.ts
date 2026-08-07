@@ -354,6 +354,7 @@ describe('SshGitProvider', () => {
       {
         args: ['clone', '--progress', '--', 'git@example.com:repo.git', 'repo'],
         cwd: '/home/user',
+        timeoutMs: 60_000,
         // Why: exec opts into response streaming so a large stdout is chunked
         // onto the bulk lane; old relays ignore the flag.
         __streamResponse: true
@@ -986,6 +987,28 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('fetchRemoteTrackingRef forwards the deadline to the relay and transport', async () => {
+    await provider.fetchRemoteTrackingRef(
+      '/home/user/repo',
+      'origin',
+      'main',
+      'refs/remotes/origin/main',
+      { timeoutMs: 75_000 }
+    )
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.fetchRemoteTrackingRef',
+      {
+        worktreePath: '/home/user/repo',
+        remote: 'origin',
+        branch: 'main',
+        ref: 'refs/remotes/origin/main',
+        timeoutMs: 75_000
+      },
+      { timeoutMs: 75_000 }
+    )
+  })
+
   it('fetchGitLabMergeRequestHead sends the durable-ref git.fetchGitLabMergeRequestHeadRef request', async () => {
     mux.request.mockResolvedValueOnce({
       localRef: 'refs/orca/merge-requests/origin-abc/42'
@@ -1432,6 +1455,18 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(worktrees)
   })
 
+  it('listWorktrees forwards the deadline to the relay and transport', async () => {
+    mux.request.mockResolvedValue([])
+
+    await provider.listWorktrees('/home/user/repo', { timeoutMs: 90_000 })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.listWorktrees',
+      { repoPath: '/home/user/repo', timeoutMs: 90_000 },
+      { signal: undefined, timeoutMs: 90_000 }
+    )
+  })
+
   it('addWorktree sends git.addWorktree request', async () => {
     await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
       base: 'main',
@@ -1444,6 +1479,40 @@ describe('SshGitProvider', () => {
       base: 'main',
       noCheckout: true
     })
+  })
+
+  it('addWorktree forwards the child deadline and adds transport headroom', async () => {
+    const controller = new AbortController()
+    await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
+      base: 'main',
+      timeoutMs: 420_000,
+      signal: controller.signal
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktree',
+      {
+        repoPath: '/home/user/repo',
+        branchName: 'feature',
+        targetDir: '/home/user/feat',
+        base: 'main',
+        timeoutMs: 420_000
+      },
+      { signal: controller.signal, timeoutMs: 425_000 }
+    )
+  })
+
+  it('addWorktree keeps the legacy transport floor for a shorter child deadline', async () => {
+    await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
+      base: 'main',
+      timeoutMs: 12_000
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktree',
+      expect.objectContaining({ timeoutMs: 12_000 }),
+      { timeoutMs: 185_000 }
+    )
   })
 
   it('removeWorktree sends git.removeWorktree request', async () => {
@@ -1479,6 +1548,25 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(cleanResult)
   })
 
+  it('worktreeIsClean forwards its deadline to the relay and transport', async () => {
+    mux.request.mockResolvedValue({ clean: true })
+
+    await provider.worktreeIsClean('/home/user/feat', {
+      includeUntracked: false,
+      timeoutMs: 75_000
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.worktreeIsClean',
+      {
+        worktreePath: '/home/user/feat',
+        includeUntracked: false,
+        timeoutMs: 75_000
+      },
+      { timeoutMs: 75_000 }
+    )
+  })
+
   it('worktreeIsClean filters untracked stdout when old relays ignore the option', async () => {
     mux.request.mockResolvedValue({ clean: false, stdout: '?? scratch.txt\n' })
 
@@ -1509,6 +1597,26 @@ describe('SshGitProvider', () => {
       remoteTrackingRef: 'refs/remotes/origin/main',
       ownerWorktreePath: '/home/user/repo'
     })
+  })
+
+  it('refreshLocalBaseRefForWorktreeCreate forwards its deadline', async () => {
+    await provider.refreshLocalBaseRefForWorktreeCreate({
+      repoPath: '/home/user/repo',
+      fullRef: 'refs/heads/main',
+      remoteTrackingRef: 'refs/remotes/origin/main',
+      timeoutMs: 75_000
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.refreshLocalBaseRefForWorktreeCreate',
+      {
+        repoPath: '/home/user/repo',
+        fullRef: 'refs/heads/main',
+        remoteTrackingRef: 'refs/remotes/origin/main',
+        timeoutMs: 75_000
+      },
+      { timeoutMs: 75_000 }
+    )
   })
 
   it('worktreeIsClean falls back to git.status for old relays', async () => {
@@ -1553,6 +1661,29 @@ describe('SshGitProvider', () => {
       expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
         worktreePath: '/home/user/feat'
       })
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('worktreeIsClean keeps its deadline in the old-relay status fallback', async () => {
+    const methodNotFound = Object.assign(new Error('Method not found: git.worktreeIsClean'), {
+      code: -32601
+    })
+    mux.request.mockRejectedValueOnce(methodNotFound).mockResolvedValueOnce({
+      entries: [],
+      conflictOperation: 'unknown'
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      await provider.worktreeIsClean('/home/user/feat', { timeoutMs: 75_000 })
+      expect(mux.request).toHaveBeenNthCalledWith(
+        2,
+        'git.status',
+        { worktreePath: '/home/user/feat', timeoutMs: 75_000 },
+        { signal: undefined, timeoutMs: 75_000 }
+      )
     } finally {
       warnSpy.mockRestore()
     }

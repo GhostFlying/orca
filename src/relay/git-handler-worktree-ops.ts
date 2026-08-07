@@ -1,25 +1,42 @@
 import * as path from 'node:path'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
+import {
+  WORKTREE_CREATE_TIMEOUT_MAX_MS,
+  WORKTREE_CREATE_TIMEOUT_MIN_MS
+} from '../shared/worktree-create-timeouts'
 import type { GitExec } from './git-handler-ops'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
 export { readRelayWorktreeList } from './git-handler-worktree-list'
+
+function remainingTimeout(deadlineAt: number | undefined, fallback: number | undefined) {
+  return deadlineAt === undefined ? fallback : Math.max(1, deadlineAt - Date.now())
+}
+
+function rethrowIfRequestAborted(signal: AbortSignal | undefined, error: unknown): void {
+  if (signal?.aborted) {
+    throw error
+  }
+}
 
 async function persistRelayWorktreeCreationBase(
   git: GitExec,
   targetDir: string,
   branchName: string,
-  effectiveBase: string
+  effectiveBase: string,
+  signal?: AbortSignal
 ): Promise<void> {
   const configKey = `branch.${branchName}.base`
   try {
     await git(['config', '--local', '--replace-all', configKey, effectiveBase], targetDir)
   } catch (error) {
+    rethrowIfRequestAborted(signal, error)
     console.warn(`relay addWorktree: failed to set ${configKey} for ${targetDir}`, error)
     try {
       // Why: SSH worktree creation shares branch config by name; clear stale
       // metadata if replacing an old same-name base fails.
       await git(['config', '--local', '--unset-all', configKey], targetDir)
     } catch (unsetError) {
+      rethrowIfRequestAborted(signal, unsetError)
       console.warn(
         `relay addWorktree: failed to unset stale ${configKey} for ${targetDir}`,
         unsetError
@@ -28,13 +45,47 @@ async function persistRelayWorktreeCreationBase(
   }
 }
 
-export async function addWorktreeOp(git: GitExec, params: Record<string, unknown>): Promise<void> {
+export async function addWorktreeOp(
+  git: GitExec,
+  params: Record<string, unknown>,
+  options: { signal?: AbortSignal } = {}
+): Promise<void> {
   const repoPath = params.repoPath as string
   const branchName = params.branchName as string
   const targetDir = params.targetDir as string
   const base = params.base as string | undefined
   const checkoutExistingBranch = params.checkoutExistingBranch === true
   const noCheckout = params.noCheckout === true
+  const timeoutValue = params.timeoutMs
+  if (
+    timeoutValue !== undefined &&
+    (typeof timeoutValue !== 'number' ||
+      !Number.isFinite(timeoutValue) ||
+      timeoutValue < WORKTREE_CREATE_TIMEOUT_MIN_MS ||
+      timeoutValue > WORKTREE_CREATE_TIMEOUT_MAX_MS)
+  ) {
+    throw new Error('Invalid worktree add timeout.')
+  }
+  const timeout = timeoutValue as number | undefined
+  const deadlineAt = timeout ? Date.now() + timeout : undefined
+  const signal = options.signal
+  const stageGit: GitExec = (args, cwd, childOptions) => {
+    const effectiveSignal = childOptions?.signal ?? signal
+    if (!timeout && !childOptions && !effectiveSignal) {
+      return git(args, cwd)
+    }
+    const gitOptions = {
+      ...childOptions,
+      ...(effectiveSignal ? { signal: effectiveSignal } : {})
+    }
+    if (!timeout) {
+      return git(args, cwd, gitOptions)
+    }
+    return git(args, cwd, {
+      ...gitOptions,
+      timeout: remainingTimeout(deadlineAt, timeout)
+    })
+  }
 
   // Why: a branchName starting with '-' would be interpreted as a git flag,
   // potentially changing the command's semantics (e.g. "--detach").
@@ -54,9 +105,13 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
     base && !checkoutExistingBranch
       ? await resolveWorktreeAddBaseRef(base, async (qualifiedRef) => {
           try {
-            await git(['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`], repoPath)
+            await stageGit(
+              ['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`],
+              repoPath
+            )
             return true
-          } catch {
+          } catch (error) {
+            rethrowIfRequestAborted(signal, error)
             return false
           }
         })
@@ -72,14 +127,14 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
     args.push(effectiveBase)
   }
 
-  await git(args, repoPath)
+  await stageGit(args, repoPath)
 
   if (checkoutExistingBranch) {
     return
   }
 
   if (effectiveBase) {
-    await persistRelayWorktreeCreationBase(git, targetDir, branchName, effectiveBase)
+    await persistRelayWorktreeCreationBase(stageGit, targetDir, branchName, effectiveBase, signal)
   }
 
   // Why: best-effort write so a deliberate user value (any scope) is
@@ -91,9 +146,10 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   try {
     let alreadySet = false
     try {
-      await git(['config', '--get', 'push.autoSetupRemote'], targetDir)
+      await stageGit(['config', '--get', 'push.autoSetupRemote'], targetDir)
       alreadySet = true
     } catch (readError) {
+      rethrowIfRequestAborted(signal, readError)
       // Why: `git config --get` exits 1 only when the key is unset at every
       // scope. Any other code is a real read failure (corrupt config,
       // locked file) — surface it via the outer catch instead of falling
@@ -104,9 +160,10 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
       }
     }
     if (!alreadySet) {
-      await git(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir)
+      await stageGit(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir)
     }
   } catch (error) {
+    rethrowIfRequestAborted(signal, error)
     console.warn(`relay addWorktree: failed to set push.autoSetupRemote for ${targetDir}`, error)
   }
 }
@@ -142,10 +199,18 @@ export async function worktreeIsCleanOp(
 ): Promise<{ clean: boolean; stdout?: string }> {
   const worktreePath = params.worktreePath as string
   const includeUntracked = params.includeUntracked !== false
-  const { stdout } = await git(
-    ['status', '--porcelain', includeUntracked ? '--untracked-files=all' : '--untracked-files=no'],
-    worktreePath
-  )
+  const timeout =
+    typeof params.timeoutMs === 'number' && Number.isFinite(params.timeoutMs)
+      ? params.timeoutMs
+      : undefined
+  const args = [
+    'status',
+    '--porcelain',
+    includeUntracked ? '--untracked-files=all' : '--untracked-files=no'
+  ]
+  const { stdout } = timeout
+    ? await git(args, worktreePath, { timeout })
+    : await git(args, worktreePath)
   const clean = !stdout.trim()
   return { clean, stdout: clean ? undefined : stdout }
 }

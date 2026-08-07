@@ -72,12 +72,21 @@ export type IGitProvider = {
     worktreePath: string,
     args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }
   ): Promise<GitDiffResult>
-  listWorktrees(repoPath: string, options?: { signal?: AbortSignal }): Promise<GitWorktreeInfo[]>
+  listWorktrees(
+    repoPath: string,
+    options?: { signal?: AbortSignal; timeoutMs?: number; strict?: boolean }
+  ): Promise<GitWorktreeInfo[]>
   addWorktree(
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string; checkoutExistingBranch?: boolean; noCheckout?: boolean }
+    options?: {
+      base?: string
+      checkoutExistingBranch?: boolean
+      noCheckout?: boolean
+      timeoutMs?: number
+      signal?: AbortSignal
+    }
   ): Promise<void>
   removeWorktree(
     worktreePath: string,
@@ -101,6 +110,6 @@ export type IGitProvider = {
   getRemoteCommitUrl(worktreePath: string, sha: string): Promise<string | null>
   worktreeIsClean(
     worktreePath: string,
-    options?: { includeUntracked?: boolean }
+    options?: { includeUntracked?: boolean; timeoutMs?: number }
   ): Promise<{ clean: boolean; stdout?: string }>
 }

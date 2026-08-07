@@ -41,6 +41,7 @@ type NonInteractiveExecQueueEntry = {
 }
 
 const NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS = 5_000
+const LEGACY_WORKTREE_ADD_TIMEOUT_MS = 180_000
 
 function isJsonRpcMethodNotFoundError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
@@ -584,16 +585,22 @@ export class SshGitProvider implements IGitProvider {
     remote: string,
     branch: string,
     ref: string,
-    options?: { skipAutoMaintenance?: boolean }
+    options?: { skipAutoMaintenance?: boolean; timeoutMs?: number }
   ): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.fetchRemoteTrackingRef', {
+      const request = {
         worktreePath,
         remote,
         branch,
         ref,
-        ...(options?.skipAutoMaintenance ? { skipAutoMaintenance: true } : {})
-      })
+        ...(options?.skipAutoMaintenance ? { skipAutoMaintenance: true } : {}),
+        ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {})
+      }
+      await (options?.timeoutMs
+        ? this.mux.request('git.fetchRemoteTrackingRef', request, {
+            timeoutMs: options.timeoutMs
+          })
+        : this.mux.request('git.fetchRemoteTrackingRef', request))
     })
   }
 
@@ -702,14 +709,16 @@ export class SshGitProvider implements IGitProvider {
 
   async listWorktrees(
     repoPath: string,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; timeoutMs?: number; strict?: boolean }
   ): Promise<GitWorktreeInfo[]> {
     return (await this.mux.request(
       'git.listWorktrees',
       {
-        repoPath
+        repoPath,
+        ...(options?.strict ? { strict: true } : {}),
+        ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {})
       },
-      { signal: options?.signal }
+      { signal: options?.signal, timeoutMs: options?.timeoutMs }
     )) as GitWorktreeInfo[]
   }
 
@@ -717,15 +726,35 @@ export class SshGitProvider implements IGitProvider {
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string; checkoutExistingBranch?: boolean; noCheckout?: boolean }
+    options?: {
+      base?: string
+      checkoutExistingBranch?: boolean
+      noCheckout?: boolean
+      timeoutMs?: number
+      signal?: AbortSignal
+    }
   ): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.addWorktree', {
+      const { signal, timeoutMs, ...requestOptions } = options ?? {}
+      const request = {
         repoPath,
         branchName,
         targetDir,
-        ...options
-      })
+        ...requestOptions,
+        ...(timeoutMs ? { timeoutMs } : {})
+      }
+      await (timeoutMs
+        ? this.mux.request('git.addWorktree', request, {
+            // Why: old relays ignore the child deadline, so keep the transport alive through
+            // the legacy create-add ceiling while new relays still receive the exact budget.
+            ...(signal ? { signal } : {}),
+            timeoutMs:
+              Math.max(timeoutMs, LEGACY_WORKTREE_ADD_TIMEOUT_MS) +
+              NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
+          })
+        : signal
+          ? this.mux.request('git.addWorktree', request, { signal })
+          : this.mux.request('git.addWorktree', request))
     })
   }
 
@@ -746,13 +775,17 @@ export class SshGitProvider implements IGitProvider {
 
   async worktreeIsClean(
     worktreePath: string,
-    options: { includeUntracked?: boolean } = {}
+    options: { includeUntracked?: boolean; timeoutMs?: number } = {}
   ): Promise<{ clean: boolean; stdout?: string }> {
     try {
-      const result = (await this.mux.request('git.worktreeIsClean', {
+      const request = {
         worktreePath,
-        ...(options.includeUntracked === false ? { includeUntracked: false } : {})
-      })) as {
+        ...(options.includeUntracked === false ? { includeUntracked: false } : {}),
+        ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {})
+      }
+      const result = (await (options.timeoutMs
+        ? this.mux.request('git.worktreeIsClean', request, { timeoutMs: options.timeoutMs })
+        : this.mux.request('git.worktreeIsClean', request))) as {
         clean: boolean
         stdout?: string
       }
@@ -776,7 +809,13 @@ export class SshGitProvider implements IGitProvider {
       }
       // Why: existing SSH relays may predate git.worktreeIsClean, but git.status
       // is a narrow relay RPC and avoids the generic git.exec allowlist.
-      const status = await this.getStatus(worktreePath)
+      const status = (await (options.timeoutMs
+        ? this.mux.request(
+            'git.status',
+            { worktreePath, timeoutMs: options.timeoutMs },
+            { timeoutMs: options.timeoutMs }
+          )
+        : this.mux.request('git.status', { worktreePath }))) as GitStatusResult
       const entries =
         options.includeUntracked === false
           ? status.entries.filter((entry) => entry.area !== 'untracked')
@@ -792,9 +831,14 @@ export class SshGitProvider implements IGitProvider {
     remoteTrackingRef: string
     ownerWorktreePath?: string
     checkOnly?: boolean
+    timeoutMs?: number
   }): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args)
+      await (args.timeoutMs
+        ? this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args, {
+            timeoutMs: args.timeoutMs
+          })
+        : this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args))
     })
   }
 
@@ -834,10 +878,15 @@ export class SshGitProvider implements IGitProvider {
     cwd: string,
     options?: { signal?: AbortSignal; timeoutMs?: number }
   ): Promise<{ stdout: string; stderr: string }> {
+    const request = {
+      args,
+      cwd,
+      ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {})
+    }
     const run = () =>
       options
-        ? requestGitStreamable(this.mux, 'git.exec', { args, cwd }, options)
-        : requestGitStreamable(this.mux, 'git.exec', { args, cwd })
+        ? requestGitStreamable(this.mux, 'git.exec', request, options)
+        : requestGitStreamable(this.mux, 'git.exec', request)
     const result = gitExecMutatesRepository(args)
       ? await this.runWithDiffDedupeClear(run)
       : await run()

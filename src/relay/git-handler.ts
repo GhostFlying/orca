@@ -247,7 +247,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.branchDiff', (p, context) => this.branchDiff(p, context))
     this.dispatcher.onRequest('git.commitDiff', (p, context) => this.commitDiff(p, context))
     this.dispatcher.onRequest('git.listWorktrees', (p, context) => this.listWorktrees(p, context))
-    this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
+    this.dispatcher.onRequest('git.addWorktree', (p, context) => this.addWorktree(p, context))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
     this.dispatcher.onRequest('git.refreshLocalBaseRefForWorktreeCreate', (p) =>
@@ -909,6 +909,10 @@ export class GitHandler {
     const branch = params.branch
     const ref = params.ref
     const skipAutoMaintenance = params.skipAutoMaintenance
+    const timeout =
+      typeof params.timeoutMs === 'number' && Number.isFinite(params.timeoutMs)
+        ? params.timeoutMs
+        : undefined
     try {
       if (typeof remote !== 'string' || typeof branch !== 'string' || typeof ref !== 'string') {
         throw new Error('Invalid remote-tracking fetch request.')
@@ -934,16 +938,16 @@ export class GitHandler {
         }
         await this.git(['check-ref-format', `refs/heads/${branch}`], worktreePath)
         await this.git(['check-ref-format', ref], worktreePath)
-        await this.git(
-          [
-            ...(skipAutoMaintenance ? GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS : []),
-            'fetch',
-            '--no-tags',
-            remote,
-            `+refs/heads/${branch}:${ref}`
-          ],
-          worktreePath
-        )
+        const fetchArgs = [
+          ...(skipAutoMaintenance ? GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS : []),
+          'fetch',
+          '--no-tags',
+          remote,
+          `+refs/heads/${branch}:${ref}`
+        ]
+        await (timeout === undefined
+          ? this.git(fetchArgs, worktreePath)
+          : this.git(fetchArgs, worktreePath, { timeout }))
       } catch (error) {
         // Why: create-worktree needs a write-capable fetch that generic git.exec rejects; narrow RPC keeps the allowlist tight.
         throw new Error(normalizeGitErrorMessage(error, 'fetch'))
@@ -1199,9 +1203,13 @@ export class GitHandler {
   private async exec(params: Record<string, unknown>, context?: RequestContext) {
     const args = params.args as string[]
     const cwd = params.cwd as string
+    const timeout =
+      typeof params.timeoutMs === 'number' && Number.isFinite(params.timeoutMs)
+        ? params.timeoutMs
+        : undefined
 
     validateGitExecArgs(args)
-    const run = () => this.git(args, cwd, { signal: context?.signal })
+    const run = () => this.git(args, cwd, { signal: context?.signal, timeout })
     const { stdout, stderr } = gitExecMutatesRepository(args)
       ? await this.runWithGitReadCacheClear(run)
       : await run()
@@ -1399,41 +1407,49 @@ export class GitHandler {
 
   private async listWorktrees(params: Record<string, unknown>, context?: RequestContext) {
     const repoPath = params.repoPath as string
-    return this.gitCapabilities
-      .runWithFallback(
-        'worktree-list-z',
-        async () => {
-          const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath, {
-            signal: context?.signal
+    const strict = params.strict === true
+    const timeout = typeof params.timeoutMs === 'number' ? params.timeoutMs : undefined
+    const scan = this.gitCapabilities.runWithFallback(
+      'worktree-list-z',
+      async () => {
+        const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath, {
+          signal: context?.signal,
+          timeout
+        })
+        return this.normalizeMainWorktreePath(
+          repoPath,
+          parseWorktreeList(stdout, { nulDelimited: true })
+        )
+      },
+      async () => {
+        // Why: Git <2.36 lacks worktree-list `-z`, so fall back to the newline-block parser (loses newline-in-path safety).
+        try {
+          const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
+            signal: context?.signal,
+            timeout
           })
-          return this.normalizeMainWorktreePath(
+          const normalized = await this.normalizeMainWorktreePath(
             repoPath,
-            parseWorktreeList(stdout, { nulDelimited: true })
+            parseWorktreeList(stdout)
           )
-        },
-        async () => {
-          // Why: Git <2.36 lacks worktree-list `-z`, so fall back to the newline-block parser (loses newline-in-path safety).
-          try {
-            const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
-              signal: context?.signal
-            })
-            const normalized = await this.normalizeMainWorktreePath(
-              repoPath,
-              parseWorktreeList(stdout)
-            )
-            // Why: Git <2.31 emits no `prunable` annotation, so probe each linked worktree's existence instead of trusting stale registrations (issue #8389).
-            return annotatePrunableWorktreesByExistence(normalized)
-          } catch {
-            return []
+          // Why: Git <2.31 emits no `prunable` annotation, so probe each linked worktree's existence instead of trusting stale registrations (issue #8389).
+          return annotatePrunableWorktreesByExistence(normalized)
+        } catch (error) {
+          if (strict) {
+            throw error
           }
-        },
-        isUnsupportedWorktreeListZError
-      )
-      .catch(() => [])
+          return []
+        }
+      },
+      isUnsupportedWorktreeListZError
+    )
+    return strict ? scan : scan.catch(() => [])
   }
 
-  private async addWorktree(params: Record<string, unknown>) {
-    return this.runWithGitReadCacheClear(() => addWorktreeOp(this.git.bind(this), params))
+  private async addWorktree(params: Record<string, unknown>, context: RequestContext) {
+    return this.runWithGitReadCacheClear(() =>
+      addWorktreeOp(this.git.bind(this), params, { signal: context.signal })
+    )
   }
 
   private async removeWorktree(params: Record<string, unknown>) {

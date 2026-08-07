@@ -240,6 +240,14 @@ import type {
   CodexRateLimitAccountsState
 } from '../../shared/types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
+import {
+  normalizeWorktreeCreateTimeouts,
+  type WorktreeCreateTimeoutOverrides
+} from '../../shared/worktree-create-timeouts'
+import {
+  createWorktreeCreateStageDeadline,
+  getEffectiveWorktreeCreateTimeouts
+} from '../worktree-create-stage-timeouts'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -857,7 +865,8 @@ import {
   addSparseWorktree,
   assertWorktreeCleanForRemoval,
   forceDeleteLocalBranch,
-  removeWorktree
+  removeWorktree,
+  rollbackFailedWorktreeCreate
 } from '../git/worktree'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
 import { isENOENT, invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
@@ -1154,6 +1163,7 @@ type RuntimeStore = {
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
+    worktreeCreateTimeouts?: GlobalSettings['worktreeCreateTimeouts']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
@@ -3427,6 +3437,7 @@ export class OrcaRuntimeService {
     | 'githubProjects'
     | 'experimentalNewWorktreeCardStyle'
     | 'compactWorktreeCards'
+    | 'worktreeCreateTimeouts'
     | 'minimaxGroupId'
     | 'minimaxUsageModels'
     | 'prBotAuthorOverrides'
@@ -3453,6 +3464,7 @@ export class OrcaRuntimeService {
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
+      worktreeCreateTimeouts: normalizeWorktreeCreateTimeouts(settings.worktreeCreateTimeouts),
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
@@ -3488,25 +3500,29 @@ export class OrcaRuntimeService {
   }
 
   async updateClientSettings(
-    updates: Pick<
-      Partial<GlobalSettings>,
-      | 'agentStatusHooksEnabled'
-      | 'defaultTuiAgent'
-      | 'disabledTuiAgents'
-      | 'agentDefaultArgs'
-      | 'agentDefaultEnv'
-      | 'defaultTaskSource'
-      | 'defaultTaskViewPreset'
-      | 'visibleTaskProviders'
-      | 'defaultRepoSelection'
-      | 'defaultLinearTeamSelection'
-      | 'githubProjects'
-      | 'experimentalNewWorktreeCardStyle'
-      | 'compactWorktreeCards'
-      | 'minimaxGroupId'
-      | 'minimaxUsageModels'
-      | 'prBotAuthorOverrides'
-    >
+    updates: Omit<
+      Pick<
+        Partial<GlobalSettings>,
+        | 'agentStatusHooksEnabled'
+        | 'defaultTuiAgent'
+        | 'disabledTuiAgents'
+        | 'agentDefaultArgs'
+        | 'agentDefaultEnv'
+        | 'defaultTaskSource'
+        | 'defaultTaskViewPreset'
+        | 'visibleTaskProviders'
+        | 'defaultRepoSelection'
+        | 'defaultLinearTeamSelection'
+        | 'githubProjects'
+        | 'experimentalNewWorktreeCardStyle'
+        | 'compactWorktreeCards'
+        | 'worktreeCreateTimeouts'
+        | 'minimaxGroupId'
+        | 'minimaxUsageModels'
+        | 'prBotAuthorOverrides'
+      >,
+      'worktreeCreateTimeouts'
+    > & { worktreeCreateTimeouts?: WorktreeCreateTimeoutOverrides }
   ): Promise<
     Pick<
       GlobalSettings,
@@ -3524,6 +3540,7 @@ export class OrcaRuntimeService {
       | 'githubProjects'
       | 'experimentalNewWorktreeCardStyle'
       | 'compactWorktreeCards'
+      | 'worktreeCreateTimeouts'
       | 'minimaxGroupId'
       | 'minimaxUsageModels'
       | 'prBotAuthorOverrides'
@@ -3534,7 +3551,18 @@ export class OrcaRuntimeService {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
-    this.store.updateSettings(updates, { notifyListeners: true })
+    const { worktreeCreateTimeouts, ...otherUpdates } = updates
+    const normalizedUpdates: Partial<GlobalSettings> =
+      worktreeCreateTimeouts === undefined
+        ? otherUpdates
+        : {
+            ...otherUpdates,
+            worktreeCreateTimeouts: normalizeWorktreeCreateTimeouts(
+              worktreeCreateTimeouts,
+              normalizeWorktreeCreateTimeouts(beforeSettings.worktreeCreateTimeouts)
+            )
+          }
+    this.store.updateSettings(normalizedUpdates, { notifyListeners: true })
     const settings = this.store.getSettings()
     if (
       (typeof updates.agentStatusHooksEnabled === 'boolean' &&
@@ -21549,6 +21577,7 @@ export class OrcaRuntimeService {
   async createManagedWorktree(args: {
     repoSelector: string
     name: string
+    timeouts?: WorktreeCreateTimeoutOverrides
     baseBranch?: string
     compareBaseRef?: string
     branchNameOverride?: string
@@ -21594,6 +21623,13 @@ export class OrcaRuntimeService {
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
     const createSettings = this.store.getSettings()
+    const createTimeouts = getEffectiveWorktreeCreateTimeouts(
+      repo,
+      {
+        worktreeCreateTimeouts: (createSettings as Partial<GlobalSettings>).worktreeCreateTimeouts
+      },
+      args.timeouts
+    )
     const requestedAgent = args.startupAgent ?? args.createdWithAgent
     const requestedAgentEnabled =
       requestedAgent !== undefined
@@ -21773,6 +21809,7 @@ export class OrcaRuntimeService {
     if (repo.connectionId) {
       const result = await this.createManagedRemoteWorktree(repo, {
         ...args,
+        timeouts: args.timeouts,
         activate: args.activate,
         ...(effectiveStartup ? { startup: effectiveStartup } : {}),
         ...(effectiveStartupFollowup ? { startupFollowup: effectiveStartupFollowup } : {}),
@@ -21812,11 +21849,23 @@ export class OrcaRuntimeService {
     const localWorktreeGitOptionArgs: [] | [{ wslDistro?: string }] = hasLocalWorktreeGitOptions
       ? [localWorktreeGitOptions]
       : []
+    let refreshDeadline: ReturnType<typeof createWorktreeCreateStageDeadline> | undefined
+    const remainingRefreshMs = (): number => {
+      refreshDeadline ??= createWorktreeCreateStageDeadline(
+        createTimeouts.refreshBaseRefMs,
+        `Worktree base ref refresh timed out after ${createTimeouts.refreshBaseRefMs}ms.`
+      )
+      return refreshDeadline.remainingMs()
+    }
+    const addRefreshTimeoutMs = (): number =>
+      refreshDeadline?.remainingMs() ?? createTimeouts.refreshBaseRefMs
     const addProjectGitOptions = (options?: AddWorktreeOptions): AddWorktreeOptions | undefined => {
-      if (!hasLocalWorktreeGitOptions) {
-        return options
+      return {
+        ...options,
+        ...localWorktreeGitOptions,
+        refreshTimeout: addRefreshTimeoutMs(),
+        timeout: createTimeouts.addCheckoutMs
       }
-      return { ...options, ...localWorktreeGitOptions }
     }
     const hostedReviewExecutionContext = this.getHostedReviewExecutionOptions(repo)
     let effectiveRequestedName = args.name
@@ -22018,9 +22067,13 @@ export class OrcaRuntimeService {
         const refreshResult = await this.getOrStartRemoteTrackingBaseRefresh(
           repo.path,
           remoteTrackingBase,
-          ...localWorktreeGitOptionArgs
+          {
+            ...localWorktreeGitOptions,
+            timeout: remainingRefreshMs()
+          }
         )
         if (!refreshResult.ok && !hadRemoteTrackingBaseRef) {
+          remainingRefreshMs()
           // Why: only block creation when the refresh failed AND there is no
           // usable local base ref to fall back on. If a local remote-tracking ref
           // already exists, `git worktree add` can create from it — a possibly
@@ -22033,14 +22086,15 @@ export class OrcaRuntimeService {
         }
         if (
           !hadRemoteTrackingBaseRef &&
-          !(await this.hasRemoteTrackingRef(
-            repo.path,
-            remoteTrackingBase,
-            ...localWorktreeGitOptionArgs
-          ))
+          !(await this.hasRemoteTrackingRef(repo.path, remoteTrackingBase, {
+            ...localWorktreeGitOptions,
+            timeout: remainingRefreshMs()
+          }))
         ) {
+          remainingRefreshMs()
           throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
         }
+        remainingRefreshMs()
       }
     } else if (
       !(await hasLocalWorktreeBaseRef(
@@ -22052,7 +22106,11 @@ export class OrcaRuntimeService {
       // Why: local bases keep legacy best-effort fetch behavior. Verified PR
       // SHA bases already have the commit object needed by `git worktree add`.
       try {
-        await this.fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
+        await this.fetchRemoteWithCache(repo.path, 'origin', {
+          ...localWorktreeGitOptions,
+          timeout: remainingRefreshMs()
+        })
+        remainingRefreshMs()
       } catch {
         // Why: belt-and-suspenders. fetchRemoteWithCache already logs and does
         // not throw; the outer try/catch guarantees create-path tolerance even
@@ -22191,22 +22249,57 @@ export class OrcaRuntimeService {
                   ))) ?? {}
 
     let configuredPushTarget: GitPushTarget | undefined
-    if (preparedPushTarget) {
-      configuredPushTarget = await configureCreatedWorktreePushTarget(
-        worktreePath,
-        branchName,
-        preparedPushTarget,
-        localWorktreeGitOptions
+    let gitWorktrees: GitWorktreeInfo[]
+    let created: GitWorktreeInfo
+    try {
+      const registrationDeadline = createWorktreeCreateStageDeadline(
+        createTimeouts.registrationMs,
+        `Worktree registration timed out after ${createTimeouts.registrationMs}ms.`
       )
-    }
+      if (preparedPushTarget) {
+        configuredPushTarget = await configureCreatedWorktreePushTarget(
+          worktreePath,
+          branchName,
+          preparedPushTarget,
+          {
+            ...localWorktreeGitOptions,
+            timeout: registrationDeadline.remainingMs()
+          }
+        )
+      }
 
-    const gitWorktrees = hasLocalWorktreeGitOptions
-      ? await listWorktrees(repo.path, localWorktreeGitOptions)
-      : await listWorktrees(repo.path)
-    // Why: Git may canonicalize a symlinked create path; its exact branch identifies the listed row.
-    const created = findCreatedWorktree(gitWorktrees, worktreePath, branchName)
-    if (!created) {
-      throw new Error('Worktree created but not found in listing')
+      gitWorktrees = hasLocalWorktreeGitOptions
+        ? await listWorktreesStrict(repo.path, {
+            ...localWorktreeGitOptions,
+            timeout: registrationDeadline.remainingMs(),
+            detectSparseCheckout: false
+          })
+        : await listWorktreesStrict(repo.path, {
+            timeout: registrationDeadline.remainingMs(),
+            detectSparseCheckout: false
+          })
+      // Why: Git may canonicalize a symlinked create path; its exact branch identifies the listed row.
+      const reconciled = findCreatedWorktree(gitWorktrees, worktreePath, branchName)
+      if (!reconciled) {
+        throw new Error('Worktree created but not found in listing')
+      }
+      created = reconciled
+    } catch (error) {
+      try {
+        await rollbackFailedWorktreeCreate(
+          repo.path,
+          worktreePath,
+          branchName,
+          checkoutExistingBranch,
+          localWorktreeGitOptions
+        )
+      } catch (cleanupError) {
+        const wrapped = error instanceof Error ? error : new Error(String(error))
+        wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${worktreePath}" may need manual removal)`
+        console.warn(`[worktree-create] Failed to roll back "${worktreePath}"`, cleanupError)
+        throw wrapped
+      }
+      throw error
     }
 
     const worktreeId = `${repo.id}::${created.path}`
@@ -22290,39 +22383,59 @@ export class OrcaRuntimeService {
       workspaceLineage,
       warnings: lineageWarnings
     } = this.recordCreatedWorktreeLineage(worktree, lineageResolution)
+    const materializationDeadlineAt = Date.now() + createTimeouts.materializationMs
+    let materializationTimedOut = false
+    const materializationOptions = {
+      deadlineAt: materializationDeadlineAt,
+      onDeadlineExceeded: () => {
+        materializationTimedOut = true
+      }
+    }
 
     const symlinkPaths = repo.symlinkPaths ?? []
     if (symlinkPaths.length > 0) {
-      await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
+      await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths, materializationOptions)
     }
 
     // Why: project-level `orca.yaml` shared directories add to (never replace) the
     // per-user setting, so a repo's shared dirs reach every teammate (issue #10451).
-    const sharedDirectories = await resolveWorktreeSharedDirectories(
-      repo.path,
-      localWorktreeGitOptions
-    )
+    const sharedDirectories =
+      Date.now() >= materializationDeadlineAt
+        ? ((materializationTimedOut = true), [])
+        : await resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions)
     if (sharedDirectories.length > 0) {
-      await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
+      await createWorktreeSharedPaths(
+        repo.path,
+        created.path,
+        sharedDirectories,
+        materializationOptions
+      )
     }
 
     // Why: project-level `.worktreeinclude` travels with the repo (issue #7549); copy semantics
     // (never symlink) so each worktree owns its files. Paths already linked above are skipped.
-    const worktreeIncludePaths = await resolveWorktreeIncludePaths(
-      repo.path,
-      localWorktreeGitOptions
-    )
+    const worktreeIncludePaths =
+      Date.now() >= materializationDeadlineAt
+        ? ((materializationTimedOut = true), [])
+        : await resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
     let includeCopyWarning: string | undefined
     if (worktreeIncludePaths.length > 0) {
       const skippedIncludePaths = await createWorktreeCopiedPaths(
         repo.path,
         created.path,
-        worktreeIncludePaths
+        worktreeIncludePaths,
+        materializationOptions
       )
       includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
       if (includeCopyWarning) {
         console.warn(`[worktree-include] ${includeCopyWarning}`)
       }
+    }
+    if (materializationTimedOut) {
+      const timeoutWarning = `Workspace materialization stopped after ${createTimeouts.materializationMs}ms; the worktree was kept and remaining shared paths can be added manually.`
+      includeCopyWarning = includeCopyWarning
+        ? `${includeCopyWarning} Also ${timeoutWarning[0]?.toLowerCase() ?? ''}${timeoutWarning.slice(1)}`
+        : timeoutWarning
     }
 
     let setup: CreateWorktreeResult['setup']
@@ -22656,6 +22769,7 @@ export class OrcaRuntimeService {
     repo: Repo,
     args: {
       name: string
+      timeouts?: WorktreeCreateTimeoutOverrides
       baseBranch?: string
       compareBaseRef?: string
       branchNameOverride?: string
@@ -22707,6 +22821,7 @@ export class OrcaRuntimeService {
       {
         repoId: repo.id,
         name: args.name,
+        ...(args.timeouts ? { timeouts: args.timeouts } : {}),
         ...(args.displayName ? { displayName: args.displayName } : {}),
         ...(args.baseBranch ? { baseBranch: args.baseBranch } : {}),
         ...(args.compareBaseRef ? { compareBaseRef: args.compareBaseRef } : {}),
@@ -23060,7 +23175,7 @@ export class OrcaRuntimeService {
   async getOrStartRemoteFetch(
     repoPath: string,
     remote: string,
-    gitOptions: { wslDistro?: string } = {}
+    gitOptions: { wslDistro?: string; timeout?: number } = {}
   ): Promise<RemoteFetchResult> {
     const key = await this.getCanonicalFetchKey(repoPath, remote, gitOptions)
     if (this.getFreshFetchCompletedAt(key) !== null) {
@@ -23070,20 +23185,27 @@ export class OrcaRuntimeService {
       return { ok: true }
     }
 
-    const existing = this.fetchInflight.get(key)
+    const timeout = gitOptions.timeout ?? REMOTE_FETCH_TIMEOUT_MS
+    const deadlineAt = Date.now() + timeout
+    const inflightKey = `${key}\0${timeout}`
+    const existing = this.fetchInflight.get(inflightKey)
     if (existing) {
       // Why: genuine serialization (not check-then-set). Two callers racing
       // on the same repo+remote share the single underlying `git fetch`.
       return existing
     }
 
-    const promise = this.enqueueRemoteFetch(key, () =>
-      gitExecFileAsync(['fetch', remote], {
+    const promise = this.enqueueRemoteFetch(key, () => {
+      const remaining = deadlineAt - Date.now()
+      if (remaining <= 0) {
+        return Promise.resolve({ ok: false, errorKind: 'git_error' })
+      }
+      return gitExecFileAsync(['fetch', remote], {
         cwd: repoPath,
         ...gitOptions,
         // Why: cap the create-path base-ref fetch so a stuck first-auth on
         // Windows (GCM prompt) fails fast instead of hanging creation (STA-1292).
-        timeout: REMOTE_FETCH_TIMEOUT_MS
+        timeout: remaining
       })
         .then((): RemoteFetchResult => {
           // Why (§3.3 Lifecycle): timestamp on success ONLY. Writing on rejection
@@ -23098,21 +23220,21 @@ export class OrcaRuntimeService {
           console.warn(`[fetchRemoteWithCache] ${remote} fetch failed for ${repoPath}:`, err)
           return { ok: false, errorKind: 'git_error' }
         })
-    ).finally(() => {
+    }).finally(() => {
       // Why (§3.3 Lifecycle): evict on BOTH success and rejection. A
       // rejected entry that survived in the Map would wedge every future
       // create on this repo until Orca restarted (the F2 bug §3.3 pins).
-      this.fetchInflight.delete(key)
+      this.fetchInflight.delete(inflightKey)
     })
 
-    this.fetchInflight.set(key, promise)
+    this.fetchInflight.set(inflightKey, promise)
     return promise
   }
 
   async getOrStartRemoteTrackingBaseRefresh(
     repoPath: string,
     base: RemoteTrackingBase,
-    gitOptions: { wslDistro?: string } = {}
+    gitOptions: { wslDistro?: string; timeout?: number } = {}
   ): Promise<RemoteFetchResult> {
     const remoteKey = await this.getCanonicalFetchKey(repoPath, base.remote, gitOptions)
     const key = await this.getCanonicalFetchKey(
@@ -23126,7 +23248,10 @@ export class OrcaRuntimeService {
       return { ok: true }
     }
 
-    const existing = this.fetchInflight.get(key)
+    const timeout = gitOptions.timeout ?? REMOTE_FETCH_TIMEOUT_MS
+    const deadlineAt = Date.now() + timeout
+    const inflightKey = `${key}\0${timeout}`
+    const existing = this.fetchInflight.get(inflightKey)
     if (existing) {
       return existing
     }
@@ -23134,6 +23259,10 @@ export class OrcaRuntimeService {
     const promise = this.enqueueRemoteFetch(remoteKey, async () => {
       if (this.getFreshFetchCompletedAt(key) !== null) {
         return { ok: true }
+      }
+      const remaining = deadlineAt - Date.now()
+      if (remaining <= 0) {
+        return { ok: false, errorKind: 'git_error' }
       }
       // Why: this exact refresh gates worktree create; ordinary fetches still own maintenance.
       return gitExecFileAsync(
@@ -23150,7 +23279,7 @@ export class OrcaRuntimeService {
           // Why: exact remote-base refresh is the network gate for worktree
           // creation, so honor repo SSH routing and bound custom wrappers.
           useConfiguredSshCommandForNetwork: true,
-          timeout: REMOTE_FETCH_TIMEOUT_MS
+          timeout: remaining
         }
       )
         .then((): RemoteFetchResult => {
@@ -23165,17 +23294,17 @@ export class OrcaRuntimeService {
           return { ok: false, errorKind: 'git_error' }
         })
     }).finally(() => {
-      this.fetchInflight.delete(key)
+      this.fetchInflight.delete(inflightKey)
     })
 
-    this.fetchInflight.set(key, promise)
+    this.fetchInflight.set(inflightKey, promise)
     return promise
   }
 
   async fetchRemoteWithCache(
     repoPath: string,
     remote: string,
-    gitOptions: { wslDistro?: string } = {}
+    gitOptions: { wslDistro?: string; timeout?: number } = {}
   ): Promise<void> {
     await this.getOrStartRemoteFetch(repoPath, remote, gitOptions)
   }
@@ -23221,7 +23350,7 @@ export class OrcaRuntimeService {
   async hasRemoteTrackingRef(
     repoPath: string,
     base: RemoteTrackingBase,
-    gitOptions: { wslDistro?: string } = {}
+    gitOptions: { wslDistro?: string; timeout?: number } = {}
   ): Promise<boolean> {
     try {
       await gitExecFileAsync(['rev-parse', '--verify', `${base.ref}^{commit}`], {

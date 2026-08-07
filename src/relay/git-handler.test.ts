@@ -2163,7 +2163,7 @@ describe('GitHandler', () => {
           (
             args: string[],
             cwd: string,
-            opts?: { maxBuffer?: number }
+            opts?: { maxBuffer?: number; signal?: AbortSignal }
           ) => Promise<{ stdout: string; stderr: string }>
         >()
       ;(localHandler as unknown as { git: typeof gitMock }).git = gitMock
@@ -2494,7 +2494,7 @@ describe('GitHandler', () => {
           (
             args: string[],
             cwd: string,
-            opts?: { maxBuffer?: number }
+            opts?: { maxBuffer?: number; signal?: AbortSignal }
           ) => Promise<{ stdout: string; stderr: string }>
         >()
       ;(handler as unknown as { git: typeof gitMock }).git = gitMock
@@ -2503,18 +2503,23 @@ describe('GitHandler', () => {
 
     it('passes --no-track and writes push.autoSetupRemote when unset', async () => {
       const { localDispatcher, gitMock } = setupMockedHandler(['/relay/repo', '/relay/wt'])
+      const controller = new AbortController()
       gitMock.mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' }) // rev-parse refs/remotes/origin/main^{commit}
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // worktree add
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // config --local --replace-all branch.<branch>.base
       gitMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // --get
       gitMock.mockResolvedValueOnce({ stdout: '', stderr: '' }) // --local set
 
-      await localDispatcher.callRequest('git.addWorktree', {
-        repoPath: '/relay/repo',
-        branchName: 'feature/test',
-        targetDir: '/relay/wt',
-        base: 'origin/main'
-      })
+      await localDispatcher.callRequest(
+        'git.addWorktree',
+        {
+          repoPath: '/relay/repo',
+          branchName: 'feature/test',
+          targetDir: '/relay/wt',
+          base: 'origin/main'
+        },
+        { isStale: () => false, signal: controller.signal }
+      )
 
       expect(gitMock.mock.calls.map((c) => c[0])).toEqual([
         ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
@@ -2543,6 +2548,7 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls[2]?.[1]).toBe('/relay/wt')
       expect(gitMock.mock.calls[3]?.[1]).toBe('/relay/wt')
       expect(gitMock.mock.calls[4]?.[1]).toBe('/relay/wt')
+      expect(gitMock.mock.calls.every((call) => call[2]?.signal === controller.signal)).toBe(true)
     })
 
     it('checks out a selected existing local branch without creating a new branch', async () => {

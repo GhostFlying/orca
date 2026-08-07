@@ -114,6 +114,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
           const result = await runtime.createManagedWorktree({
             repoSelector: params.repo,
             name: params.name ?? '',
+            timeouts: params.timeouts,
             baseBranch: params.baseBranch,
             compareBaseRef: params.compareBaseRef,
             branchNameOverride: params.branchNameOverride,
