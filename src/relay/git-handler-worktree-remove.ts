@@ -46,7 +46,9 @@ function isWorktreeRemovalInterruption(error: unknown): boolean {
     details.code === 'ETIMEDOUT' ||
     details.killed === true ||
     (typeof details.signal === 'string' && details.signal.length > 0) ||
-    /\btimed out\b/i.test(getErrorText(error))
+    ('message' in error &&
+      typeof error.message === 'string' &&
+      /\btimed out\b/i.test(error.message))
   )
 }
 

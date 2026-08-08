@@ -98,6 +98,8 @@ const BULK_CHUNK_SIZE = 100
 const PUSH_TARGET_REMOTE_CLEANUP_TIMEOUT_MS = 30_000
 const PUSH_TARGET_REMOTE_RECONCILIATION_GRACE_MS = 1_000
 const PUSH_TARGET_REMOTE_RECONCILIATION_POLL_MS = 100
+const PUSH_TARGET_REMOTE_SETTLEMENT_TIMEOUT_MS =
+  PUSH_TARGET_REMOTE_CLEANUP_TIMEOUT_MS * 2 + PUSH_TARGET_REMOTE_RECONCILIATION_GRACE_MS
 
 function normalizeRelayGitTimeout(error: unknown, timeout: number | undefined): never {
   const details = error as Error & { code?: unknown; killed?: unknown; signal?: unknown }
@@ -1152,7 +1154,17 @@ export class GitHandler {
         })
       )
       if (context?.onResponseSettled) {
+        let settlementExpired = false
+        const settlementGuard = setTimeout(() => {
+          settlementExpired = true
+          releaseMutation()
+        }, PUSH_TARGET_REMOTE_SETTLEMENT_TIMEOUT_MS)
+        settlementGuard.unref?.()
         context.onResponseSettled((result) => {
+          clearTimeout(settlementGuard)
+          if (settlementExpired) {
+            return
+          }
           void (async () => {
             try {
               if (!result.ok) {

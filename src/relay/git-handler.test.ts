@@ -146,8 +146,7 @@ describe('GitHandler', () => {
     const controller = new AbortController()
     const gitSpy = vi
       .spyOn(handler as unknown as GitSpyTarget, 'git')
-      .mockImplementation(async (args, _cwd, options) => {
-        expect(options?.signal).toBe(controller.signal)
+      .mockImplementation(async (args) => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
@@ -171,6 +170,9 @@ describe('GitHandler', () => {
       tmpDir,
       { signal: controller.signal, timeout: 75_000 }
     )
+    for (const [, , options] of gitSpy.mock.calls) {
+      expect(options?.signal).toBe(controller.signal)
+    }
   })
 
   it('normalizes timed-out push-target remote additions for client reconciliation', async () => {
@@ -248,6 +250,104 @@ describe('GitHandler', () => {
     expect(gitSpy).toHaveBeenCalledWith(['config', '--get', 'remote.fork.url'], tmpDir, {
       timeout: 30_000
     })
+  })
+
+  it('holds the push-target mutation until failed-response cleanup finishes', async () => {
+    let responseSettled: ((result: { ok: boolean; error?: Error }) => void) | undefined
+    let finishCleanup!: () => void
+    const cleanupBlocked = new Promise<void>((resolve) => {
+      finishCleanup = resolve
+    })
+    const gitSpy = vi
+      .spyOn(handler as unknown as GitSpyTarget, 'git')
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: 'git@github.com:contributor/orca.git\n',
+        stderr: ''
+      })
+      .mockImplementationOnce(async () => {
+        await cleanupBlocked
+        return { stdout: '', stderr: '' }
+      })
+
+    await dispatcher.callRequest(
+      'git.addPushTargetRemote',
+      {
+        repoPath: tmpDir,
+        remoteName: 'fork',
+        remoteUrl: 'git@github.com:contributor/orca.git',
+        timeoutMs: 75_000
+      },
+      {
+        isStale: () => false,
+        onResponseSettled: (callback) => {
+          responseSettled = callback
+        }
+      } as never
+    )
+    responseSettled?.({ ok: false, error: new Error('connection lost') })
+    await waitForSpyCalls(gitSpy, 3)
+
+    const barrier = dispatcher.callRequest('git.awaitPushTargetRemoteMutation', {
+      repoPath: tmpDir
+    })
+    let barrierSettled = false
+    void barrier.then(() => {
+      barrierSettled = true
+    })
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    expect(barrierSettled).toBe(false)
+
+    finishCleanup()
+    await barrier
+    expect(barrierSettled).toBe(true)
+  })
+
+  it('releases a push-target mutation when response settlement never fires', async () => {
+    vi.useFakeTimers()
+    try {
+      let responseSettled: ((result: { ok: boolean; error?: Error }) => void) | undefined
+      const gitSpy = vi
+        .spyOn(handler as unknown as GitSpyTarget, 'git')
+        .mockResolvedValue({ stdout: '', stderr: '' })
+
+      await dispatcher.callRequest(
+        'git.addPushTargetRemote',
+        {
+          repoPath: tmpDir,
+          remoteName: 'fork',
+          remoteUrl: 'git@github.com:contributor/orca.git',
+          timeoutMs: 75_000
+        },
+        {
+          isStale: () => false,
+          onResponseSettled: (callback) => {
+            responseSettled = callback
+          }
+        } as never
+      )
+      const barrier = dispatcher.callRequest('git.awaitPushTargetRemoteMutation', {
+        repoPath: tmpDir
+      })
+      let barrierSettled = false
+      void barrier.then(() => {
+        barrierSettled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(60_999)
+      expect(barrierSettled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      await barrier
+      expect(barrierSettled).toBe(true)
+
+      responseSettled?.({ ok: false, error: new Error('late connection loss') })
+      await vi.runAllTimersAsync()
+      expect(gitSpy).not.toHaveBeenCalledWith(['remote', 'remove', 'fork'], tmpDir, {
+        timeout: 30_000
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('runs remote worktree deletion inside the relay watcher fence', async () => {

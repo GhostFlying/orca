@@ -1532,7 +1532,7 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledWith(
       'git.listWorktrees',
       { repoPath: '/home/user/repo', timeoutMs: 90_000 },
-      { signal: undefined, timeoutMs: 90_000 }
+      { signal: undefined, timeoutMs: 95_000 }
     )
   })
 
@@ -1650,7 +1650,7 @@ describe('SshGitProvider', () => {
         includeUntracked: false,
         timeoutMs: 75_000
       },
-      { timeoutMs: 75_000 }
+      { timeoutMs: 80_000 }
     )
   })
 
@@ -1702,7 +1702,7 @@ describe('SshGitProvider', () => {
         remoteTrackingRef: 'refs/remotes/origin/main',
         timeoutMs: 75_000
       },
-      { timeoutMs: 75_000 }
+      { timeoutMs: 80_000 }
     )
   })
 

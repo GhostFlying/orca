@@ -747,7 +747,12 @@ export class SshGitProvider implements IGitProvider {
         ...(options?.strict ? { strict: true } : {}),
         ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {})
       },
-      { signal: options?.signal, timeoutMs: options?.timeoutMs }
+      {
+        signal: options?.signal,
+        timeoutMs: options?.timeoutMs
+          ? options.timeoutMs + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
+          : undefined
+      }
     )) as GitWorktreeInfo[]
   }
 
@@ -820,7 +825,9 @@ export class SshGitProvider implements IGitProvider {
         ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {})
       }
       const result = (await (options.timeoutMs
-        ? this.mux.request('git.worktreeIsClean', request, { timeoutMs: options.timeoutMs })
+        ? this.mux.request('git.worktreeIsClean', request, {
+            timeoutMs: options.timeoutMs + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
+          })
         : this.mux.request('git.worktreeIsClean', request))) as {
         clean: boolean
         stdout?: string
@@ -872,7 +879,7 @@ export class SshGitProvider implements IGitProvider {
     await this.runWithDiffDedupeClear(async () => {
       await (args.timeoutMs
         ? this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args, {
-            timeoutMs: args.timeoutMs
+            timeoutMs: args.timeoutMs + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
           })
         : this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args))
     })
