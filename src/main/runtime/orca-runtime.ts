@@ -21896,12 +21896,21 @@ export class OrcaRuntimeService {
     }
     const addRefreshTimeoutMs = (): number =>
       refreshDeadline?.remainingMs() ?? createTimeouts.refreshBaseRefMs
+    let addRefreshTimeout = createTimeouts.refreshBaseRefMs
+    let addCheckoutDeadline: ReturnType<typeof createWorktreeCreateStageDeadline> | undefined
+    const remainingAddCheckoutMs = (): number => {
+      addCheckoutDeadline ??= createWorktreeCreateStageDeadline(
+        createTimeouts.addCheckoutMs,
+        `Worktree add and checkout timed out after ${createTimeouts.addCheckoutMs}ms.`
+      )
+      return addCheckoutDeadline.remainingMs()
+    }
     const addProjectGitOptions = (options?: AddWorktreeOptions): AddWorktreeOptions | undefined => {
       return {
         ...options,
         ...localWorktreeGitOptions,
-        refreshTimeout: addRefreshTimeoutMs(),
-        timeout: createTimeouts.addCheckoutMs
+        refreshTimeout: addRefreshTimeout,
+        timeout: remainingAddCheckoutMs()
       }
     }
     const hostedReviewExecutionContext = this.getHostedReviewExecutionOptions(repo)
@@ -22164,11 +22173,12 @@ export class OrcaRuntimeService {
     if (args.sparseCheckout && sparseDirectories.length === 0) {
       throw new Error('Sparse checkout requires at least one repo-relative directory.')
     }
+    addRefreshTimeout = addRefreshTimeoutMs()
 
     let preparedPushTarget: GitPushTarget | undefined
     const releasePushTargetPreparation = args.pushTarget
       ? await acquireWorktreePushTargetPreparationLease(repo.path, args.pushTarget, {
-          remainingTimeoutMs: remainingRefreshMs,
+          remainingTimeoutMs: remainingAddCheckoutMs,
           signal: args.signal
         })
       : undefined
@@ -22183,7 +22193,7 @@ export class OrcaRuntimeService {
           this.store,
           repo.id,
           localWorktreeGitOptions,
-          remainingRefreshMs
+          remainingAddCheckoutMs
         )
       } catch (error) {
         releasePushTargetPreparation?.()

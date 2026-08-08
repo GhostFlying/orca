@@ -1956,10 +1956,14 @@ export async function createRemoteWorktree(
     }
   }
 
+  const addCheckoutDeadline = createWorktreeCreateStageDeadline(
+    createTimeouts.addCheckoutMs,
+    `Worktree add and checkout timed out after ${createTimeouts.addCheckoutMs}ms.`
+  )
   let preparedPushTarget: GitPushTarget | undefined
   const releasePushTargetPreparation = args.pushTarget
     ? await acquireWorktreePushTargetPreparationLease(repo.path, args.pushTarget, {
-        remainingTimeoutMs: remainingRefreshMs,
+        remainingTimeoutMs: addCheckoutDeadline.remainingMs,
         signal
       })
     : undefined
@@ -1972,7 +1976,7 @@ export async function createRemoteWorktree(
         args.pushTarget,
         store,
         repo.id,
-        remainingRefreshMs,
+        addCheckoutDeadline.remainingMs,
         signal
       )
     } catch (error) {
@@ -1981,16 +1985,6 @@ export async function createRemoteWorktree(
     }
   }
 
-  const addCheckoutDeadlineAt = Date.now() + createTimeouts.addCheckoutMs
-  const remainingAddCheckoutMs = (): number => {
-    const remaining = addCheckoutDeadlineAt - Date.now()
-    if (remaining <= 0) {
-      throw new Error(
-        `Worktree add and checkout timed out after ${createTimeouts.addCheckoutMs}ms.`
-      )
-    }
-    return remaining
-  }
   let created: GitWorktreeInfo
   let configuredPushTarget: GitPushTarget | undefined
   let addAttempted = false
@@ -2005,11 +1999,15 @@ export async function createRemoteWorktree(
           branchName,
           remotePath,
           checkoutExistingBranch
-            ? { checkoutExistingBranch, timeoutMs: remainingAddCheckoutMs(), signal }
+            ? {
+                checkoutExistingBranch,
+                timeoutMs: addCheckoutDeadline.remainingMs(),
+                signal
+              }
             : {
                 base: baseBranch,
                 ...(sparseDirectories.length > 0 ? { noCheckout: true } : {}),
-                timeoutMs: remainingAddCheckoutMs(),
+                timeoutMs: addCheckoutDeadline.remainingMs(),
                 signal
               }
         )
@@ -2032,15 +2030,15 @@ export async function createRemoteWorktree(
     if (sparseDirectories.length > 0) {
       // Why: SSH providers expose generic git exec, so remote sparse mirrors local addSparseWorktree without a new relay method.
       await provider.exec(['sparse-checkout', 'init', '--cone'], remotePath, {
-        timeoutMs: remainingAddCheckoutMs(),
+        timeoutMs: addCheckoutDeadline.remainingMs(),
         signal
       })
       await provider.exec(['sparse-checkout', 'set', '--', ...sparseDirectories], remotePath, {
-        timeoutMs: remainingAddCheckoutMs(),
+        timeoutMs: addCheckoutDeadline.remainingMs(),
         signal
       })
       await provider.exec(['checkout', branchName], remotePath, {
-        timeoutMs: remainingAddCheckoutMs(),
+        timeoutMs: addCheckoutDeadline.remainingMs(),
         signal
       })
     }
@@ -2270,12 +2268,21 @@ export async function createLocalWorktree(
   }
   const addRefreshTimeoutMs = (): number =>
     refreshDeadline?.remainingMs() ?? createTimeouts.refreshBaseRefMs
+  let addRefreshTimeout = createTimeouts.refreshBaseRefMs
+  let addCheckoutDeadline: ReturnType<typeof createWorktreeCreateStageDeadline> | undefined
+  const remainingAddCheckoutMs = (): number => {
+    addCheckoutDeadline ??= createWorktreeCreateStageDeadline(
+      createTimeouts.addCheckoutMs,
+      `Worktree add and checkout timed out after ${createTimeouts.addCheckoutMs}ms.`
+    )
+    return addCheckoutDeadline.remainingMs()
+  }
   const addProjectGitOptions = (options?: AddWorktreeOptions): AddWorktreeOptions | undefined => {
     return {
       ...options,
       ...localWorktreeGitOptions,
-      refreshTimeout: addRefreshTimeoutMs(),
-      timeout: createTimeouts.addCheckoutMs
+      refreshTimeout: addRefreshTimeout,
+      timeout: remainingAddCheckoutMs()
     }
   }
 
@@ -2612,11 +2619,12 @@ export async function createLocalWorktree(
     })
   }
   emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId)
+  addRefreshTimeout = addRefreshTimeoutMs()
 
   let preparedPushTarget: GitPushTarget | undefined
   const releasePushTargetPreparation = args.pushTarget
     ? await acquireWorktreePushTargetPreparationLease(repo.path, args.pushTarget, {
-        remainingTimeoutMs: remainingRefreshMs
+        remainingTimeoutMs: remainingAddCheckoutMs
       })
     : undefined
   if (args.pushTarget) {
@@ -2628,7 +2636,7 @@ export async function createLocalWorktree(
         store,
         repo.id,
         localWorktreeGitOptions,
-        remainingRefreshMs
+        remainingAddCheckoutMs
       )
     } catch (error) {
       releasePushTargetPreparation?.()

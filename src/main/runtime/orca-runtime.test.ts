@@ -4439,6 +4439,7 @@ describe('OrcaRuntimeService', () => {
         {
           ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
           refreshTimeout: expect.any(Number),
+          timeout: expect.any(Number),
           suggestLocalBaseRefUpdate: true,
           remoteTrackingBase: {
             remote: 'origin',
@@ -4451,6 +4452,8 @@ describe('OrcaRuntimeService', () => {
       const addOptions = vi.mocked(addWorktree).mock.calls.at(-1)?.[6]
       expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
       expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
+      expect(addOptions?.timeout).toBeGreaterThan(0)
+      expect(addOptions?.timeout).toBeLessThanOrEqual(180_000)
       expect(result.worktree).toMatchObject({
         path: createdWorktree.path,
         baseRef: 'refs/remotes/origin/main'
@@ -5326,8 +5329,15 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        { ...TEST_WORKTREE_CREATE_GIT_OPTIONS, checkoutExistingBranch: true }
+        {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          checkoutExistingBranch: true,
+          refreshTimeout: expect.any(Number)
+        }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
     } finally {
       gitSpy.mockRestore()
     }
@@ -5498,8 +5508,11 @@ describe('OrcaRuntimeService', () => {
       '/remote/repo',
       'mobile-feature',
       '/remote/repo-mobile-feature',
-      { base: 'origin/main', timeoutMs: 180_000 }
+      { base: 'origin/main', signal: undefined, timeoutMs: expect.any(Number) }
     )
+    const addOptions = provider.addWorktree.mock.calls[0]?.[3]
+    expect(addOptions?.timeoutMs).toBeGreaterThan(0)
+    expect(addOptions?.timeoutMs).toBeLessThanOrEqual(180_000)
     expect(result.worktree).toMatchObject({
       id: `${TEST_REPO_ID}::${created.path}`,
       path: created.path,
@@ -45597,6 +45610,8 @@ describe('OrcaRuntimeService', () => {
 
   it('routes runtime worktree creation through the selected WSL project runtime', async () => {
     setPlatform('win32')
+    let now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
     const runtimeStore = {
       ...store,
       getProjects: () => [
@@ -45612,7 +45627,13 @@ describe('OrcaRuntimeService', () => {
       ],
       getSettings: () => ({
         ...store.getSettings(),
-        localWindowsRuntimeDefault: { kind: 'windows-host' }
+        localWindowsRuntimeDefault: { kind: 'windows-host' },
+        worktreeCreateTimeouts: {
+          refreshBaseRefMs: 12_000,
+          addCheckoutMs: 24_000,
+          registrationMs: 30_000,
+          materializationMs: 300_000
+        }
       })
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -45644,6 +45665,9 @@ describe('OrcaRuntimeService', () => {
       }
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' }
+      }
+      if (args[0] === 'fetch' && args[1] === 'pr-contributor-orca') {
+        now += 6_000
       }
       return { stdout: '', stderr: '' }
     })
@@ -45691,7 +45715,8 @@ describe('OrcaRuntimeService', () => {
         false,
         {
           ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
-          refreshTimeout: expect.any(Number),
+          refreshTimeout: 12_000,
+          timeout: 18_000,
           remoteTrackingBase: {
             base: 'origin/main',
             branch: 'main',
@@ -45703,8 +45728,8 @@ describe('OrcaRuntimeService', () => {
         }
       )
       const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
-      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
-      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
+      expect(addOptions?.refreshTimeout).toBe(12_000)
+      expect(addOptions?.timeout).toBe(18_000)
       expect(gitSpy).toHaveBeenCalledWith(
         ['check-ref-format', '--branch', 'contributor/runtime-wsl'],
         { cwd: TEST_REPO_PATH, timeout: expect.any(Number), wslDistro: 'Ubuntu' }
@@ -45720,8 +45745,7 @@ describe('OrcaRuntimeService', () => {
       const pushTargetFetchOptions = gitSpy.mock.calls.find(
         ([args]) => args[0] === 'fetch' && args[1] === 'pr-contributor-orca'
       )?.[1]
-      expect(pushTargetFetchOptions?.timeout).toBeGreaterThan(0)
-      expect(pushTargetFetchOptions?.timeout).toBeLessThanOrEqual(60_000)
+      expect(pushTargetFetchOptions?.timeout).toBe(24_000)
       expect(gitSpy).toHaveBeenCalledWith(
         [
           'branch',
@@ -45738,6 +45762,7 @@ describe('OrcaRuntimeService', () => {
       })
     } finally {
       gitSpy.mockRestore()
+      nowSpy.mockRestore()
     }
   })
 

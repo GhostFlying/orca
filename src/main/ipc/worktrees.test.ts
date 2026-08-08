@@ -727,8 +727,16 @@ describe('registerWorktreeHandlers', () => {
       sha,
       false,
       false,
-      DEFAULT_LOCAL_CREATE_OPTIONS
+      {
+        refreshTimeout: expect.any(Number),
+        timeout: expect.any(Number)
+      }
     )
+    const addOptions = addWorktreeMock.mock.calls[0]?.[6]
+    expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+    expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
+    expect(addOptions?.timeout).toBeGreaterThan(0)
+    expect(addOptions?.timeout).toBeLessThanOrEqual(DEFAULT_CREATE_ADD_TIMEOUT_MS)
   })
 
   it('keeps the broad remote fetch fallback when a commit SHA base is missing locally', async () => {
@@ -2188,6 +2196,14 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('configures a PR push target during local create', async () => {
+    let now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'fetch' && args[1] === 'pr-prateek-orca') {
+        now += 6_000
+      }
+      return { stdout: '', stderr: '' }
+    })
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -2199,15 +2215,23 @@ describe('registerWorktreeHandlers', () => {
     ])
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
 
-    await handlers['worktrees:create'](null, {
-      repoId: 'repo-1',
-      name: 'improve-dashboard',
-      pushTarget: {
-        remoteName: 'pr-prateek-orca',
-        branchName: 'prateek/fix-sidebar-agents-toggle',
-        remoteUrl: 'git@github.com:prateek/orca.git'
-      }
-    })
+    try {
+      await handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard',
+        pushTarget: {
+          remoteName: 'pr-prateek-orca',
+          branchName: 'prateek/fix-sidebar-agents-toggle',
+          remoteUrl: 'git@github.com:prateek/orca.git'
+        },
+        timeouts: {
+          refreshBaseRefMs: 12_000,
+          addCheckoutMs: 24_000
+        }
+      })
+    } finally {
+      nowSpy.mockRestore()
+    }
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['remote', 'add', 'pr-prateek-orca', 'git@github.com:prateek/orca.git'],
@@ -2224,8 +2248,10 @@ describe('registerWorktreeHandlers', () => {
     const fetchOptions = gitExecFileAsyncMock.mock.calls.find(
       ([args]) => args[0] === 'fetch' && args[1] === 'pr-prateek-orca'
     )?.[1]
-    expect(fetchOptions?.timeout).toBeGreaterThan(0)
-    expect(fetchOptions?.timeout).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
+    expect(fetchOptions?.timeout).toBe(24_000)
+    const addOptions = addWorktreeMock.mock.calls[0]?.[6]
+    expect(addOptions?.refreshTimeout).toBe(12_000)
+    expect(addOptions?.timeout).toBe(18_000)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'branch',
@@ -2515,7 +2541,7 @@ describe('registerWorktreeHandlers', () => {
       ([args]) => args[0] === 'fetch' && args[1] === 'pr-contributor-orca'
     )?.[1]
     expect(fetchOptions?.timeout).toBeGreaterThan(0)
-    expect(fetchOptions?.timeout).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
+    expect(fetchOptions?.timeout).toBeLessThanOrEqual(DEFAULT_CREATE_ADD_TIMEOUT_MS)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/wsl-fork', 'wsl-fork'],
       { cwd: '/workspace/wsl-fork', timeout: expect.any(Number), wslDistro: 'Ubuntu' }
@@ -5382,6 +5408,8 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('rolls back an SSH create when push-target registration fails', async () => {
+    let now = 1_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
     const remoteUrl = 'git@github.com:contributor/orca.git'
     let remoteExists = false
     const repo = {
@@ -5418,7 +5446,11 @@ describe('registerWorktreeHandlers', () => {
         }
         return { stdout: '', stderr: '' }
       }),
-      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      fetchRemoteTrackingRef: vi.fn().mockImplementation(async (_repoPath, remote) => {
+        if (remote === 'contributor') {
+          now += 6_000
+        }
+      }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -5439,17 +5471,25 @@ describe('registerWorktreeHandlers', () => {
       notify: vi.fn()
     })
 
-    await expect(
-      handlers['worktrees:create'](null, {
-        repoId: 'repo-ssh',
-        name: 'improve-dashboard',
-        pushTarget: {
-          remoteName: 'contributor',
-          branchName: 'feature/fix',
-          remoteUrl
-        }
-      })
-    ).rejects.toThrow('upstream config failed')
+    try {
+      await expect(
+        handlers['worktrees:create'](null, {
+          repoId: 'repo-ssh',
+          name: 'improve-dashboard',
+          pushTarget: {
+            remoteName: 'contributor',
+            branchName: 'feature/fix',
+            remoteUrl
+          },
+          timeouts: {
+            refreshBaseRefMs: 12_000,
+            addCheckoutMs: 24_000
+          }
+        })
+      ).rejects.toThrow('upstream config failed')
+    } finally {
+      nowSpy.mockRestore()
+    }
 
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/repo-improve-dashboard', true, {
       deleteBranch: true,
@@ -5466,8 +5506,8 @@ describe('registerWorktreeHandlers', () => {
     const pushTargetFetchOptions = provider.fetchRemoteTrackingRef.mock.calls.find(
       ([, remote]) => remote === 'contributor'
     )?.[4]
-    expect(pushTargetFetchOptions?.timeoutMs).toBeGreaterThan(0)
-    expect(pushTargetFetchOptions?.timeoutMs).toBeLessThanOrEqual(DEFAULT_CREATE_REFRESH_TIMEOUT_MS)
+    expect(pushTargetFetchOptions?.timeoutMs).toBe(24_000)
+    expect(provider.addWorktree.mock.calls[0]?.[3]?.timeoutMs).toBe(18_000)
     expect(provider.exec).toHaveBeenCalledWith(['remote', 'remove', 'contributor'], '/remote/repo')
     expect(remoteExists).toBe(false)
   })

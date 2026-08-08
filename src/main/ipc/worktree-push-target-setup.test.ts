@@ -101,9 +101,9 @@ describe('prepareWorktreePushTargetWithExec', () => {
     thirdRelease()
   })
 
-  it('uses the refresh deadline while waiting for the preparation lease', async () => {
+  it('uses the caller deadline while waiting for the preparation lease', async () => {
     const firstRelease = await acquireWorktreePushTargetPreparationLease(REPO, forkTarget())
-    const timeoutError = new Error('Worktree base ref refresh timed out after 60000ms.')
+    const timeoutError = new Error('Worktree add and checkout timed out after 180000ms.')
 
     await expect(
       acquireWorktreePushTargetPreparationLease(REPO, forkTarget(), {
