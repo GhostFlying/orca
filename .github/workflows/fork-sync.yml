@@ -375,6 +375,21 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.preview_sha }}
           persist-credentials: false
+      - name: Restore disabled workflow test fixtures
+        env:
+          UPSTREAM_TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet --no-tags --depth=1 --no-recurse-submodules \
+            "https://github.com/${UPSTREAM_REPOSITORY}.git" \
+            "${UPSTREAM_TARGET_SHA}"
+          test "$(git rev-parse FETCH_HEAD^{commit})" = "${UPSTREAM_TARGET_SHA}"
+          git ls-tree -r --name-only FETCH_HEAD -- .github/workflows |
+          while IFS= read -r WORKFLOW_PATH; do
+            if [ ! -e "${WORKFLOW_PATH}" ]; then
+              git checkout FETCH_HEAD -- "${WORKFLOW_PATH}"
+            fi
+          done
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
@@ -414,6 +429,11 @@ jobs:
           ref: ${{ needs.prepare.outputs.preview_sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Fetch upstream release tags
+        run: |
+          git fetch --quiet --force --no-tags --no-recurse-submodules \
+            "https://github.com/${UPSTREAM_REPOSITORY}.git" \
+            "+refs/tags/v*:refs/tags/v*"
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node

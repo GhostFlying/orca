@@ -61,6 +61,42 @@ describe('fork sync workflow', () => {
     }
   })
 
+  it('fetches cross-version baselines from official release tags', () => {
+    const crossVersionSteps = job('cross-version-wire').steps
+    const fetchIndex = crossVersionSteps.findIndex(
+      (step) => step.name === 'Fetch upstream release tags'
+    )
+    const testIndex = crossVersionSteps.findIndex((step) =>
+      step.run?.includes('cross-version-terminal-wire.unit.test.ts')
+    )
+    const crossVersionWire = crossVersionSteps.map((step) => step.run ?? '').join('\n')
+    expect(fetchIndex).toBeGreaterThan(0)
+    expect(testIndex).toBeGreaterThan(fetchIndex)
+    expect(crossVersionWire).toContain('"https://github.com/${UPSTREAM_REPOSITORY}.git"')
+    expect(crossVersionWire).toContain('"+refs/tags/v*:refs/tags/v*"')
+    expect(crossVersionWire).toContain('--no-recurse-submodules')
+    expect(crossVersionWire).not.toContain('FORK_MAINTENANCE_SSH_KEY')
+  })
+
+  it('restores disabled workflows only as pinned unit-test fixtures', () => {
+    const testJob = job('test')
+    const fixtureStep = testJob.steps.find(
+      (step) => step.name === 'Restore disabled workflow test fixtures'
+    )
+    const fixtureIndex = testJob.steps.indexOf(fixtureStep)
+    const testIndex = testJob.steps.findIndex((step) => step.name === 'Test shard')
+    expect(fixtureIndex).toBeGreaterThan(0)
+    expect(testIndex).toBeGreaterThan(fixtureIndex)
+    expect(fixtureStep?.env?.UPSTREAM_TARGET_SHA).toBe('${{ needs.prepare.outputs.target_sha }}')
+    expect(fixtureStep?.run).toContain('"${UPSTREAM_TARGET_SHA}"')
+    expect(fixtureStep?.run).toContain(
+      'test "$(git rev-parse FETCH_HEAD^{commit})" = "${UPSTREAM_TARGET_SHA}"'
+    )
+    expect(fixtureStep?.run).toContain('if [ ! -e "${WORKFLOW_PATH}" ]; then')
+    expect(fixtureStep?.run).toContain('git checkout FETCH_HEAD -- "${WORKFLOW_PATH}"')
+    expect(JSON.stringify(testJob)).not.toContain('FORK_MAINTENANCE_SSH_KEY')
+  })
+
   it('pins every checkout action to one reviewed commit', () => {
     expect(workflowText).not.toContain('actions/checkout@v')
     const checkoutSteps = Object.values(workflow.jobs).flatMap((value) =>

@@ -110,7 +110,11 @@ The preview must pass:
 - typecheck
 - unit tests
 - desktop build
-- cross-version wire compatibility
+- cross-version wire compatibility against the latest stable tag fetched
+  read-only from the official upstream repository
+
+Unit-test jobs restore disabled workflow files from the pinned upstream target
+only as read-only fixtures; preview and production refs retain the allowlist.
 
 The first rollout must also demonstrate a no-op repeat, a clean automatic
 promotion, a source-ref lease rejection, and a conflict that leaves production
