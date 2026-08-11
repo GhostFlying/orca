@@ -3,7 +3,9 @@ import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
 const workflowPath = new URL('../workflows/fork-sync.yml', import.meta.url)
+const vitestConfigPath = new URL('../../config/vitest.config.ts', import.meta.url)
 const workflowText = readFileSync(workflowPath, 'utf8')
+const vitestConfigText = readFileSync(vitestConfigPath, 'utf8')
 const workflow = parse(workflowText)
 const checkoutAction = 'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803'
 
@@ -95,6 +97,10 @@ describe('fork sync workflow', () => {
     expect(fixtureStep?.run).toContain('if [ ! -e "${WORKFLOW_PATH}" ]; then')
     expect(fixtureStep?.run).toContain('git checkout FETCH_HEAD -- "${WORKFLOW_PATH}"')
     expect(JSON.stringify(testJob)).not.toContain('FORK_MAINTENANCE_SSH_KEY')
+  })
+
+  it('keeps upstream retention tests runnable in fork validation', () => {
+    expect(vitestConfigText).toContain("'--expose-gc'")
   })
 
   it('pins every checkout action to one reviewed commit', () => {

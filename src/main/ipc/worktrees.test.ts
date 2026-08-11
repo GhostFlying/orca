@@ -1886,8 +1886,14 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      DEFAULT_LOCAL_CREATE_OPTIONS
+      {
+        ...DEFAULT_LOCAL_CREATE_OPTIONS,
+        timeout: expect.any(Number)
+      }
     )
+    const addOptions = addWorktreeMock.mock.calls[0]?.[6]
+    expect(addOptions?.timeout).toBeGreaterThan(0)
+    expect(addOptions?.timeout).toBeLessThanOrEqual(DEFAULT_CREATE_ADD_TIMEOUT_MS)
   })
 
   it('suffixes a matching push target branch when selected PR metadata has no PR number', async () => {
