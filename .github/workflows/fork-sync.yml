@@ -153,7 +153,10 @@ jobs:
           git rm -r --ignore-unmatch -- "${MAINTENANCE_PATHS[@]}"
           git checkout "${SOURCE_FORK_SHA}" -- "${MAINTENANCE_PATHS[@]}"
           git add -- "${MAINTENANCE_PATHS[@]}"
-          git commit --allow-empty \
+          TARGET_COMMIT_DATE="$(git show -s --format=%cI "${TARGET_SHA}")"
+          GIT_AUTHOR_DATE="${TARGET_COMMIT_DATE}" \
+            GIT_COMMITTER_DATE="${TARGET_COMMIT_DATE}" \
+            git commit --allow-empty \
             -m "chore(fork): anchor upstream ${TARGET_SHA}" \
             -m "Fork-Maintenance-Generated: upstream-anchor-v1"
           echo "next_anchor_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -184,7 +187,8 @@ jobs:
           git checkout -B "${PREVIEW_BRANCH}" "${NEXT_ANCHOR_SHA}"
           while IFS= read -r COMMIT; do
             [ -n "${COMMIT}" ] || continue
-            if git cherry-pick "${COMMIT}"; then
+            COMMITTER_DATE="$(git show -s --format=%cI "${COMMIT}")"
+            if GIT_COMMITTER_DATE="${COMMITTER_DATE}" git cherry-pick "${COMMIT}"; then
               APPLIED_COUNT=$((APPLIED_COUNT + 1))
               continue
             fi
@@ -212,7 +216,10 @@ jobs:
           git checkout "${SOURCE_FORK_SHA}" -- "${MAINTENANCE_PATHS[@]}"
           if ! git diff --cached --quiet || ! git diff --quiet; then
             git add -- "${MAINTENANCE_PATHS[@]}"
-            git commit \
+            SNAPSHOT_COMMIT_DATE="$(git show -s --format=%cI "${SOURCE_FORK_SHA}")"
+            GIT_AUTHOR_DATE="${SNAPSHOT_COMMIT_DATE}" \
+              GIT_COMMITTER_DATE="${SNAPSHOT_COMMIT_DATE}" \
+              git commit \
               -m "chore(fork): restore maintenance snapshot" \
               -m "Fork-Maintenance-Generated: maintenance-snapshot-v1"
           fi
