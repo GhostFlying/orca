@@ -20,6 +20,7 @@ export default defineConfig({
     // Why: happy-dom drops MutationObserver callbacks on GC; keep them alive like a browser does.
     setupFiles: [resolve('config/scripts/happy-dom-mutation-observer-retention.ts')],
     include: [
+      '.github/scripts/**/*.test.mjs',
       'src/**/*.test.ts',
       'src/**/*.test.tsx',
       'config/scripts/**/*.test.ts',

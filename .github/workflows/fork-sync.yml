@@ -1,0 +1,545 @@
+name: Fork Sync
+
+on:
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+    inputs:
+      upstream_sha:
+        description: Optional upstream main commit to adopt
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: fork-maintenance
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPOSITORY: stablyai/orca
+  ANCHOR_BRANCH: upstream-main
+  FORK_BRANCH: fork
+  PREVIEW_BRANCH: sync/upstream-main
+  FORK_COMMITTER_NAME: GhostFlying
+  FORK_COMMITTER_EMAIL: 4019569+GhostFlying@users.noreply.github.com
+
+jobs:
+  prepare:
+    if: github.repository == 'GhostFlying/orca'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.replay.outputs.result || steps.state.outputs.result }}
+      anchor_sha: ${{ steps.state.outputs.anchor_sha }}
+      fork_sha: ${{ steps.state.outputs.fork_sha }}
+      target_sha: ${{ steps.state.outputs.target_sha }}
+      next_anchor_sha: ${{ steps.anchor.outputs.next_anchor_sha }}
+      preview_sha: ${{ steps.replay.outputs.preview_sha }}
+    steps:
+      - name: Checkout production fork
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ env.FORK_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure Git
+        run: |
+          git config user.name "${FORK_COMMITTER_NAME}"
+          git config user.email "${FORK_COMMITTER_EMAIL}"
+          git config commit.gpgsign false
+          cp .github/scripts/fork-maintenance-state.mjs \
+            "$RUNNER_TEMP/trusted-fork-maintenance-state.mjs"
+
+      - name: Fetch pinned maintenance refs
+        id: refs
+        env:
+          REQUESTED_UPSTREAM_SHA: ${{ inputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
+          git fetch --no-tags upstream \
+            "+refs/heads/main:refs/remotes/upstream/main"
+          git fetch --no-tags origin \
+            "+refs/heads/${FORK_BRANCH}:refs/remotes/origin/${FORK_BRANCH}" \
+            "+refs/heads/${ANCHOR_BRANCH}:refs/remotes/origin/${ANCHOR_BRANCH}"
+
+          PREVIEW_LEASE_SHA="$(
+            git ls-remote origin "refs/heads/${PREVIEW_BRANCH}" | awk '{print $1}'
+          )"
+          if [ -n "${PREVIEW_LEASE_SHA}" ]; then
+            git fetch --no-tags origin \
+              "+refs/heads/${PREVIEW_BRANCH}:refs/remotes/origin/${PREVIEW_BRANCH}"
+            test "$(git rev-parse "refs/remotes/origin/${PREVIEW_BRANCH}^{commit}")" = \
+              "${PREVIEW_LEASE_SHA}"
+          fi
+          echo "preview_lease_sha=${PREVIEW_LEASE_SHA}" >> "$GITHUB_OUTPUT"
+
+          if [ -n "${REQUESTED_UPSTREAM_SHA}" ]; then
+            if ! [[ "${REQUESTED_UPSTREAM_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::upstream_sha must be a lowercase 40-character commit SHA."
+              exit 1
+            fi
+            git rev-parse --verify "${REQUESTED_UPSTREAM_SHA}^{commit}" >/dev/null
+            git merge-base --is-ancestor "${REQUESTED_UPSTREAM_SHA}" refs/remotes/upstream/main
+            git update-ref refs/remotes/upstream/selected "${REQUESTED_UPSTREAM_SHA}"
+          else
+            git update-ref refs/remotes/upstream/selected refs/remotes/upstream/main
+          fi
+
+      - name: Inspect patch stack
+        id: state
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/trusted-fork-maintenance-state.mjs" inspect \
+            --anchor="refs/remotes/origin/${ANCHOR_BRANCH}" \
+            --fork="refs/remotes/origin/${FORK_BRANCH}" \
+            --target=refs/remotes/upstream/selected \
+            > "$RUNNER_TEMP/fork-sync-state.json"
+
+          jq . "$RUNNER_TEMP/fork-sync-state.json"
+          jq -r '"anchor_sha=\(.anchorSha)"' "$RUNNER_TEMP/fork-sync-state.json" >> "$GITHUB_OUTPUT"
+          jq -r '"upstream_sha=\(.upstreamSha)"' "$RUNNER_TEMP/fork-sync-state.json" >> "$GITHUB_OUTPUT"
+          jq -r '"fork_sha=\(.forkSha)"' "$RUNNER_TEMP/fork-sync-state.json" >> "$GITHUB_OUTPUT"
+          jq -r '"target_sha=\(.targetSha)"' "$RUNNER_TEMP/fork-sync-state.json" >> "$GITHUB_OUTPUT"
+
+          if [ "$(jq -r .upstreamSha "$RUNNER_TEMP/fork-sync-state.json")" = \
+            "$(jq -r .targetSha "$RUNNER_TEMP/fork-sync-state.json")" ]; then
+            echo "result=noop" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=pending" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify production workflow snapshot
+        if: steps.state.outputs.result == 'pending'
+        env:
+          FORK_SHA: ${{ steps.state.outputs.fork_sha }}
+        run: |
+          set -euo pipefail
+          git ls-tree -r --name-only "${FORK_SHA}" .github/workflows |
+          while IFS= read -r WORKFLOW_PATH; do
+            case "${WORKFLOW_PATH}" in
+              .github/workflows/fork-sync.yml|\
+              .github/workflows/pr.yml|\
+              .github/workflows/mobile.yml|\
+              .github/workflows/e2e.yml)
+                ;;
+              *)
+                echo "::error::Production fork contains disallowed workflow ${WORKFLOW_PATH}."
+                exit 1
+                ;;
+            esac
+          done
+
+      - name: Create sanitized upstream anchor
+        if: steps.state.outputs.result == 'pending'
+        id: anchor
+        env:
+          SOURCE_FORK_SHA: ${{ steps.state.outputs.fork_sha }}
+          TARGET_SHA: ${{ steps.state.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          MAINTENANCE_PATHS=(
+            .github/fork-maintenance-plan.md
+            .github/scripts/fork-maintenance-state.mjs
+            .github/scripts/fork-maintenance-state.test.mjs
+            .github/scripts/fork-maintenance-workflow.test.mjs
+            .github/workflows
+            config/vitest.config.ts
+          )
+          git checkout -B generated-upstream-anchor "${TARGET_SHA}"
+          git rm -r --ignore-unmatch -- "${MAINTENANCE_PATHS[@]}"
+          git checkout "${SOURCE_FORK_SHA}" -- "${MAINTENANCE_PATHS[@]}"
+          git add -- "${MAINTENANCE_PATHS[@]}"
+          git commit --allow-empty \
+            -m "chore(fork): anchor upstream ${TARGET_SHA}" \
+            -m "Fork-Maintenance-Generated: upstream-anchor-v1"
+          echo "next_anchor_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Replay fork patch stack
+        if: steps.state.outputs.result == 'pending'
+        id: replay
+        env:
+          SOURCE_FORK_SHA: ${{ steps.state.outputs.fork_sha }}
+          NEXT_ANCHOR_SHA: ${{ steps.anchor.outputs.next_anchor_sha }}
+        run: |
+          set -euo pipefail
+          MAINTENANCE_PATHS=(
+            .github/fork-maintenance-plan.md
+            .github/scripts/fork-maintenance-state.mjs
+            .github/scripts/fork-maintenance-state.test.mjs
+            .github/scripts/fork-maintenance-workflow.test.mjs
+            .github/workflows
+            config/vitest.config.ts
+          )
+          STATE="$RUNNER_TEMP/fork-sync-state.json"
+          PATCH_COUNT="$(jq -r .patchCount "$STATE")"
+          APPLIED_COUNT=0
+          RESULT=clean
+          FAILED_COMMIT=""
+          : > "$RUNNER_TEMP/fork-sync-conflicts.txt"
+
+          git checkout -B "${PREVIEW_BRANCH}" "${NEXT_ANCHOR_SHA}"
+          while IFS= read -r COMMIT; do
+            [ -n "${COMMIT}" ] || continue
+            if git cherry-pick "${COMMIT}"; then
+              APPLIED_COUNT=$((APPLIED_COUNT + 1))
+              continue
+            fi
+
+            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/fork-sync-conflicts.txt"
+            if [ ! -s "$RUNNER_TEMP/fork-sync-conflicts.txt" ] &&
+              git diff --cached --quiet &&
+              git diff --quiet; then
+              git cherry-pick --skip
+              APPLIED_COUNT=$((APPLIED_COUNT + 1))
+              continue
+            fi
+            if [ ! -s "$RUNNER_TEMP/fork-sync-conflicts.txt" ]; then
+              echo "::error::Cherry-pick failed without an empty change or merge conflict."
+              exit 1
+            fi
+
+            RESULT=conflict
+            FAILED_COMMIT="${COMMIT}"
+            git cherry-pick --abort || true
+            break
+          done < <(jq -r '.patchCommits[]' "$STATE")
+
+          git rm -r --ignore-unmatch -- "${MAINTENANCE_PATHS[@]}"
+          git checkout "${SOURCE_FORK_SHA}" -- "${MAINTENANCE_PATHS[@]}"
+          if ! git diff --cached --quiet || ! git diff --quiet; then
+            git add -- "${MAINTENANCE_PATHS[@]}"
+            git commit \
+              -m "chore(fork): restore maintenance snapshot" \
+              -m "Fork-Maintenance-Generated: maintenance-snapshot-v1"
+          fi
+
+          PREVIEW_SHA="$(git rev-parse HEAD)"
+          git diff --quiet "${SOURCE_FORK_SHA}" "${PREVIEW_SHA}" -- "${MAINTENANCE_PATHS[@]}"
+          echo "result=${RESULT}" >> "$GITHUB_OUTPUT"
+          echo "preview_sha=${PREVIEW_SHA}" >> "$GITHUB_OUTPUT"
+          echo "patch_count=${PATCH_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "applied_count=${APPLIED_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "failed_commit=${FAILED_COMMIT}" >> "$GITHUB_OUTPUT"
+
+      - name: Report preview
+        if: steps.state.outputs.result == 'pending'
+        env:
+          RESULT: ${{ steps.replay.outputs.result }}
+          PREVIEW_SHA: ${{ steps.replay.outputs.preview_sha }}
+          PATCH_COUNT: ${{ steps.replay.outputs.patch_count }}
+          APPLIED_COUNT: ${{ steps.replay.outputs.applied_count }}
+          FAILED_COMMIT: ${{ steps.replay.outputs.failed_commit }}
+          TARGET_SHA: ${{ steps.state.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Fork sync preview"
+            echo
+            if [ "${RESULT}" = clean ]; then
+              echo "Clean patch-stack replay onto upstream \`${TARGET_SHA}\`."
+            else
+              echo "Patch-stack replay conflicts on \`${FAILED_COMMIT}\`."
+            fi
+            echo
+            echo "- Upstream target: \`${TARGET_SHA}\`"
+            echo "- Preview head: \`${PREVIEW_SHA}\`"
+            echo "- Applied patches: \`${APPLIED_COUNT}/${PATCH_COUNT}\`"
+            if [ "${RESULT}" = conflict ]; then
+              echo "- Conflicted paths:"
+              sed 's/^/  - `/' "$RUNNER_TEMP/fork-sync-conflicts.txt" | sed 's/$/`/'
+            fi
+            echo
+            if [ "${RESULT}" = clean ]; then
+              echo "Validation and promotion continue automatically."
+            else
+              echo "Production refs remain unchanged."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish pinned preview
+        if: steps.state.outputs.result == 'pending'
+        env:
+          ANCHOR_SHA: ${{ steps.state.outputs.anchor_sha }}
+          FORK_SHA: ${{ steps.state.outputs.fork_sha }}
+          FORK_MAINTENANCE_SSH_KEY: ${{ secrets.FORK_MAINTENANCE_SSH_KEY }}
+          PREVIEW_SHA: ${{ steps.replay.outputs.preview_sha }}
+          PREVIEW_LEASE_SHA: ${{ steps.refs.outputs.preview_lease_sha }}
+        run: |
+          set -euo pipefail
+          test -n "${FORK_MAINTENANCE_SSH_KEY}"
+          KEY_PATH="$RUNNER_TEMP/fork-maintenance-key"
+          KNOWN_HOSTS_PATH="$RUNNER_TEMP/fork-maintenance-known-hosts"
+          printf '%s\n' "${FORK_MAINTENANCE_SSH_KEY}" > "${KEY_PATH}"
+          chmod 600 "${KEY_PATH}"
+          ssh-keyscan -t ed25519 github.com > "${KNOWN_HOSTS_PATH}" 2>/dev/null
+          test "$(ssh-keygen -lf "${KNOWN_HOSTS_PATH}" -E sha256 | awk '{print $2}')" = \
+            "SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU"
+
+          if [ -n "${PREVIEW_LEASE_SHA}" ]; then
+            PREVIEW_LEASE="--force-with-lease=refs/heads/${PREVIEW_BRANCH}:${PREVIEW_LEASE_SHA}"
+          else
+            PREVIEW_LEASE="--force-with-lease=refs/heads/${PREVIEW_BRANCH}:"
+          fi
+
+          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
+          GIT_SSH_COMMAND="ssh -i ${KEY_PATH} -o IdentitiesOnly=yes -o UserKnownHostsFile=${KNOWN_HOSTS_PATH}" \
+            git push --atomic \
+            --force-with-lease="refs/heads/${FORK_BRANCH}:${FORK_SHA}" \
+            --force-with-lease="refs/heads/${ANCHOR_BRANCH}:${ANCHOR_SHA}" \
+            "${PREVIEW_LEASE}" \
+            origin \
+            "${FORK_SHA}:refs/heads/${FORK_BRANCH}" \
+            "${ANCHOR_SHA}:refs/heads/${ANCHOR_BRANCH}" \
+            "${PREVIEW_SHA}:refs/heads/${PREVIEW_BRANCH}"
+
+  maintenance-contract:
+    if: needs.prepare.outputs.result == 'clean'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ needs.prepare.outputs.preview_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - run: pnpm exec vitest run --config config/vitest.config.ts .github/scripts/fork-maintenance-state.test.mjs .github/scripts/fork-maintenance-workflow.test.mjs
+      - name: Verify fork state with Git 2.25.5
+        run: |
+          archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
+          source="$RUNNER_TEMP/git-2.25.5"
+          curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
+          echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
+            | sha256sum --check
+          mkdir -p "$source"
+          tar -xzf "$archive" -C "$source" --strip-components=1
+          make -C "$source" -j"$(nproc)" \
+            NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
+          ORCA_FORK_MAINTENANCE_GIT_BINARY="$source/git" \
+            pnpm exec vitest run --config config/vitest.config.ts \
+            .github/scripts/fork-maintenance-state.test.mjs
+
+  lint:
+    if: needs.prepare.outputs.result == 'clean'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ needs.prepare.outputs.preview_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - run: pnpm lint
+
+  typecheck:
+    if: needs.prepare.outputs.result == 'clean'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ needs.prepare.outputs.preview_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - run: pnpm typecheck
+
+  test:
+    if: needs.prepare.outputs.result == 'clean'
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard_total: [8]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ needs.prepare.outputs.preview_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - name: Install Electron package binary for tests
+        run: node config/scripts/install-electron-package-binary.mjs
+      - name: Test shard
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts \
+            --exclude=tests/e2e/cross-version-wire/** \
+            --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
+
+  build:
+    if: needs.prepare.outputs.result == 'clean'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ needs.prepare.outputs.preview_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - run: pnpm build:desktop
+
+  cross-version-wire:
+    if: needs.prepare.outputs.result == 'clean'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ needs.prepare.outputs.preview_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
+
+  conflict:
+    if: needs.prepare.outputs.result == 'conflict'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: |
+          echo "::error::Fork patch-stack replay conflicted. Production refs were not changed."
+          exit 1
+
+  workflow-policy:
+    if: always() && needs.prepare.result == 'success'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Enforce fork workflow allowlist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows?per_page=100" \
+            --paginate \
+            --jq '.workflows[] | [.id, .path, .state] | @tsv' |
+          while IFS=$'\t' read -r WORKFLOW_ID WORKFLOW_PATH WORKFLOW_STATE; do
+            case "${WORKFLOW_PATH}" in
+              .github/workflows/fork-sync.yml|\
+              .github/workflows/pr.yml|\
+              .github/workflows/mobile.yml|\
+              .github/workflows/e2e.yml)
+                if [ "${WORKFLOW_STATE}" != active ]; then
+                  gh api \
+                    --method PUT \
+                    "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/enable"
+                fi
+                ;;
+              *)
+                if [ "${WORKFLOW_STATE}" = active ]; then
+                  gh api \
+                    --method PUT \
+                    "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/disable"
+                fi
+                ;;
+            esac
+          done
+
+  promote:
+    if: needs.prepare.outputs.result == 'clean'
+    needs:
+      - prepare
+      - maintenance-contract
+      - lint
+      - typecheck
+      - test
+      - build
+      - cross-version-wire
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout trusted production fork
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ env.FORK_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify pinned preview
+        env:
+          NEXT_ANCHOR_SHA: ${{ needs.prepare.outputs.next_anchor_sha }}
+          SOURCE_ANCHOR_SHA: ${{ needs.prepare.outputs.anchor_sha }}
+          SOURCE_FORK_SHA: ${{ needs.prepare.outputs.fork_sha }}
+          TARGET_SHA: ${{ needs.prepare.outputs.target_sha }}
+          PREVIEW_SHA: ${{ needs.prepare.outputs.preview_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "+refs/heads/${FORK_BRANCH}:refs/remotes/origin/${FORK_BRANCH}" \
+            "+refs/heads/${ANCHOR_BRANCH}:refs/remotes/origin/${ANCHOR_BRANCH}" \
+            "+refs/heads/${PREVIEW_BRANCH}:refs/remotes/origin/${PREVIEW_BRANCH}"
+
+          CURRENT_FORK_SHA="$(git rev-parse "refs/remotes/origin/${FORK_BRANCH}^{commit}")"
+          CURRENT_ANCHOR_SHA="$(git rev-parse "refs/remotes/origin/${ANCHOR_BRANCH}^{commit}")"
+          CURRENT_PREVIEW_SHA="$(git rev-parse "refs/remotes/origin/${PREVIEW_BRANCH}^{commit}")"
+          test "${CURRENT_FORK_SHA}" = "${SOURCE_FORK_SHA}"
+          test "${CURRENT_ANCHOR_SHA}" = "${SOURCE_ANCHOR_SHA}"
+          test "${CURRENT_PREVIEW_SHA}" = "${PREVIEW_SHA}"
+          git diff --quiet "${SOURCE_FORK_SHA}" "${PREVIEW_SHA}" -- \
+            .github/fork-maintenance-plan.md \
+            .github/scripts/fork-maintenance-state.mjs \
+            .github/scripts/fork-maintenance-state.test.mjs \
+            .github/scripts/fork-maintenance-workflow.test.mjs \
+            .github/workflows \
+            config/vitest.config.ts
+
+          node .github/scripts/fork-maintenance-state.mjs inspect \
+            --anchor="${NEXT_ANCHOR_SHA}" \
+            --fork="refs/remotes/origin/${PREVIEW_BRANCH}" \
+            --target="${TARGET_SHA}" \
+            > "$RUNNER_TEMP/verified-preview-state.json"
+          jq . "$RUNNER_TEMP/verified-preview-state.json"
+
+      - name: Atomically promote validated fork
+        env:
+          FORK_MAINTENANCE_SSH_KEY: ${{ secrets.FORK_MAINTENANCE_SSH_KEY }}
+          NEXT_ANCHOR_SHA: ${{ needs.prepare.outputs.next_anchor_sha }}
+          SOURCE_ANCHOR_SHA: ${{ needs.prepare.outputs.anchor_sha }}
+          SOURCE_FORK_SHA: ${{ needs.prepare.outputs.fork_sha }}
+          PREVIEW_SHA: ${{ needs.prepare.outputs.preview_sha }}
+        run: |
+          set -euo pipefail
+          test -n "${FORK_MAINTENANCE_SSH_KEY}"
+          KEY_PATH="$RUNNER_TEMP/fork-maintenance-key"
+          KNOWN_HOSTS_PATH="$RUNNER_TEMP/fork-maintenance-known-hosts"
+          printf '%s\n' "${FORK_MAINTENANCE_SSH_KEY}" > "${KEY_PATH}"
+          chmod 600 "${KEY_PATH}"
+          ssh-keyscan -t ed25519 github.com > "${KNOWN_HOSTS_PATH}" 2>/dev/null
+          test "$(ssh-keygen -lf "${KNOWN_HOSTS_PATH}" -E sha256 | awk '{print $2}')" = \
+            "SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU"
+
+          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
+          GIT_SSH_COMMAND="ssh -i ${KEY_PATH} -o IdentitiesOnly=yes -o UserKnownHostsFile=${KNOWN_HOSTS_PATH}" \
+            git push --atomic \
+            --force-with-lease="refs/heads/${FORK_BRANCH}:${SOURCE_FORK_SHA}" \
+            --force-with-lease="refs/heads/${ANCHOR_BRANCH}:${SOURCE_ANCHOR_SHA}" \
+            --force-with-lease="refs/heads/${PREVIEW_BRANCH}:${PREVIEW_SHA}" \
+            origin \
+            "${PREVIEW_SHA}:refs/heads/${FORK_BRANCH}" \
+            "${NEXT_ANCHOR_SHA}:refs/heads/${ANCHOR_BRANCH}" \
+            "${PREVIEW_SHA}:refs/heads/${PREVIEW_BRANCH}"
