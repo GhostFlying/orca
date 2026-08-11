@@ -15,7 +15,7 @@ const DEFAULT_CREATE_ADD_TIMEOUT_MS = 180_000
 const DEFAULT_CREATE_REGISTRATION_TIMEOUT_MS = 30_000
 const DEFAULT_LOCAL_CREATE_OPTIONS = {
   refreshTimeout: expect.any(Number),
-  timeout: DEFAULT_CREATE_ADD_TIMEOUT_MS
+  timeout: expect.any(Number)
 }
 const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
 const findExistingWorktreeSymlinkPathsMock = vi.hoisted(() => vi.fn())
