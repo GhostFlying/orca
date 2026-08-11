@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process'
+import { realpathSync } from 'node:fs'
 import process from 'node:process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/
 const GIT_BINARY = process.env.ORCA_FORK_MAINTENANCE_GIT_BINARY || 'git'
@@ -167,7 +168,14 @@ function runCli(argv) {
   throw new Error('usage: fork-maintenance-state.mjs inspect [options]')
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+export function isDirectExecution(moduleUrl, executablePath) {
+  return (
+    Boolean(executablePath) &&
+    realpathSync(fileURLToPath(moduleUrl)) === realpathSync(executablePath)
+  )
+}
+
+if (isDirectExecution(import.meta.url, process.argv[1])) {
   try {
     runCli(process.argv.slice(2))
   } catch (error) {

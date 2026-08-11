@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { inspectForkPatchStack } from './fork-maintenance-state.mjs'
+import { inspectForkPatchStack, isDirectExecution } from './fork-maintenance-state.mjs'
 
 function git(root, ...args) {
   const gitBinary = process.env.ORCA_FORK_MAINTENANCE_GIT_BINARY || 'git'
@@ -230,5 +231,17 @@ describe('inspectForkPatchStack', () => {
         cwd: root
       })
     ).toThrow('target is not a fast-forward of the anchored upstream commit')
+  })
+})
+
+describe('CLI entrypoint', () => {
+  it('recognizes executable paths reached through a symlink', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-fork-maintenance-entrypoint-'))
+    const script = join(root, 'script.mjs')
+    const alias = join(root, 'script-alias.mjs')
+    writeFileSync(script, 'export {}\n')
+    symlinkSync(script, alias)
+
+    expect(isDirectExecution(pathToFileURL(script).href, alias)).toBe(true)
   })
 })
