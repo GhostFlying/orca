@@ -5409,8 +5409,15 @@ describe('OrcaRuntimeService', () => {
         'abc123',
         false,
         false,
-        { ...TEST_WORKTREE_CREATE_GIT_OPTIONS, checkoutExistingBranch: true }
+        {
+          ...TEST_WORKTREE_CREATE_GIT_OPTIONS,
+          checkoutExistingBranch: true,
+          refreshTimeout: expect.any(Number)
+        }
       )
+      const addOptions = vi.mocked(addWorktree).mock.calls[0]?.[6]
+      expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+      expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
     } finally {
       gitSpy.mockRestore()
     }
