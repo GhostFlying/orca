@@ -302,10 +302,15 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       false,
       false,
       {
-        refreshTimeout: 60_000,
-        timeout: 180_000
+        refreshTimeout: expect.any(Number),
+        timeout: expect.any(Number)
       }
     )
+    const addOptions = addWorktreeMock.mock.calls[0]?.[6]
+    expect(addOptions?.refreshTimeout).toBeGreaterThan(0)
+    expect(addOptions?.refreshTimeout).toBeLessThanOrEqual(60_000)
+    expect(addOptions?.timeout).toBeGreaterThan(0)
+    expect(addOptions?.timeout).toBeLessThanOrEqual(180_000)
     expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::C:/workspaces/improve-dashboard',

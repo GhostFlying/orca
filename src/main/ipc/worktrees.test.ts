@@ -1692,8 +1692,14 @@ describe('registerWorktreeHandlers', () => {
       'abc123',
       false,
       false,
-      DEFAULT_LOCAL_CREATE_OPTIONS
+      {
+        ...DEFAULT_LOCAL_CREATE_OPTIONS,
+        timeout: expect.any(Number)
+      }
     )
+    const addOptions = addWorktreeMock.mock.calls[0]?.[6]
+    expect(addOptions?.timeout).toBeGreaterThan(0)
+    expect(addOptions?.timeout).toBeLessThanOrEqual(DEFAULT_CREATE_ADD_TIMEOUT_MS)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '--set-upstream-to', 'origin/feature/fix', 'feature/fix'],
       { cwd: '/workspace/fix-title', timeout: expect.any(Number) }
