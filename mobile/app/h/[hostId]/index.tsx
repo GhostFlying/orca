@@ -75,6 +75,7 @@ import {
 import {
   applyDesktopViewSettings,
   groupModeToDesktop,
+  loadDesktopWorkspaceSettings,
   type MobileGroupMode,
   type MobileSortMode,
   type MobileViewState,
@@ -176,6 +177,7 @@ export function HostScreen({
     alwaysShowDefaultBranch: true
   })
   const [groupMode, setGroupMode] = useState<MobileGroupMode>('repo')
+  const [showPinnedWorktreesInGroups, setShowPinnedWorktreesInGroups] = useState(false)
   const [workspaceStatuses, setWorkspaceStatuses] = useState<readonly WorkspaceStatusDefinition[]>(
     DEFAULT_MOBILE_WORKSPACE_STATUSES
   )
@@ -307,19 +309,15 @@ export function HostScreen({
       return
     }
     const requestClient = client
-    const requestHostId = hostId
-    try {
-      const response = await requestClient.sendRequest('ui.get')
-      if (clientRef.current !== requestClient || hostId !== requestHostId || !response.ok) {
-        return
-      }
-      const ui = ((response as RpcSuccess).result as { ui?: WorkspaceViewSettings }).ui
-      if (!ui) {
-        return
-      }
-      applyViewState(applyDesktopViewSettings(viewStateRef.current, ui))
-    } catch {
-      // Transient transport failure; retry on the next focus/connect.
+    const settings = await loadDesktopWorkspaceSettings(requestClient)
+    if (clientRef.current !== requestClient) {
+      return
+    }
+    if (settings.ui) {
+      applyViewState(applyDesktopViewSettings(viewStateRef.current, settings.ui))
+    }
+    if (settings.showPinnedWorktreesInGroups !== undefined) {
+      setShowPinnedWorktreesInGroups(settings.showPinnedWorktreesInGroups)
     }
   }, [client, connState, hostId, applyViewState])
 
@@ -331,6 +329,7 @@ export function HostScreen({
   useEffect(() => {
     setHostName('')
     setError('')
+    setShowPinnedWorktreesInGroups(false)
     setRepoColorsByName(new Map())
     setRepoIconsByName(new Map())
     repoMetadataFetchedAtRef.current = 0
@@ -786,7 +785,8 @@ export function HostScreen({
     repoIdsByName,
     repoColorsByName,
     collapsedGroups,
-    workspaceStatuses
+    workspaceStatuses,
+    showPinnedWorktreesInGroups
   })
   const existingWorktreePaths = useMemo(() => worktrees.map((w) => w.path), [worktrees])
 
