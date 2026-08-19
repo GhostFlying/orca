@@ -1346,6 +1346,7 @@ type RuntimeStore = {
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
+    showPinnedWorktreesInGroups?: GlobalSettings['showPinnedWorktreesInGroups']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
@@ -3871,6 +3872,7 @@ export class OrcaRuntimeService {
     | 'githubProjects'
     | 'experimentalNewWorktreeCardStyle'
     | 'compactWorktreeCards'
+    | 'showPinnedWorktreesInGroups'
     | 'minimaxGroupId'
     | 'minimaxUsageModels'
     | 'prBotAuthorOverrides'
@@ -3899,6 +3901,7 @@ export class OrcaRuntimeService {
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
+      showPinnedWorktreesInGroups: settings.showPinnedWorktreesInGroups === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
