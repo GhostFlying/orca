@@ -1757,6 +1757,10 @@ describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
 
 describe('OrcaRuntimeService', () => {
   it('projects runtime-backed settings to paired clients', () => {
+    expect(new OrcaRuntimeService(store).getClientSettings()).toMatchObject({
+      showPinnedWorktreesInGroups: false
+    })
+
     const terminalQuickCommands = [
       {
         id: 'review',
@@ -1773,6 +1777,7 @@ describe('OrcaRuntimeService', () => {
         ...store.getSettings(),
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        showPinnedWorktreesInGroups: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
         terminalQuickCommands
@@ -1783,6 +1788,7 @@ describe('OrcaRuntimeService', () => {
       worktreeVisibilityDefaults: { external: 'hide' },
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      showPinnedWorktreesInGroups: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5'
     })
