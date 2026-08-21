@@ -27,12 +27,14 @@ export type WorkspaceDisplaySettings = {
   showPinnedWorktreesInGroups?: boolean
 }
 
+/** Normalizes the optional desktop preference, defaulting missing or invalid values to false. */
 export function getShowPinnedWorktreesInGroups(
   settings: WorkspaceDisplaySettings | null | undefined
 ): boolean {
   return settings?.showPinnedWorktreesInGroups === true
 }
 
+/** Loads view and display settings independently so older hosts can return either payload. */
 export async function loadDesktopWorkspaceSettings(
   client: Pick<RpcClient, 'sendRequest'>
 ): Promise<{
