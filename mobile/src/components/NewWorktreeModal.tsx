@@ -68,6 +68,7 @@ import { SmartWorkspaceSourceDrawer } from './SmartWorkspaceSourceDrawer'
 import { SmartWorkspaceAdvancedFields } from './SmartWorkspaceAdvancedFields'
 import { SetupHookTrustDrawer, type SetupTrustPrompt } from './SetupHookTrustDrawer'
 import { NewWorktreeProjectTargetFields } from './NewWorktreeProjectTargetFields'
+import { useMobileSshTargetLabels } from './use-mobile-ssh-target-labels'
 import {
   buildNewWorkspaceProjectOptions,
   buildNewWorkspaceRunTargetOptions,
@@ -227,6 +228,7 @@ function NewWorktreeModalContent({
   const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
   const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport } =
     useNewWorktreeRuntimeCapabilities(client, visible)
+  const sshTargetLabels = useMobileSshTargetLabels(client, visible)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
@@ -727,11 +729,12 @@ function NewWorktreeModalContent({
   const selectedProject =
     projectPickerItems.find((project) => project.id === selectedProjectId) ?? null
   const runTargetPickerItems = useMemo(
-    () => buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform),
-    [hostPlatform, repos, selectedProjectId]
+    () =>
+      buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform, sshTargetLabels),
+    [hostPlatform, repos, selectedProjectId, sshTargetLabels]
   )
   const selectedRunTarget = selectedRepo
-    ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform)
+    ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform, sshTargetLabels)
     : null
 
   function prepareSelectionPickerOpen(): void {
