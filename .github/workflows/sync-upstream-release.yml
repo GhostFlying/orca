@@ -1,0 +1,305 @@
+name: Sync Upstream Release
+
+on:
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: Optional published stable upstream tag (vX.Y.Z)
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: fork-release-maintenance
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPOSITORY: stablyai/orca
+  ANCHOR_BRANCH: upstream-release
+  FORK_BRANCH: fork
+  PREVIEW_BRANCH: sync/upstream-release
+  FORK_COMMITTER_NAME: GhostFlying
+  FORK_COMMITTER_EMAIL: 4019569+GhostFlying@users.noreply.github.com
+  PINNED_WORKSPACE_BRANCH: GhostFlying/fix_mobile_pinned_workspace_parity
+  PINNED_WORKSPACE_SHA: 02d0d5597b65b338754972fa25e4f3d4df499f22
+  PINNED_WORKSPACE_BASE_SHA: 1727b71f0f6bdd94c6c0a75531bed7641ff00c6e
+  PINNED_CORNETFISH_BRANCH: GhostFlying/cornetfish
+  PINNED_CORNETFISH_SHA: 6646250976a9e5b8c64f819ee9f0a88ea5b66d90
+
+jobs:
+  prepare:
+    if: github.repository == 'GhostFlying/orca'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.replay.outputs.result || steps.state.outputs.result }}
+      upstream_tag: ${{ steps.release.outputs.tag }}
+      target_sha: ${{ steps.refs.outputs.target_sha }}
+      preview_sha: ${{ steps.replay.outputs.preview_sha }}
+    steps:
+      - name: Checkout trusted production fork
+        uses: actions/checkout@v6
+        with:
+          ref: fork
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure Git
+        run: |
+          git config user.name "$FORK_COMMITTER_NAME"
+          git config user.email "$FORK_COMMITTER_EMAIL"
+          git config commit.gpgsign false
+      - name: Resolve published stable upstream Release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_UPSTREAM_TAG: ${{ inputs.upstream_tag }}
+        run: node .github/scripts/upstream-release.mjs
+      - name: Fetch pinned refs and release commit
+        id: refs
+        env:
+          UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git remote add upstream "https://github.com/$UPSTREAM_REPOSITORY.git"
+          git fetch --no-tags origin \
+            "+refs/heads/$FORK_BRANCH:refs/remotes/origin/$FORK_BRANCH" \
+            "+refs/heads/$PINNED_WORKSPACE_BRANCH:refs/remotes/origin/pinned-workspace" \
+            "+refs/heads/$PINNED_CORNETFISH_BRANCH:refs/remotes/origin/pinned-cornetfish"
+          test "$(git rev-parse refs/remotes/origin/pinned-workspace)" = "$PINNED_WORKSPACE_SHA"
+          test "$(git rev-parse refs/remotes/origin/pinned-cornetfish)" = "$PINNED_CORNETFISH_SHA"
+          git merge-base --is-ancestor "$PINNED_WORKSPACE_BASE_SHA" "$PINNED_WORKSPACE_SHA"
+          anchor_lease_sha="$(git ls-remote origin "refs/heads/$ANCHOR_BRANCH" | awk '{print $1}')"
+          if [[ -n "$anchor_lease_sha" ]]; then
+            git fetch --no-tags origin \
+              "+refs/heads/$ANCHOR_BRANCH:refs/remotes/origin/$ANCHOR_BRANCH"
+            test "$(git rev-parse "refs/remotes/origin/$ANCHOR_BRANCH^{commit}")" = "$anchor_lease_sha"
+          fi
+          git fetch --no-tags upstream \
+            "+refs/tags/$UPSTREAM_TAG:refs/tags/upstream-release-target"
+          preview_lease_sha="$(git ls-remote origin "refs/heads/$PREVIEW_BRANCH" | awk '{print $1}')"
+          if [[ -n "$preview_lease_sha" ]]; then
+            git fetch --no-tags origin \
+              "+refs/heads/$PREVIEW_BRANCH:refs/remotes/origin/$PREVIEW_BRANCH"
+            test "$(git rev-parse "refs/remotes/origin/$PREVIEW_BRANCH^{commit}")" = "$preview_lease_sha"
+          fi
+          target_sha="$(git rev-parse 'refs/tags/upstream-release-target^{commit}')"
+          subject="$(git show -s --format=%s "$target_sha")"
+          package_version="$(git show "$target_sha:package.json" | jq -r .version)"
+          test "$subject" = "release: $UPSTREAM_TAG"
+          test "v$package_version" = "$UPSTREAM_TAG"
+          echo "preview_lease_sha=$preview_lease_sha" >>"$GITHUB_OUTPUT"
+          echo "anchor_lease_sha=$anchor_lease_sha" >>"$GITHUB_OUTPUT"
+          echo "target_sha=$target_sha" >>"$GITHUB_OUTPUT"
+      - name: Inspect release patch stack
+        id: state
+        env:
+          ANCHOR_LEASE_SHA: ${{ steps.refs.outputs.anchor_lease_sha }}
+          TARGET_SHA: ${{ steps.refs.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$ANCHOR_LEASE_SHA" ]]; then
+            echo "anchor_sha=0000000000000000000000000000000000000000" >>"$GITHUB_OUTPUT"
+            echo "fork_sha=$(git rev-parse "refs/remotes/origin/$FORK_BRANCH^{commit}")" >>"$GITHUB_OUTPUT"
+            jq -n \
+              --arg anchorSha 0000000000000000000000000000000000000000 \
+              --arg forkSha "$(git rev-parse "refs/remotes/origin/$FORK_BRANCH^{commit}")" \
+              --arg upstreamSha "$TARGET_SHA" \
+              --arg first "$PINNED_WORKSPACE_BASE_SHA" \
+              --arg second "$PINNED_WORKSPACE_SHA" \
+              --arg third "$PINNED_CORNETFISH_SHA" \
+              '{version: 1, $anchorSha, $forkSha, $upstreamSha, patchCommits: [$first, $second, $third], patchCount: 3, generatedMaintenanceSnapshotSha: null}' \
+              >"$RUNNER_TEMP/fork-sync-state.json"
+            echo "result=pending" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node .github/scripts/fork-maintenance-state.mjs inspect \
+            --anchor="refs/remotes/origin/$ANCHOR_BRANCH" \
+            --fork="refs/remotes/origin/$FORK_BRANCH" \
+            --target="$TARGET_SHA" \
+            --enforce-patch-contract=true >"$RUNNER_TEMP/fork-sync-state.json"
+          jq . "$RUNNER_TEMP/fork-sync-state.json"
+          jq -r '"anchor_sha=\(.anchorSha)"' "$RUNNER_TEMP/fork-sync-state.json" >>"$GITHUB_OUTPUT"
+          jq -r '"fork_sha=\(.forkSha)"' "$RUNNER_TEMP/fork-sync-state.json" >>"$GITHUB_OUTPUT"
+          if [[ "$(jq -r .upstreamSha "$RUNNER_TEMP/fork-sync-state.json")" = "$TARGET_SHA" ]]; then
+            echo "result=noop" >>"$GITHUB_OUTPUT"
+          else
+            echo "result=pending" >>"$GITHUB_OUTPUT"
+          fi
+      - name: Create safe release anchor
+        if: steps.state.outputs.result == 'pending'
+        id: anchor
+        env:
+          SOURCE_FORK_SHA: ${{ steps.state.outputs.fork_sha }}
+          SOURCE_ANCHOR_SHA: ${{ steps.state.outputs.anchor_sha }}
+          SOURCE_PREVIEW_SHA: ${{ steps.refs.outputs.preview_lease_sha }}
+          TARGET_SHA: ${{ steps.refs.outputs.target_sha }}
+          UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          maintenance_paths=(
+            .github/fork-maintenance-plan.md
+            .github/scripts/fork-maintenance-state.mjs
+            .github/scripts/fork-maintenance-state.test.mjs
+            .github/scripts/fork-maintenance-workflow.test.mjs
+            .github/scripts/fork-release-assets.mjs
+            .github/scripts/fork-release-assets.test.mjs
+            .github/scripts/upstream-release.mjs
+            .github/scripts/upstream-release.test.mjs
+            .github/scripts/vitest.config.mjs
+            .github/workflows/sync-upstream-release.yml
+            .github/workflows/fork-release-build.yml
+            config/scripts/fork-electron-builder-config.cjs
+            config/scripts/fork-electron-builder-config.test.mjs
+            mobile/scripts/build-unsigned-ios.sh
+          )
+          git checkout -B generated-upstream-release "$TARGET_SHA"
+          find .github/workflows -maxdepth 1 -type f \
+            ! -name pr.yml ! -name mobile.yml ! -name e2e.yml -print0 | \
+            xargs -0 -r git rm --
+          git rm -r --ignore-unmatch -- "${maintenance_paths[@]}"
+          git checkout "$SOURCE_FORK_SHA" -- "${maintenance_paths[@]}"
+          fork_agents="$RUNNER_TEMP/fork-agents.md"
+          upstream_agents="$RUNNER_TEMP/upstream-agents.md"
+          upstream_agents_without_fork="$RUNNER_TEMP/upstream-agents-without-fork.md"
+          git show "$SOURCE_FORK_SHA:AGENTS.md" | awk '
+            $0 == "<!-- BEGIN FORK RELEASE MAINTENANCE -->" { copy = 1; blocks += 1 }
+            copy { print }
+            $0 == "<!-- END FORK RELEASE MAINTENANCE -->" { copy = 0; ends += 1 }
+            END { if (blocks != 1 || ends != 1 || copy) exit 1 }
+          ' >"$fork_agents"
+          if git cat-file -e "$TARGET_SHA:AGENTS.md"; then
+            git show "$TARGET_SHA:AGENTS.md" >"$upstream_agents"
+          else
+            : >"$upstream_agents"
+          fi
+          awk '
+            $0 == "<!-- BEGIN FORK RELEASE MAINTENANCE -->" { skip = 1; next }
+            $0 == "<!-- END FORK RELEASE MAINTENANCE -->" { skip = 0; next }
+            !skip { print }
+          ' "$upstream_agents" >"$upstream_agents_without_fork"
+          {
+            cat "$fork_agents"
+            printf '\n'
+            cat "$upstream_agents_without_fork"
+          } >AGENTS.md
+          git add -- "${maintenance_paths[@]}"
+          git add -- AGENTS.md
+          target_date="$(git show -s --format=%cI "$TARGET_SHA")"
+          source_preview_sha="${SOURCE_PREVIEW_SHA:-0000000000000000000000000000000000000000}"
+          GIT_AUTHOR_DATE="$target_date" GIT_COMMITTER_DATE="$target_date" \
+            git -c core.hooksPath=/dev/null commit --allow-empty \
+              -m "chore(fork): anchor upstream release $UPSTREAM_TAG" \
+              -m "Upstream-Release: $UPSTREAM_TAG" \
+              -m "Upstream-Commit: $TARGET_SHA" \
+              -m "Fork-Maintenance-Source-Fork: $SOURCE_FORK_SHA" \
+              -m "Fork-Maintenance-Source-Anchor: $SOURCE_ANCHOR_SHA" \
+              -m "Fork-Maintenance-Source-Preview: $source_preview_sha" \
+              -m "Fork-Maintenance-Generated: upstream-anchor-v1"
+          echo "next_anchor_sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+      - name: Replay fork patches
+        if: steps.state.outputs.result == 'pending'
+        id: replay
+        env:
+          SOURCE_FORK_SHA: ${{ steps.state.outputs.fork_sha }}
+          NEXT_ANCHOR_SHA: ${{ steps.anchor.outputs.next_anchor_sha }}
+        run: |
+          set -euo pipefail
+          state="$RUNNER_TEMP/fork-sync-state.json"
+          result=clean
+          failed_commit=
+          : >"$RUNNER_TEMP/fork-sync-conflicts.txt"
+          git checkout -B "$PREVIEW_BRANCH" "$NEXT_ANCHOR_SHA"
+          while IFS= read -r commit; do
+            [[ -n "$commit" ]] || continue
+            committer_date="$(git show -s --format=%cI "$commit")"
+            if GIT_COMMITTER_DATE="$committer_date" \
+              git -c core.hooksPath=/dev/null cherry-pick "$commit"; then
+              continue
+            fi
+            git diff --name-only --diff-filter=U >"$RUNNER_TEMP/fork-sync-conflicts.txt"
+            if [[ ! -s "$RUNNER_TEMP/fork-sync-conflicts.txt" ]] && git diff --cached --quiet && git diff --quiet; then
+              git cherry-pick --skip
+              continue
+            fi
+            result=conflict
+            failed_commit="$commit"
+            git cherry-pick --abort || true
+            break
+          done < <(jq -r '.patchCommits[]' "$state")
+          preview_sha="$(git rev-parse HEAD)"
+          echo "result=$result" >>"$GITHUB_OUTPUT"
+          echo "preview_sha=$preview_sha" >>"$GITHUB_OUTPUT"
+          echo "failed_commit=$failed_commit" >>"$GITHUB_OUTPUT"
+      - name: Publish leased candidate
+        if: steps.replay.outputs.result == 'clean'
+        env:
+          ANCHOR_SHA: ${{ steps.state.outputs.anchor_sha }}
+          FORK_SHA: ${{ steps.state.outputs.fork_sha }}
+          PREVIEW_SHA: ${{ steps.replay.outputs.preview_sha }}
+          PREVIEW_LEASE_SHA: ${{ steps.refs.outputs.preview_lease_sha }}
+          FORK_MAINTENANCE_SSH_KEY: ${{ secrets.FORK_MAINTENANCE_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$FORK_MAINTENANCE_SSH_KEY"
+          key_path="$RUNNER_TEMP/fork-maintenance-key"
+          known_hosts_path="$RUNNER_TEMP/fork-maintenance-known-hosts"
+          printf '%s\n' "$FORK_MAINTENANCE_SSH_KEY" >"$key_path"
+          chmod 600 "$key_path"
+          ssh-keyscan -t ed25519 github.com >"$known_hosts_path" 2>/dev/null
+          test "$(ssh-keygen -lf "$known_hosts_path" -E sha256 | awk '{print $2}')" = \
+            'SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU'
+          if [[ -n "$PREVIEW_LEASE_SHA" ]]; then
+            preview_lease="--force-with-lease=refs/heads/$PREVIEW_BRANCH:$PREVIEW_LEASE_SHA"
+          else
+            preview_lease="--force-with-lease=refs/heads/$PREVIEW_BRANCH:"
+          fi
+          test "$(git ls-remote origin "refs/heads/$FORK_BRANCH" | awk '{print $1}')" = "$FORK_SHA"
+          current_anchor="$(git ls-remote origin "refs/heads/$ANCHOR_BRANCH" | awk '{print $1}')"
+          expected_anchor="$ANCHOR_SHA"
+          [[ "$expected_anchor" = 0000000000000000000000000000000000000000 ]] && expected_anchor=
+          test "$current_anchor" = "$expected_anchor"
+          git remote set-url origin "git@github.com:$GITHUB_REPOSITORY.git"
+          GIT_SSH_COMMAND="ssh -i $key_path -o IdentitiesOnly=yes -o UserKnownHostsFile=$known_hosts_path" \
+            git push "$preview_lease" origin \
+              "$PREVIEW_SHA:refs/heads/$PREVIEW_BRANCH"
+
+  conflict:
+    if: needs.prepare.outputs.result == 'conflict'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: echo '::error::Fork patch replay conflicted; production refs are unchanged.' && exit 1
+
+  workflow-policy:
+    if: always() && needs.prepare.result == 'success'
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Enforce fork workflow allowlist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" --paginate \
+            --jq '.workflows[] | [.id, .path, .state] | @tsv' |
+          while IFS=$'\t' read -r workflow_id workflow_path workflow_state; do
+            case "$workflow_path" in
+              .github/workflows/sync-upstream-release.yml|\
+              .github/workflows/fork-release-build.yml|\
+              .github/workflows/pr.yml|\
+              .github/workflows/mobile.yml) desired=active ;;
+              *) desired=disabled ;;
+            esac
+            if [[ "$desired" = active && "$workflow_state" != active ]]; then
+              gh api --method PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/enable"
+            elif [[ "$desired" = disabled && "$workflow_state" = active ]]; then
+              gh api --method PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/disable"
+            fi
+          done
