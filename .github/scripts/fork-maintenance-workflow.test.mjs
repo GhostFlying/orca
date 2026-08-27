@@ -37,6 +37,9 @@ describe('fork release maintenance workflows', () => {
     expect(syncText).not.toContain('refs/remotes/upstream/main')
     expect(sync.env.ANCHOR_BRANCH).toBe('upstream-release')
     expect(sync.env.PREVIEW_BRANCH).toBe('sync/upstream-release')
+    expect(sync.env.PINNED_WORKTREE_SCAN_BRANCH).toBe('p/luchengxuan/worktree-scan-last-known-good')
+    expect(syncText).toContain('refs/remotes/origin/pinned-worktree-scan')
+    expect(syncText).toContain('patchCount: 4')
   })
 
   it('routes context-free agents to a preserved conflict runbook', () => {

@@ -51,6 +51,7 @@ The fork-only stack contains these changes in order:
 1. `fix(mobile): honor pinned workspace display preference`
 2. `docs(mobile): document workspace settings loaders`
 3. `fix(mobile): show SSH labels in Run on picker`
+4. `fix(runtime): preserve worktree names across scan stalls`
 
 Generated maintenance snapshots are excluded from the business patch stack.
 Merge commits are forbidden. Empty patches are skipped during replay.

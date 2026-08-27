@@ -10,12 +10,14 @@ const GENERATED_SNAPSHOT_TRAILER = 'Fork-Maintenance-Generated: maintenance-snap
 export const EXPECTED_FORK_PATCH_SUBJECTS = [
   'fix(mobile): honor pinned workspace display preference',
   'docs(mobile): document workspace settings loaders',
-  'fix(mobile): show SSH labels in Run on picker'
+  'fix(mobile): show SSH labels in Run on picker',
+  'fix(runtime): preserve worktree names across scan stalls'
 ]
 export const EXPECTED_FORK_PATCH_IDS = [
   '7b329e48d727f84f48edaf32ca55e909671d8c93',
   '3ee38c9ce1f44247484a9ab150b7ef6e55eb4ddd',
-  '673b450c91309c0cb6c2c857e36ebb62e3c104ac'
+  '673b450c91309c0cb6c2c857e36ebb62e3c104ac',
+  'a8e3378513e7788a7d0744d998517ecbe4e37078'
 ]
 const MAINTENANCE_PATHS = [
   'AGENTS.md',

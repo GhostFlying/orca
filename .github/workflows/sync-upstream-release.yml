@@ -28,6 +28,8 @@ env:
   PINNED_WORKSPACE_BASE_SHA: 1727b71f0f6bdd94c6c0a75531bed7641ff00c6e
   PINNED_CORNETFISH_BRANCH: GhostFlying/cornetfish
   PINNED_CORNETFISH_SHA: 6646250976a9e5b8c64f819ee9f0a88ea5b66d90
+  PINNED_WORKTREE_SCAN_BRANCH: p/luchengxuan/worktree-scan-last-known-good
+  PINNED_WORKTREE_SCAN_SHA: 3f41b32e1b345f737c67abe4d7ea94e7dbb70f82
 
 jobs:
   prepare:
@@ -68,9 +70,12 @@ jobs:
           git fetch --no-tags origin \
             "+refs/heads/$FORK_BRANCH:refs/remotes/origin/$FORK_BRANCH" \
             "+refs/heads/$PINNED_WORKSPACE_BRANCH:refs/remotes/origin/pinned-workspace" \
-            "+refs/heads/$PINNED_CORNETFISH_BRANCH:refs/remotes/origin/pinned-cornetfish"
+            "+refs/heads/$PINNED_CORNETFISH_BRANCH:refs/remotes/origin/pinned-cornetfish" \
+            "+refs/heads/$PINNED_WORKTREE_SCAN_BRANCH:refs/remotes/origin/pinned-worktree-scan"
           test "$(git rev-parse refs/remotes/origin/pinned-workspace)" = "$PINNED_WORKSPACE_SHA"
           test "$(git rev-parse refs/remotes/origin/pinned-cornetfish)" = "$PINNED_CORNETFISH_SHA"
+          test "$(git rev-parse refs/remotes/origin/pinned-worktree-scan)" = \
+            "$PINNED_WORKTREE_SCAN_SHA"
           git merge-base --is-ancestor "$PINNED_WORKSPACE_BASE_SHA" "$PINNED_WORKSPACE_SHA"
           anchor_lease_sha="$(git ls-remote origin "refs/heads/$ANCHOR_BRANCH" | awk '{print $1}')"
           if [[ -n "$anchor_lease_sha" ]]; then
@@ -111,7 +116,8 @@ jobs:
               --arg first "$PINNED_WORKSPACE_BASE_SHA" \
               --arg second "$PINNED_WORKSPACE_SHA" \
               --arg third "$PINNED_CORNETFISH_SHA" \
-              '{version: 1, $anchorSha, $forkSha, $upstreamSha, patchCommits: [$first, $second, $third], patchCount: 3, generatedMaintenanceSnapshotSha: null}' \
+              --arg fourth "$PINNED_WORKTREE_SCAN_SHA" \
+              '{version: 1, $anchorSha, $forkSha, $upstreamSha, patchCommits: [$first, $second, $third, $fourth], patchCount: 4, generatedMaintenanceSnapshotSha: null}' \
               >"$RUNNER_TEMP/fork-sync-state.json"
             echo "result=pending" >>"$GITHUB_OUTPUT"
             exit 0
