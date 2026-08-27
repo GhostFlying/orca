@@ -38,6 +38,7 @@ function gitWorktree(path: string): GitWorktreeInfo {
 function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
   metaById: Record<string, WorktreeMeta>
   scanRepo: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['scanRepo']>>
+  lastSuccessfulScan: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['lastSuccessfulScan']>>
   listFolderWorkspaces: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>>
 } {
   const metaById: Record<string, WorktreeMeta> = {}
@@ -57,8 +58,9 @@ function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
     ok: true,
     worktrees: [gitWorktree(owner.id === 'unrelated' ? '/unrelated/worktree' : '/same/worktree')]
   }))
+  const lastSuccessfulScan = vi.fn<RepoWorktreeRowDeps['lastSuccessfulScan']>(() => null)
   const listFolderWorkspaces = vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>(() => [])
-  return { store, metaById, scanRepo, listFolderWorkspaces }
+  return { store, metaById, scanRepo, lastSuccessfulScan, listFolderWorkspaces }
 }
 
 describe('host-qualified scoped worktree resolution', () => {
