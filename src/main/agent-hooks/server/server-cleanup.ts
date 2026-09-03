@@ -1,4 +1,8 @@
 import { paneHasStateClaims } from '../../../shared/agent-hook-listener/listener-state'
+import {
+  clearCodexCompatibleState,
+  isCodexCompatibleAgentType
+} from '../../../shared/agent-hook-listener/providers/codex-state'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 
@@ -107,10 +111,9 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
       if (deleted) {
         statusChanged = true
-        if (deleted.payload.agentType === 'codex') {
+        if (isCodexCompatibleAgentType(deleted.payload.agentType)) {
           // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
-          this.state.codexSubagentRosterByPaneKey.delete(paneKey)
-          this.state.codexLeadStateByPaneKey.delete(paneKey)
+          clearCodexCompatibleState(this.state, paneKey, deleted.payload.agentType)
         } else if (deleted.payload.agentType === 'claude') {
           this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
           this.state.claudeLeadStateByPaneKey.delete(paneKey)

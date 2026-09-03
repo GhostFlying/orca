@@ -166,6 +166,13 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'codex')) {
     return 'Codex'
   }
+  if (
+    titleHasAgentName(title, 'trae') ||
+    titleHasAgentName(title, 'traecli') ||
+    titleHasAgentName(title, 'traex')
+  ) {
+    return 'Trae'
+  }
   if (titleHasAgentName(title, 'openclaude')) {
     return 'OpenClaude'
   }
@@ -220,6 +227,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'Claude Code': 'claude',
   OpenClaude: 'openclaude',
   Codex: 'codex',
+  Trae: 'trae',
   'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',
   Grok: 'grok',
