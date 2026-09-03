@@ -90,9 +90,9 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.claudeSessionOwnerByPaneKey.delete(paneKey)
-  state.codexSubagentRosterByPaneKey.delete(paneKey)
-  state.codexSubagentTranscriptByPaneKey.delete(paneKey)
-  state.codexLeadStateByPaneKey.delete(paneKey)
+  deletePaneScopedCacheEntry(state.codexSubagentRosterByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.codexSubagentTranscriptByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.codexLeadStateByPaneKey, paneKey)
 }
 
 /** Does this pane still hold anything that can ASSERT a state — a stored row, or a Claude latch that
@@ -103,6 +103,8 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
  *  one file is what makes that obvious. Prompt/tool/transcript caches are excluded — they render a
  *  row, they never create one. */
 export function paneHasStateClaims(state: HookListenerState, paneKey: string): boolean {
+  const hasCodexCompatibleClaim = (map: Map<string, unknown>): boolean =>
+    map.has(paneKey) || Array.from(map.keys()).some((key) => key.startsWith(`${paneKey}\0`))
   return (
     state.lastStatusByPaneKey.has(paneKey) ||
     state.claudeSubagentRosterByPaneKey.has(paneKey) ||
@@ -110,8 +112,8 @@ export function paneHasStateClaims(state: HookListenerState, paneKey: string): b
     state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
     state.claudeActiveSessionCronPaneKeys.has(paneKey) ||
     state.claudeSessionOwnerByPaneKey.has(paneKey) ||
-    state.codexSubagentRosterByPaneKey.has(paneKey) ||
-    state.codexLeadStateByPaneKey.has(paneKey)
+    hasCodexCompatibleClaim(state.codexSubagentRosterByPaneKey) ||
+    hasCodexCompatibleClaim(state.codexLeadStateByPaneKey)
   )
 }
 

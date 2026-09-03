@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { userInfo } from 'node:os'
+import { homedir, userInfo } from 'node:os'
 import { promisify } from 'node:util'
 import path, { win32 } from 'node:path'
 import type { RelayDispatcher } from './dispatcher'
@@ -8,6 +8,11 @@ import { isPwshAvailableAsync } from '../main/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
+import {
+  buildPosixTraeHomeProbeScript,
+  parsePosixTraeHomeProbeOutput,
+  TRAE_HOME_PROBE_MAX_LENGTH
+} from '../main/trae/trae-home-paths'
 
 const execFileAsync = promisify(execFile)
 
@@ -49,6 +54,7 @@ export class PreflightHandler {
     this.dispatcher.onRequest('preflight.detectWindowsTerminalCapabilities', () =>
       this.detectWindowsTerminalCapabilities()
     )
+    this.dispatcher.onRequest('preflight.resolveTraeHomes', () => this.resolveTraeHomes())
   }
 
   // Why: the client sends the command list rather than importing TUI_AGENT_CONFIG
@@ -112,6 +118,31 @@ export class PreflightHandler {
       pwshAvailable,
       gitBashAvailable,
       hostPlatform: process.platform
+    }
+  }
+
+  private async resolveTraeHomes(): Promise<{ traeHomeDir: string; traeCliHomeDir: string }> {
+    const home = homedir()
+    if (process.platform === 'win32') {
+      return parsePosixTraeHomeProbeOutput(home, '')
+    }
+    const shell =
+      pickTrustedPosixShell(process.env, resolveAccountLoginShell(process.platform)) ?? '/bin/sh'
+    try {
+      const { stdout } = await execFileAsync(
+        shell,
+        [getShellCommandMode(shell), buildPosixTraeHomeProbeScript()],
+        {
+          encoding: 'utf8',
+          env: buildRelayCommandEnv(process.env, process.platform),
+          timeout: 5000,
+          maxBuffer: TRAE_HOME_PROBE_MAX_LENGTH * 3,
+          windowsHide: true
+        }
+      )
+      return parsePosixTraeHomeProbeOutput(home, stdout)
+    } catch {
+      return parsePosixTraeHomeProbeOutput(home, '')
     }
   }
 

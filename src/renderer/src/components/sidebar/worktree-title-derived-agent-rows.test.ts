@@ -70,6 +70,24 @@ describe('buildTitleDerivedAgentRows', () => {
     ])
   })
 
+  it('projects TraeX titles as canonical Trae rows before hook status arrives', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'trae' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ traex' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-trae'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.prompt])).toEqual([
+      ['trae', 'working', 'Trae']
+    ])
+  })
+
   it('normalizes Pi-compatible title-derived rows to the launched OMP owner', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'omp' })],

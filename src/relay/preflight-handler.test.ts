@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { homedir } from 'node:os'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 
 const { execFileAsyncMock } = vi.hoisted(() => ({
@@ -237,6 +238,32 @@ describe('hasAbsoluteCommandPath', () => {
 })
 
 describe('PreflightHandler', () => {
+  it('resolves Trae homes through the remote login environment', async () => {
+    const home = homedir()
+    execFileAsyncMock.mockResolvedValue({
+      stdout: `__ORCA_TRAE_HOME__${home}/.config/trae\n__ORCA_TRAECLI_HOME__${home}/.cache/traecli\n`
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+    new PreflightHandler(dispatcher as never)
+
+    await expect(requestHandlers.get('preflight.resolveTraeHomes')!({})).resolves.toEqual({
+      traeHomeDir: `${home}/.config/trae`,
+      traeCliHomeDir: `${home}/.cache/traecli`
+    })
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ windowsHide: true })
+    )
+  })
+
   it('honors required commands when reporting detected agents', async () => {
     execFileAsyncMock.mockImplementation(async (_file, args) => {
       const script = String(args[1])

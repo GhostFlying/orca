@@ -305,6 +305,33 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     })
   })
 
+  it('preserves canonical Trae identity across the SSH relay boundary', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const events: CapturedStatus[] = []
+    captureAgentStatuses(events)
+    session = createSession('conn-trae')
+    await session.establish({} as SshConnection)
+
+    relay.notifyAgentHook(
+      makeEnvelope({
+        source: 'trae',
+        hookEventName: 'UserPromptSubmit',
+        payload: { state: 'working', prompt: 'remote Trae task', agentType: 'trae' }
+      })
+    )
+
+    await waitForStatusCount(events, 1)
+    expect(events[0]).toMatchObject({
+      connectionId: 'conn-trae',
+      payload: { state: 'working', prompt: 'remote Trae task', agentType: 'trae' }
+    })
+  })
+
   it('preserves Claude monitoring mode across the SSH relay boundary', async () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({

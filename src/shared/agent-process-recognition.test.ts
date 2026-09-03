@@ -140,6 +140,12 @@ describe('agent process recognition', () => {
       processName: 'traecli'
     })
     expect(isExpectedAgentProcess('/Users/dev/.local/bin/traecli', 'traecli')).toBe(true)
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/traex')).toEqual({
+      agent: 'trae',
+      processName: 'traex'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/traex', 'traecli')).toBe(true)
+    expect(isExpectedAgentProcess('traecli.cmd', 'traex')).toBe(true)
     expect(isRecognizedAgentType('traecli')).toBe(true)
     // Why: `trae-cli` and `trae-agent` both name the unrelated open-source bytedance/trae-agent.
     expect(recognizeAgentProcess('trae-cli')).toBeNull()
@@ -158,6 +164,10 @@ describe('agent process recognition', () => {
     expect(recognizeAgentProcessFromCommandLine('traecli --resume AUTO')).toEqual({
       agent: 'trae',
       processName: 'traecli'
+    })
+    expect(recognizeAgentProcessFromCommandLine('traex --resume AUTO')).toEqual({
+      agent: 'trae',
+      processName: 'traex'
     })
     // Why: past `--` nothing is a flag, so this is the interactive pane Orca itself launches.
     expect(recognizeAgentProcessFromCommandLine('traecli -- "--print the release notes"')).toEqual({
