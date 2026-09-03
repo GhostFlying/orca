@@ -52,6 +52,7 @@ The fork-only stack contains these changes in order:
 2. `docs(mobile): document workspace settings loaders`
 3. `fix(mobile): show SSH labels in Run on picker`
 4. `fix(runtime): preserve worktree names across scan stalls`
+5. `fix(agents): complete Trae status integration`
 
 Generated maintenance snapshots are excluded from the business patch stack.
 Merge commits are forbidden. Empty patches are skipped during replay.
