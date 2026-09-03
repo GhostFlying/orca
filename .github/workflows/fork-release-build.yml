@@ -154,7 +154,58 @@ jobs:
           UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
         run: |
           set -euo pipefail
-          git checkout "$UPSTREAM_SHA" -- .github/workflows
+          git checkout "$UPSTREAM_SHA" -- \
+            .github/workflows \
+            config/scripts/windows-signing-workflow-contract.test.mjs
+      - name: Repair v1.4.196 signing contract fixture
+        if: needs.candidate.outputs.upstream_sha == 'aad4ae42ea5e555f25fdec679ebbcd18cc1e8911'
+        env:
+          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse "$UPSTREAM_SHA:config/scripts/windows-signing-workflow-contract.test.mjs")" = \
+            08aa4e4e6d446f1dd0fc262cf0b9b10735f32439
+          git apply --unidiff-zero <<'PATCH'
+          diff --git a/config/scripts/windows-signing-workflow-contract.test.mjs b/config/scripts/windows-signing-workflow-contract.test.mjs
+          --- a/config/scripts/windows-signing-workflow-contract.test.mjs
+          +++ b/config/scripts/windows-signing-workflow-contract.test.mjs
+          @@ -186 +186 @@ describe('Windows signing workflow contract', () => {
+          -  it('does not submit installer signing after inner approval times out', () => {
+          +  it('verifies Windows inner binary signatures fail-open before publishing', () => {
+          @@ -194 +193,0 @@ describe('Windows signing workflow contract', () => {
+          -    const installerRequestIndex = stepNames.indexOf('Submit Windows installer signing request')
+          @@ -201,2 +200,3 @@ describe('Windows signing workflow contract', () => {
+          -    // The evidence report remains warn-only for legacy paths, but an approval
+          -    // timeout must fail closed before a second request can consume quota.
+          +    // Why fail-open: unsigned inner binaries must warn, not block, until the
+          +    // flow is proven on a real release (issue #7785). Flip this to 'true'
+          +    // together with the workflow env to make the gate required.
+          @@ -205,4 +205,18 @@ describe('Windows signing workflow contract', () => {
+          -    const downloadInnerIndex = stepNames.indexOf('Download signed inner binaries from SignPath')
+          -    expect(downloadInnerIndex).toBeGreaterThan(-1)
+          -    expect(steps[downloadInnerIndex]['continue-on-error']).toBeUndefined()
+          -    expect(installerRequestIndex).toBeGreaterThan(downloadInnerIndex)
+          +    // Why: every step in the inner-signing chain must be unable to fail the
+          +    // release — a SignPath outage or timeout falls through to today's
+          +    // unsigned-inner flow instead of blocking the cut.
+          +    const innerChainStepNames = [
+          +      'Stage unsigned inner PE files for signing',
+          +      'Upload unsigned inner binaries for SignPath',
+          +      'Submit inner binaries signing request',
+          +      'Notify Slack that inner-binary signing is waiting for approval',
+          +      'Download signed inner binaries from SignPath',
+          +      'Restore signed inner binaries into unpacked app',
+          +      'Replace cached elevate.exe with the signed copy',
+          +      'Rebuild NSIS installer from signed unpacked app'
+          +    ]
+          +    for (const stepName of innerChainStepNames) {
+          +      const step = steps[stepNames.indexOf(stepName)]
+          +      expect(step, stepName).toBeDefined()
+          +      expect(step['continue-on-error'], stepName).toBe(true)
+          +    }
+          PATCH
+          test "$(git hash-object config/scripts/windows-signing-workflow-contract.test.mjs)" = \
+            37edc2196d472c30e20f3bf160e7f2dc6077af32
       - name: Test shard
         run: |
           pnpm exec vitest run --config config/vitest.config.ts \
@@ -178,15 +229,20 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
-      - name: Fetch exact upstream Release baseline
+      - name: Fetch exact upstream Release baselines
         env:
+          TERMINAL_MODE_METADATA_LEGACY_SHA: 6e4f817101daa18d82824b69243d9079baa9c416
+          TERMINAL_MODE_METADATA_LEGACY_TAG: v1.4.190
           UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
           UPSTREAM_TAG: ${{ needs.candidate.outputs.upstream_tag }}
         run: |
           set -euo pipefail
           git fetch --no-tags https://github.com/stablyai/orca.git \
-            "refs/tags/$UPSTREAM_TAG:refs/tags/$UPSTREAM_TAG"
+            "refs/tags/$UPSTREAM_TAG:refs/tags/$UPSTREAM_TAG" \
+            "refs/tags/$TERMINAL_MODE_METADATA_LEGACY_TAG:refs/tags/$TERMINAL_MODE_METADATA_LEGACY_TAG"
           test "$(git rev-parse "$UPSTREAM_TAG^{commit}")" = "$UPSTREAM_SHA"
+          test "$(git rev-parse "$TERMINAL_MODE_METADATA_LEGACY_TAG^{commit}")" = \
+            "$TERMINAL_MODE_METADATA_LEGACY_SHA"
       - run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts

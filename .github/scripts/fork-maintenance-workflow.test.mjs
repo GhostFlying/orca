@@ -118,15 +118,23 @@ describe('fork release maintenance workflows', () => {
     }
   })
 
-  it('fetches and verifies the exact upstream Release for cross-version tests', () => {
+  it('fetches and verifies every upstream Release used by cross-version tests', () => {
     const crossVersion = job(build, 'cross-version-wire')
     const fetchBaseline = crossVersion.steps.find(
-      (step) => step.name === 'Fetch exact upstream Release baseline'
+      (step) => step.name === 'Fetch exact upstream Release baselines'
     )
     expect(fetchBaseline.env.UPSTREAM_SHA).toBe(expression('needs.candidate.outputs.upstream_sha'))
     expect(fetchBaseline.env.UPSTREAM_TAG).toBe(expression('needs.candidate.outputs.upstream_tag'))
+    expect(fetchBaseline.env.TERMINAL_MODE_METADATA_LEGACY_TAG).toBe('v1.4.190')
+    expect(fetchBaseline.env.TERMINAL_MODE_METADATA_LEGACY_SHA).toBe(
+      '6e4f817101daa18d82824b69243d9079baa9c416'
+    )
     expect(fetchBaseline.run).toContain('refs/tags/$UPSTREAM_TAG:refs/tags/$UPSTREAM_TAG')
+    expect(fetchBaseline.run).toContain(
+      'refs/tags/$TERMINAL_MODE_METADATA_LEGACY_TAG:refs/tags/$TERMINAL_MODE_METADATA_LEGACY_TAG'
+    )
     expect(fetchBaseline.run).toContain('$UPSTREAM_TAG^{commit}')
+    expect(fetchBaseline.run).toContain('$TERMINAL_MODE_METADATA_LEGACY_TAG^{commit}')
     const testStep = crossVersion.steps.find((step) =>
       step.run?.includes('cross-version-terminal-wire.unit.test.ts')
     )
@@ -139,10 +147,24 @@ describe('fork release maintenance workflows', () => {
     const testJob = job(build, 'test')
     const checkout = testJob.steps.find((step) => step.uses === 'actions/checkout@v6')
     const restore = testJob.steps.find((step) => step.name === 'Restore upstream workflow fixtures')
+    const repair = testJob.steps.find(
+      (step) => step.name === 'Repair v1.4.196 signing contract fixture'
+    )
     expect(checkout.with['fetch-depth']).toBe(0)
     expect(restore.env.UPSTREAM_SHA).toBe(expression('needs.candidate.outputs.upstream_sha'))
-    expect(restore.run).toContain('git checkout "$UPSTREAM_SHA" -- .github/workflows')
-    expect(testJob.steps.indexOf(restore)).toBeLessThan(
+    expect(restore.run).toContain('git checkout "$UPSTREAM_SHA" --')
+    expect(restore.run).toContain('.github/workflows')
+    expect(restore.run).toContain('config/scripts/windows-signing-workflow-contract.test.mjs')
+    expect(repair.if).toBe(
+      "needs.candidate.outputs.upstream_sha == 'aad4ae42ea5e555f25fdec679ebbcd18cc1e8911'"
+    )
+    expect(repair.run).toContain('08aa4e4e6d446f1dd0fc262cf0b9b10735f32439')
+    expect(repair.run).toContain('37edc2196d472c30e20f3bf160e7f2dc6077af32')
+    expect(repair.run).toContain(
+      "it('verifies Windows inner binary signatures fail-open before publishing'"
+    )
+    expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(repair))
+    expect(testJob.steps.indexOf(repair)).toBeLessThan(
       testJob.steps.findIndex((step) => step.name === 'Test shard')
     )
   })
