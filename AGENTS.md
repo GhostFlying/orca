@@ -1,3 +1,28 @@
+<!-- BEGIN FORK RELEASE MAINTENANCE -->
+# Fork Release Maintenance
+
+When working in `GhostFlying/orca` on an upstream Release sync, fork Release,
+maintenance workflow, or replay conflict, read
+[`.github/fork-maintenance-plan.md`](.github/fork-maintenance-plan.md) in full
+before changing commits, refs, Releases, or workflow state. Treat that document
+as the runbook and the maintenance scripts/workflows as the executable source
+of truth. Do not substitute a merge from upstream `main` or a generic rebase.
+
+In particular:
+
+- Only published stable upstream `vX.Y.Z` Releases are eligible.
+- Never push directly to `fork` or `upstream-release` to resolve a conflict.
+  Build a leased `sync/upstream-release` candidate and let the gated finalizer
+  atomically promote all three refs.
+- Never rewrite `main` or any PR/fix branch. The protected branch list and the
+  required pre/post SHA audit are in the runbook.
+- Resolve replay conflicts semantically against the selected Release commit,
+  retaining only the approved fork patch stack. Do not take an entire side of
+  a conflict merely to make a cherry-pick complete.
+- Before declaring success, require a successful full Desktop/Mobile build, a
+  published GitHub prerelease with verified assets, and exact final ref checks.
+<!-- END FORK RELEASE MAINTENANCE -->
+
 # Design System
 
 All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. When STYLEGUIDE.md is silent, follow the resolution order in its final section.
