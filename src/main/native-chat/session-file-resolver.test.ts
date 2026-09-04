@@ -249,6 +249,43 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 
+  it('resolves TraeX only from its own session roots', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-traex-')
+    const traexSessionsDir = join(root, 'traex-sessions')
+    const codexSessionsDir = join(root, 'codex-sessions')
+    const traexDayDir = join(traexSessionsDir, '2026', '09', '04')
+    const codexDayDir = join(codexSessionsDir, '2026', '09', '04')
+    await mkdir(traexDayDir, { recursive: true })
+    await mkdir(codexDayDir, { recursive: true })
+    const target = join(traexDayDir, 'rollout-traex-session.jsonl')
+    await writeFile(target, '{}\n')
+    await writeFile(join(codexDayDir, 'rollout-traex-session.jsonl'), '{}\n')
+
+    await expect(
+      resolveSessionFilePath('traex', 'traex-session', {
+        traexSessionsDirs: [traexSessionsDir],
+        codexSessionsDirs: [codexSessionsDir]
+      })
+    ).resolves.toBe(target)
+  })
+
+  it('does not fall back from TraeX to Codex session roots', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-traex-isolation-')
+    const traexSessionsDir = join(root, 'traex-sessions')
+    const codexSessionsDir = join(root, 'codex-sessions')
+    const codexDayDir = join(codexSessionsDir, '2026', '09', '04')
+    await mkdir(traexSessionsDir, { recursive: true })
+    await mkdir(codexDayDir, { recursive: true })
+    await writeFile(join(codexDayDir, 'rollout-shared-session.jsonl'), '{}\n')
+
+    await expect(
+      resolveSessionFilePath('traex', 'shared-session', {
+        traexSessionsDirs: [traexSessionsDir],
+        codexSessionsDirs: [codexSessionsDir]
+      })
+    ).resolves.toBeNull()
+  })
+
   it('matches omp transcripts by session id suffix inside the per-cwd directory', async () => {
     const root = await makeRoot('orca-native-chat-resolve-omp-')
     const ompSessionsDir = join(root, 'omp-sessions')

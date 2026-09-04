@@ -43,6 +43,7 @@ export function useMobileSessionNativeChatDictation(
     canSend,
     liveInputEnabled,
     showToast,
+    traexChatSupported,
     resetLiveInputFocus
   } = scope
   const nativeChatScopeKey = mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
@@ -70,6 +71,7 @@ export function useMobileSessionNativeChatDictation(
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
+    traexChatSupported: traexChatSupported === true,
     nativeChatInputLeaseReady,
     connState,
     onSendError: nativeChatSendError.show,
@@ -208,6 +210,7 @@ export function useMobileSessionNativeChatDictation(
     nativeChatScopeKey,
     nativeChatSendError,
     nativeChatTranscriptIsLocalReadable,
+    traexChatSupported,
     nativeChatInputLeaseReady,
     nativeChatInputLeaseReadyRef,
     nativeChatInputLockReason,

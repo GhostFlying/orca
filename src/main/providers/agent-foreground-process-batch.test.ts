@@ -25,6 +25,17 @@ describe('batched foreground process correlation', () => {
     ).toEqual([{ available: true, processName: 'codex' }])
   })
 
+  it('keeps background TraeX commands out of authoritative sidebar inventory', () => {
+    const rows = parseStrictProcessTableRows(
+      ['100 1 100 101 Ss /bin/zsh', '101 100 101 101 S+ traex app-server'].join('\n')
+    )
+    expect(
+      resolveAgentForegroundProcessesFromIndex(buildProcessTableIndex(rows), [
+        { rootPid: 100, fallbackProcess: 'traex' }
+      ])
+    ).toEqual([{ available: true, processName: null }])
+  })
+
   it('returns unverifiable for a missing root or no controlling tty', () => {
     const rows = parseStrictProcessTableRows('100 1 100 0 Ss /bin/zsh')
     expect(

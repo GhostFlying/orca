@@ -157,6 +157,13 @@ describe('PtyHandler inventory foreground evidence', () => {
     expect((await listProcesses())[0].title).toBe('node')
   })
 
+  it('does not restore a bare TraeX name after command-line evidence rejects it', async () => {
+    mockGetStrictProcessTableSnapshot.mockResolvedValue(paneRows(4000, ['traex app-server']))
+    await spawnPane(4000, 'traex')
+
+    expect((await listProcesses())[0].title).toBe('shell')
+  })
+
   it.each([1, 8])('visits the host table exactly once for %s panes', async (paneCount) => {
     const table = Array.from({ length: paneCount }, (_, index) =>
       paneRows(10_000 + index * 10, ['node /opt/codex'])

@@ -26,12 +26,10 @@ describe('managed hook detection commands', () => {
     ])
   })
 
-  it('detects both Trae executable names under one canonical target', () => {
-    expect(buildManagedHookDetectionCommands(null, 'linux')).toEqual(
-      expect.arrayContaining([
-        { id: 'trae', cmd: 'traecli' },
-        { id: 'trae', cmd: 'traex' }
-      ])
-    )
+  it('detects Trae via traecli without treating TraeX as a launch alias', () => {
+    const commands = buildManagedHookDetectionCommands(null, 'linux')
+
+    expect(commands).toContainEqual({ id: 'trae', cmd: 'traecli' })
+    expect(commands).not.toContainEqual({ id: 'trae', cmd: 'traex' })
   })
 })

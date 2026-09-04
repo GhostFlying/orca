@@ -40,18 +40,20 @@ export type MobileNativeChatTab = {
  *  hint or the live status; session id from the captured provider session. */
 export function resolveMobileNativeChat(
   tab: MobileNativeChatTab | null,
-  nativeChatTranscriptIsLocalReadable = false
+  nativeChatTranscriptIsLocalReadable = false,
+  traexChatSupported = false
 ): MobileNativeChatResolution | null {
   if (!tab || tab.type !== 'terminal') {
     return null
   }
   const liveAgent = tab.agentStatus?.agentType ?? null
-  const agent = liveAgent
-    ? isNativeChatSupportedAgent(liveAgent)
-      ? liveAgent
-      : null
-    : tab.launchAgent
-  if (!agent || !isNativeChatSupportedAgent(agent)) {
+  const liveAgentSupported =
+    liveAgent === 'traex' ? traexChatSupported : isNativeChatSupportedAgent(liveAgent)
+  const agent = liveAgent ? (liveAgentSupported ? liveAgent : null) : tab.launchAgent
+  if (!agent || (agent !== 'traex' && !isNativeChatSupportedAgent(agent))) {
+    return null
+  }
+  if (agent === 'traex' && (!traexChatSupported || !tab.agentStatus?.providerSession)) {
     return null
   }
   if (nativeChatRequiresLocalTranscript(agent) && !nativeChatTranscriptIsLocalReadable) {
@@ -67,7 +69,10 @@ export function resolveMobileNativeChat(
 /** Whether the tab can toggle into native chat — gates the long-press item. */
 export function canShowMobileNativeChat(
   tab: MobileNativeChatTab | null,
-  nativeChatTranscriptIsLocalReadable = false
+  nativeChatTranscriptIsLocalReadable = false,
+  traexChatSupported = false
 ): boolean {
-  return resolveMobileNativeChat(tab, nativeChatTranscriptIsLocalReadable) !== null
+  return (
+    resolveMobileNativeChat(tab, nativeChatTranscriptIsLocalReadable, traexChatSupported) !== null
+  )
 }

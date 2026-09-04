@@ -346,6 +346,21 @@ describe('getForegroundProcessName', () => {
     })
   })
 
+  it('does not trust a bare TraeX fallback when the SSH command is non-interactive', async () => {
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: ['100 99 Ss   bash -l', '101 100 S+   traex app-server'].join('\n')
+          }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, 'traex')).resolves.toBeNull()
+    })
+  })
+
   it('recognizes Windows SSH relay shell-rooted agent descendants', async () => {
     await withProcessPlatform('win32', async () => {
       mockWindowsProcessTable([

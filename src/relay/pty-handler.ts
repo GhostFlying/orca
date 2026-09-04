@@ -43,6 +43,10 @@ import {
 } from '../main/shell-prompt-readiness-probe'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import {
+  recognizeAgentProcess,
+  requiresAgentCommandLineVerification
+} from '../shared/agent-process-recognition'
+import {
   gitCredentialPromptGuardEnv,
   mergeGitConfigEnvProtocol
 } from '../shared/git-credential-prompt-env'
@@ -2403,10 +2407,16 @@ export class PtyHandler {
         continue
       }
       // Reuse batched correlation; per-PTY tree scans recreate O(PTY × rows) work.
+      const fallbackProcess = managed.pty.process || null
+      const unverifiedFallback = requiresAgentCommandLineVerification(
+        recognizeAgentProcess(fallbackProcess)
+      )
+        ? null
+        : fallbackProcess
       const title =
         (evidenceRows
-          ? (evidenceResults[entryIndex]?.processName ?? managed.pty.process ?? null)
-          : await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
+          ? (evidenceResults[entryIndex]?.processName ?? unverifiedFallback)
+          : await getForegroundProcessName(managed.pty.pid, fallbackProcess)) || 'shell'
       const foregroundProcessEvidence =
         process.platform !== 'win32'
           ? toForegroundProcessEvidence(

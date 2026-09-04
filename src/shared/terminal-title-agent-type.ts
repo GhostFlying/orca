@@ -166,11 +166,10 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'codex')) {
     return 'Codex'
   }
-  if (
-    titleHasAgentName(title, 'trae') ||
-    titleHasAgentName(title, 'traecli') ||
-    titleHasAgentName(title, 'traex')
-  ) {
+  if (titleHasAgentName(title, 'traex')) {
+    return 'TraeX'
+  }
+  if (titleHasAgentName(title, 'trae') || titleHasAgentName(title, 'traecli')) {
     return 'Trae'
   }
   if (titleHasAgentName(title, 'openclaude')) {

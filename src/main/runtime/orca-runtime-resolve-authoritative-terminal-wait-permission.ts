@@ -14,6 +14,7 @@ import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { AgentPromptActivity } from './agent-prompt-submission-verification'
 
 export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends OrcaRuntimeWithSerializeAgentPromptSubmission {
@@ -99,7 +100,8 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
 
   protected getPtyAgent(ptyId: string): TuiAgent | null {
     const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    const observedAgent = pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    return isTuiAgent(observedAgent) ? observedAgent : null
   }
 
   protected assertAgentPromptPermissionSafe(

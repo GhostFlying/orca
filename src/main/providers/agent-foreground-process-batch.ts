@@ -1,7 +1,9 @@
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
-  recognizeAgentProcessFromCommandLine
+  recognizeAgentProcess,
+  recognizeAgentProcessFromCommandLine,
+  requiresAgentCommandLineVerification
 } from '../../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../../shared/command-token-scanner'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
@@ -91,25 +93,30 @@ export function resolveAgentForegroundProcessesFromIndex(
   }
 
   return requests.map((request) => {
+    const unverifiedFallback = requiresAgentCommandLineVerification(
+      recognizeAgentProcess(request.fallbackProcess)
+    )
+      ? null
+      : (request.fallbackProcess ?? null)
     const root = lookupProcessTableIndex(index, (value) => value.byPid.get(request.rootPid))
     if (!root) {
       return {
         available: false,
-        processName: request.fallbackProcess ?? null,
+        processName: unverifiedFallback,
         reason: 'root_missing'
       }
     }
     if (root.pgid === undefined || root.tpgid === undefined) {
       return {
         available: false,
-        processName: request.fallbackProcess ?? null,
+        processName: unverifiedFallback,
         reason: 'correlation_unavailable'
       }
     }
     if (root.tpgid === 0 || root.tpgid === -1) {
       return {
         available: false,
-        processName: request.fallbackProcess ?? null,
+        processName: unverifiedFallback,
         reason: 'no_controlling_tty'
       }
     }

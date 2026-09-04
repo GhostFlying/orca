@@ -2,6 +2,7 @@ import { track } from '../../telemetry/client'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import { isAgentHookSource, restoreShedStatusFields } from '../../../shared/agent-hook-relay'
+import { resolveObservedHookSource } from '../../../shared/agent-hook-observed-agent'
 import {
   MAX_PANE_KEY_LEN,
   normalizeClaudePromptId,
@@ -33,6 +34,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestT
       promptInteractionKey?: string
       hookEventName?: string
       source?: unknown
+      observedAgent?: unknown
       providerPromptId?: unknown
       compactTrigger?: unknown
       toolUseId?: string
@@ -102,7 +104,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestT
       typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
         ? envelope.hookEventName.trim()
         : undefined
-    const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
+    const wireSource = isAgentHookSource(envelope.source) ? envelope.source : undefined
+    const source = wireSource ? resolveObservedHookSource(wireSource, envelope) : undefined
     const providerPromptId =
       source === 'claude' ? normalizeClaudePromptId(envelope.providerPromptId) : undefined
     const compactTrigger =
@@ -164,6 +167,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestT
       envelope.shedFields,
       this.state.lastStatusByPaneKey.get(paneKey)?.payload
     )
+    if (source === 'traex' && normalizedPayload.agentType === 'trae') {
+      normalizedPayload = { ...normalizedPayload, agentType: 'traex' }
+    }
     const previousStatus = this.state.lastStatusByPaneKey.get(paneKey)
     let acceptedCompactCompletion = false
     if (hookEventName === 'PreCompact' || hookEventName === 'PostCompact') {

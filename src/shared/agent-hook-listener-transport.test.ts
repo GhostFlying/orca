@@ -137,6 +137,32 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('restores TraeX identity from the optional observed-agent header', () => {
+    const merged = mergeAgentHookRequestHeaders(
+      { hook_event_name: 'UserPromptSubmit', prompt: 'hello', session_id: 'traex-session' },
+      {
+        'x-orca-agent-hook-meta-encoding': 'base64',
+        'x-orca-agent-hook-meta': packedMetadata(
+          paneKey,
+          'tab-1',
+          '',
+          'repo::/tmp/work',
+          'production',
+          '1'
+        ),
+        'x-orca-agent-hook-observed-agent': 'traex'
+      }
+    )
+
+    expect(
+      normalizeHookPayload(createHookListenerState(), 'trae', merged, 'production')
+    ).toMatchObject({
+      source: 'traex',
+      providerSession: { key: 'session_id', id: 'traex-session' },
+      payload: { state: 'working', prompt: 'hello', agentType: 'traex' }
+    })
+  })
+
   it('releases request parser listeners after rejecting an oversized body', async () => {
     const req = createReadableRequest({ 'content-type': 'application/json' })
     const body = readRequestBody(req as unknown as IncomingMessage)
@@ -217,6 +243,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/prime-agent')).toBe('prime-agent')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')
+    expect(resolveHookSource('/hook/traex')).toBeNull()
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
