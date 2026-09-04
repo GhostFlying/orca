@@ -40,7 +40,8 @@ describe('fork release maintenance workflows', () => {
     expect(sync.env.PINNED_WORKTREE_SCAN_BRANCH).toBe('p/luchengxuan/worktree-scan-last-known-good')
     expect(syncText).toContain('refs/remotes/origin/pinned-worktree-scan')
     expect(sync.env.PINNED_TRAE_STATUS_SHA).toBe('1e5e90e127b5df8c6372485a2ae067a300880b39')
-    expect(syncText).toContain('patchCount: 5')
+    expect(sync.env.PINNED_MOBILE_TRAEX_CHAT_SHA).toBe('c16e7260035b67d4c88891ec7790a0a697eed34a')
+    expect(syncText).toContain('patchCount: 6')
   })
 
   it('routes context-free agents to a preserved conflict runbook', () => {

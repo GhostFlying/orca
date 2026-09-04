@@ -12,14 +12,16 @@ export const EXPECTED_FORK_PATCH_SUBJECTS = [
   'docs(mobile): document workspace settings loaders',
   'fix(mobile): show SSH labels in Run on picker',
   'fix(runtime): preserve worktree names across scan stalls',
-  'fix(agents): complete Trae status integration'
+  'fix(agents): complete Trae status integration',
+  'feat(mobile): support existing TraeX chats'
 ]
 export const EXPECTED_FORK_PATCH_IDS = [
   'efa983e7d8a0055bb52cec99cc8f0374c581a46b',
   '3ee38c9ce1f44247484a9ab150b7ef6e55eb4ddd',
   'afda6350fc567b1ee8cd5440985e33dc0d218a36',
   'cfe77ffb8b7c8725946d738824143657780a776a',
-  '06701e764b3d94e4444d9a608578b754a5ae51d0'
+  '06701e764b3d94e4444d9a608578b754a5ae51d0',
+  '97917f68867d43a321779ccdae139e17ecc04c1f'
 ]
 const MAINTENANCE_PATHS = [
   'AGENTS.md',

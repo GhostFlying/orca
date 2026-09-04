@@ -31,6 +31,7 @@ env:
   PINNED_WORKTREE_SCAN_BRANCH: p/luchengxuan/worktree-scan-last-known-good
   PINNED_WORKTREE_SCAN_SHA: 3f41b32e1b345f737c67abe4d7ea94e7dbb70f82
   PINNED_TRAE_STATUS_SHA: 1e5e90e127b5df8c6372485a2ae067a300880b39
+  PINNED_MOBILE_TRAEX_CHAT_SHA: c16e7260035b67d4c88891ec7790a0a697eed34a
 
 jobs:
   prepare:
@@ -80,6 +81,8 @@ jobs:
           git merge-base --is-ancestor "$PINNED_WORKSPACE_BASE_SHA" "$PINNED_WORKSPACE_SHA"
           git merge-base --is-ancestor "$PINNED_TRAE_STATUS_SHA" \
             "refs/remotes/origin/$FORK_BRANCH"
+          git merge-base --is-ancestor "$PINNED_MOBILE_TRAEX_CHAT_SHA" \
+            "refs/remotes/origin/$FORK_BRANCH"
           anchor_lease_sha="$(git ls-remote origin "refs/heads/$ANCHOR_BRANCH" | awk '{print $1}')"
           if [[ -n "$anchor_lease_sha" ]]; then
             git fetch --no-tags origin \
@@ -121,7 +124,8 @@ jobs:
               --arg third "$PINNED_CORNETFISH_SHA" \
               --arg fourth "$PINNED_WORKTREE_SCAN_SHA" \
               --arg fifth "$PINNED_TRAE_STATUS_SHA" \
-              '{version: 1, $anchorSha, $forkSha, $upstreamSha, patchCommits: [$first, $second, $third, $fourth, $fifth], patchCount: 5, generatedMaintenanceSnapshotSha: null}' \
+              --arg sixth "$PINNED_MOBILE_TRAEX_CHAT_SHA" \
+              '{version: 1, $anchorSha, $forkSha, $upstreamSha, patchCommits: [$first, $second, $third, $fourth, $fifth, $sixth], patchCount: 6, generatedMaintenanceSnapshotSha: null}' \
               >"$RUNNER_TEMP/fork-sync-state.json"
             echo "result=pending" >>"$GITHUB_OUTPUT"
             exit 0
