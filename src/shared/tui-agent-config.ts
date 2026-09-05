@@ -82,6 +82,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   trae: {
     // Use TRAE CN’s unique traecli alias; unrelated bytedance/trae-agent also installs trae-cli.
     detectCmd: 'traecli',
+    // TraeX runs as traex while retaining the traecli public command.
+    detectCmdAliases: ['traex'],
     promptInjectionMode: 'argv',
     // Cobra’s -- stops subcommands and flags from consuming prompt text such as help/config/-….
     argvPromptSeparator: '--'

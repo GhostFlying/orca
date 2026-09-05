@@ -273,6 +273,7 @@ describe('agent hook extraction boundaries', () => {
     state.ampCompletedCacheKeys.add(sibling)
     state.claudeLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     state.codexLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
+    state.codexLeadStateByPaneKey.set(scoped, { state: 'working', stateStartedAt: 1 })
     state.grokActiveTurnByPaneKey.set(PANE, { promptId: 'prompt-1' })
 
     clearPaneCacheState(state, PANE)
@@ -291,6 +292,7 @@ describe('agent hook extraction boundaries', () => {
     expect(state.ampCompletedCacheKeys.has(sibling)).toBe(true)
     expect(state.claudeLeadStateByPaneKey.has(PANE)).toBe(false)
     expect(state.codexLeadStateByPaneKey.has(PANE)).toBe(false)
+    expect(state.codexLeadStateByPaneKey.has(scoped)).toBe(false)
     expect(state.grokActiveTurnByPaneKey.has(PANE)).toBe(false)
   })
 
