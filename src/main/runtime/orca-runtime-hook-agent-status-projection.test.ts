@@ -424,3 +424,42 @@ describe('hook-driven session tabs republish (#11761)', () => {
     unsubscribe()
   })
 })
+
+describe('TraeX native chat authority', () => {
+  it('binds access to the terminal pane, worktree, provider session, and connection', async () => {
+    const row = hookRow({
+      agentType: 'traex',
+      providerSession: {
+        key: 'session_id',
+        id: 'traex-session',
+        transcriptPath: '/trae/rollout.jsonl'
+      }
+    })
+    const runtime = await createRuntimeWithHookRows([row])
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    if (tab?.type !== 'terminal' || !tab.terminal) {
+      throw new Error('expected terminal handle')
+    }
+
+    expect(
+      runtime.resolveNativeChatTraexSession(tab.terminal, WORKTREE_ID, 'traex-session')
+    ).toEqual({ connectionId: null, transcriptPath: '/trae/rollout.jsonl' })
+    expect(
+      runtime.resolveNativeChatTraexSession(tab.terminal, 'other-wt', 'traex-session')
+    ).toBeNull()
+    expect(
+      runtime.resolveNativeChatTraexSession(tab.terminal, WORKTREE_ID, 'other-session')
+    ).toBeNull()
+
+    row.connectionId = 'other-ssh-connection'
+    expect(
+      runtime.resolveNativeChatTraexSession(tab.terminal, WORKTREE_ID, 'traex-session')
+    ).toBeNull()
+    row.connectionId = null
+    row.agentType = 'trae'
+    expect(
+      runtime.resolveNativeChatTraexSession(tab.terminal, WORKTREE_ID, 'traex-session')
+    ).toBeNull()
+  })
+})

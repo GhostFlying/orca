@@ -1,13 +1,29 @@
 import { z } from 'zod'
-import type { NativeChatMessage, AgentType } from '../../../../shared/native-chat-types'
+import type { AgentType } from '../../../../shared/native-chat-types'
 import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript,
   type NativeChatTranscriptSubscription,
   type SubscribeNativeChatTranscriptArgs
 } from '../../../native-chat/transcript-watch'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
-import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
+import {
+  defineMethod,
+  defineStreamingMethod,
+  InvalidArgumentError,
+  type RpcAnyMethod,
+  type RpcContext
+} from '../core'
+import {
+  MOBILE_NATIVE_CHAT_DEFAULT_WINDOW,
+  MOBILE_NATIVE_CHAT_MAX_WINDOW,
+  sanitizeNativeChatAppend,
+  windowNativeChatMessages
+} from './native-chat-payload-window'
+import { getSshFilesystemProvider } from '../../../providers/ssh-filesystem-dispatch'
+import {
+  readRemoteNativeChatTranscriptTail,
+  subscribeRemoteNativeChatTranscript
+} from '../../../native-chat/remote-transcript-access'
 
 // Why: native chat renders an agent's own transcript (Claude/Codex JSONL). The
 // desktop reaches the readers via Electron IPC; mobile/web clients reach the
@@ -44,6 +60,8 @@ const NativeChatSession = z.object({
   // locate the file directly when the session id no longer names it (recent
   // Claude Code). Optional for back-compat with older clients.
   transcriptPath: z.string().min(1).optional(),
+  terminal: z.string().min(1).optional(),
+  worktree: z.string().min(1).optional(),
   // A pending snapshot is not authoritative transcript history. Only clients
   // that advertise this semantic may receive one; legacy clients treat it as a
   // settled empty read and can overwrite retention / unblock launch drafts.
@@ -55,76 +73,61 @@ const NativeChatUnsubscribe = z.object({
   subscriptionId: z.string().min(1).optional()
 })
 
-// Why: a long agent session can hold thousands of turns (with full tool I/O).
-// Shipping all of them over the paired connection and rendering them at once
-// freezes the mobile app, so the runtime RPC windows to the most recent slice —
-// the conversation tail is what the chat view shows first. The desktop IPC path
-// is unaffected (it reads locally with a virtualized list).
-// Small first page for a fast initial paint; the client raises `limit` to load
-// older history as the user scrolls back.
-const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40
-const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
-
-function sanitizeMessage(
-  message: NativeChatMessage,
-  clientKind: RpcContext['clientKind']
-): NativeChatMessage {
-  return {
-    ...message,
-    blocks: message.blocks.map((block) => sanitizeNativeChatRpcBlock(block, clientKind))
+function resolveTraexSessionAccess(
+  params: z.infer<typeof NativeChatSession>,
+  runtime: RpcContext['runtime']
+): { transcriptPath?: string; connectionId: string | null } | null {
+  if (params.agent !== 'traex') {
+    return null
   }
+  if (!params.terminal || !params.worktree) {
+    throw new InvalidArgumentError('TraeX chat requires terminal context')
+  }
+  const access = runtime.resolveNativeChatTraexSession(
+    params.terminal,
+    params.worktree,
+    params.sessionId
+  )
+  if (!access) {
+    throw new InvalidArgumentError('TraeX session is not confirmed for this terminal')
+  }
+  return access
 }
 
-function sanitizeAppendForClient(
-  messages: readonly NativeChatMessage[],
-  clientKind: RpcContext['clientKind']
-): NativeChatMessage[] {
-  return messages.map((message) => sanitizeMessage(message, clientKind))
-}
-
-/** Window a transcript to its most recent `limit` messages so a long session
- *  can't freeze the client. Windowing by count applies to ALL RPC clients —
- *  shipping thousands of turns over the paired link is bad for web and mobile
- *  alike. Char-clipping (the mobile-only payload diet) is applied separately. */
-function windowTranscript(
-  messages: readonly NativeChatMessage[],
-  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-): NativeChatMessage[] {
-  const window = Math.min(Math.max(limit, 1), MOBILE_NATIVE_CHAT_MAX_WINDOW)
-  return messages.length > window ? messages.slice(-window) : messages.slice()
-}
-
-/** Apply the windowed slice and keep inline image bytes off every RPC transport.
- *  Mobile clients additionally receive bounded text and tool bodies; runtime
- *  clients keep those bodies intact. */
-function windowForClient(
-  messages: readonly NativeChatMessage[],
-  clientKind: RpcContext['clientKind'],
-  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-): NativeChatMessage[] {
-  const windowed = windowTranscript(messages, limit)
-  return windowed.map((message) => sanitizeMessage(message, clientKind))
+function resolveTraexFilesystemProvider(connectionId: string | null) {
+  if (!connectionId) {
+    return null
+  }
+  const provider = getSshFilesystemProvider(connectionId)
+  if (!provider) {
+    throw new Error('TraeX transcript is unverifiable while the SSH target is disconnected')
+  }
+  return provider
 }
 
 export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'nativeChat.readSession',
     params: NativeChatSession,
-    handler: async (params, { clientKind, signal }) => {
+    handler: async (params, { runtime, clientKind, signal }) => {
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-      const result = await readNativeChatTranscriptTail(
-        {
-          agent: params.agent,
-          sessionId: params.sessionId,
-          transcriptPath: params.transcriptPath,
-          limit,
-          beforeOffset: params.beforeOffset
-        },
-        signal
-      )
+      const traexAccess = resolveTraexSessionAccess(params, runtime)
+      const remoteProvider = traexAccess
+        ? resolveTraexFilesystemProvider(traexAccess.connectionId)
+        : null
+      const readArgs = {
+        agent: params.agent,
+        sessionId: params.sessionId,
+        transcriptPath: traexAccess ? traexAccess.transcriptPath : params.transcriptPath,
+        limit,
+        beforeOffset: params.beforeOffset
+      }
+      const result = remoteProvider
+        ? await readRemoteNativeChatTranscriptTail(remoteProvider, readArgs, signal)
+        : await readNativeChatTranscriptTail(readArgs, signal)
       return 'messages' in result
         ? {
-            messages: windowForClient(result.messages, clientKind, limit),
+            messages: windowNativeChatMessages(result.messages, clientKind, limit),
             hasMore: result.hasMore,
             beforeOffset: result.beforeOffset,
             ...(result.lifecycle ? { lifecycle: result.lifecycle } : {})
@@ -152,6 +155,10 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       const cleanupToken = params.subscriptionId ?? `${params.agent}:${params.sessionId}`
       const subscriptionId = `nativeChat:${connectionId ?? 'local'}:${cleanupToken}`
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+      const traexAccess = resolveTraexSessionAccess(params, runtime)
+      const remoteProvider = traexAccess
+        ? resolveTraexFilesystemProvider(traexAccess.connectionId)
+        : null
       const cleanup = (): void => {
         if (closed) {
           return
@@ -177,7 +184,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
         agent: params.agent,
         sessionId: params.sessionId,
-        transcriptPath: params.transcriptPath,
+        transcriptPath: traexAccess ? traexAccess.transcriptPath : params.transcriptPath,
         initialLimit: limit,
         onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
           if (closed) {
@@ -187,7 +194,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
           // instead of stranding the view at 'loading' when the read keeps throwing.
           emit({
             type: 'snapshot',
-            messages: windowForClient(messages, clientKind, limit),
+            messages: windowNativeChatMessages(messages, clientKind, limit),
             hasMore,
             beforeOffset,
             ...(error ? { error } : {}),
@@ -209,7 +216,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
           }
           emit({
             type: 'replacement',
-            messages: windowForClient(messages, clientKind, limit),
+            messages: windowNativeChatMessages(messages, clientKind, limit),
             hasMore,
             beforeOffset,
             ...(lifecycle ? { lifecycle } : {})
@@ -221,14 +228,20 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
           }
           emit({
             type: 'appended',
-            messages: sanitizeAppendForClient(messages, clientKind),
+            messages: sanitizeNativeChatAppend(messages, clientKind),
             ...(lifecycle ? { lifecycle } : {})
           })
         }
       }
       let subscription: NativeChatTranscriptSubscription
       try {
-        subscription = await subscribeNativeChatTranscript(subscribeArgs, setupController.signal)
+        subscription = remoteProvider
+          ? await subscribeRemoteNativeChatTranscript(
+              remoteProvider,
+              subscribeArgs,
+              setupController.signal
+            )
+          : await subscribeNativeChatTranscript(subscribeArgs, setupController.signal)
       } catch (error) {
         if (closed || setupController.signal.aborted) {
           return

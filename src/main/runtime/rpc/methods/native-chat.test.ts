@@ -87,7 +87,6 @@ vi.mock('../../../native-chat/transcript-watch', () => ({
     )
   }
 }))
-
 import { NATIVE_CHAT_METHODS } from './native-chat'
 
 function makeMessage(text: string): NativeChatMessage {
