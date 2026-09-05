@@ -7,8 +7,6 @@ import {
   needsHookRootEvidence,
   readHookProcessVerdict
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
-import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
-import { reconcileCodexStatusEvent } from '../../../shared/agent-hook-listener/providers/codex/codex-session-start'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
@@ -28,6 +26,10 @@ import { resolveCancelVerdictLatch } from '../../../shared/agent-hook-listener/s
 
 import { claimsPaneAfterExit } from './agent-exit-evidence'
 import { resolvedHookAgentType } from './pane-agent-turn-continuity'
+import {
+  markCodexCompatibleLeadInterrupted,
+  reconcileCodexStatusForAgentType
+} from './server-codex-status-rules'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusRowMutation {
   protected applyNormalizedStatus(
@@ -184,7 +186,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusR
       this.emitEnrichedStatus(enriched)
       return enriched
     }
-    const stateReconciledPayload = reconcileCodexStatusEvent(
+    const stateReconciledPayload = reconcileCodexStatusForAgentType(
       this.state,
       terminalOwnedPayload,
       previous,
@@ -226,11 +228,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusR
         // A refused late hook already mutated the local producer; keep its idle lease clock.
         setClaudeMainAgentTurnState(this.state, attachedPayload.paneKey, previous.payload.mainAgent)
       }
-      if (
-        attachedPayload.payload.agentType === 'codex' &&
-        attachedPayload.payload.state === 'working'
-      ) {
-        markCodexLeadTurnInterrupted(this.state, attachedPayload.paneKey)
+      const agentType = attachedPayload.payload.agentType
+      if (attachedPayload.payload.state === 'working') {
+        markCodexCompatibleLeadInterrupted(this.state, attachedPayload.paneKey, agentType)
       }
       this.commitStatusRowMutation(rowBefore, previous)
       return previous

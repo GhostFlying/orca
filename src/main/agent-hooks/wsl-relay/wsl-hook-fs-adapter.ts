@@ -13,6 +13,7 @@ import {
   type WslFsResult
 } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
+import type { TraeHomePaths } from '../../trae/trae-home-paths'
 
 export async function installWslGuestHooks(options: {
   mux: SshChannelMultiplexer
@@ -64,9 +65,31 @@ export async function installWslGuestHooks(options: {
   }
   // Redirected Codex homes use the canonical runtime writer; the relay adapter handles other agents.
   const remoteAgents = agents.filter((agent) => agent !== 'codex')
+  let traeHomePaths: TraeHomePaths | undefined
+  if (remoteAgents.includes('trae')) {
+    try {
+      const resolved = await mux.request('preflight.resolveTraeHomes')
+      if (
+        typeof resolved === 'object' &&
+        resolved !== null &&
+        'traeHomeDir' in resolved &&
+        'traeCliHomeDir' in resolved &&
+        typeof resolved.traeHomeDir === 'string' &&
+        typeof resolved.traeCliHomeDir === 'string'
+      ) {
+        traeHomePaths = {
+          traeHomeDir: resolved.traeHomeDir,
+          traeCliHomeDir: resolved.traeCliHomeDir
+        }
+      }
+    } catch {
+      // Older guest relays use the default ~/.trae and ~/.trae/cli paths.
+    }
+  }
   const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
     agents: remoteAgents,
-    ...(claudeVersion ? { claudeVersion } : {})
+    ...(claudeVersion ? { claudeVersion } : {}),
+    ...(traeHomePaths ? { traeHomePaths } : {})
   })
   const failed = results.filter((r) => r.state === 'error').length
   if (failed > 0) {

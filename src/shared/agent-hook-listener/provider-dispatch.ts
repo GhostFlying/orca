@@ -65,16 +65,18 @@ export function normalizeProviderEvent(input: {
 }): ProviderDispatchResult {
   const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
   // Ephemeral side chats share the pane but must not replace its recorded main turn.
-  const codexEventName =
-    source === 'codex'
-      ? codexHookEventForEphemeralThread(state, paneKey, input.eventName, hookPayload)
+  const codexCompatibleEventName =
+    source === 'codex' || source === 'trae'
+      ? codexHookEventForEphemeralThread(state, paneKey, input.eventName, hookPayload, source)
       : undefined
   let eventName =
-    source !== 'codex'
+    source !== 'codex' && source !== 'trae'
       ? input.eventName
-      : codexEventName === undefined
+      : codexCompatibleEventName === undefined
         ? undefined
-        : codexHookEventForEndedTurn(state, paneKey, codexEventName, hookPayload)
+        : source === 'codex'
+          ? codexHookEventForEndedTurn(state, paneKey, codexCompatibleEventName, hookPayload)
+          : codexCompatibleEventName
   let resolvedPromptText = promptText
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false
@@ -109,6 +111,18 @@ export function normalizeProviderEvent(input: {
         promptText,
         paneKey,
         hookPayload,
+        'codex',
+        input.eventName
+      )
+      break
+    case 'trae':
+      payload = normalizeCodexEvent(
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload,
+        'trae',
         input.eventName
       )
       break

@@ -327,6 +327,16 @@
       }
     },
     {
+      "files": [
+        "src/shared/agent-hook-listener/providers/codex/codex-state.ts",
+        "src/wsl-guest/agent-hooks/results/agent-hook-result-retry-scheduler.ts",
+        "src/main/agent-hooks/server/server-status-retries.ts"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 400, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
       "files": ["**/*.tsx"],
       "rules": {
         "max-lines": ["error", { "max": 400, "skipBlankLines": true, "skipComments": true }]

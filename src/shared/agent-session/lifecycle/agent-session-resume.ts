@@ -285,6 +285,7 @@ export function extractAgentProviderSession(
       return id ? { key: 'conversation_id', id } : null
     }
     case 'amp':
+    case 'trae':
     case 'command-code':
       return null
   }
@@ -322,9 +323,7 @@ export type SavedResumeStartupSource = {
 export function terminalLaunchFacts(result: TerminalLaunchResult): TerminalLaunchResult {
   return {
     ...(result.savedResumeDecision ? { savedResumeDecision: result.savedResumeDecision } : {}),
-    ...(result.agentResumeUnavailable
-      ? { agentResumeUnavailable: result.agentResumeUnavailable }
-      : {}),
+    ...(result.agentResumeUnavailable ? { agentResumeUnavailable: true } : {}),
     ...(result.agentResumeRefused ? { agentResumeRefused: result.agentResumeRefused } : {}),
     ...(result.refusedResume ? { refusedResume: result.refusedResume } : {}),
     ...(result.launchConfig ? { launchConfig: result.launchConfig } : {}),

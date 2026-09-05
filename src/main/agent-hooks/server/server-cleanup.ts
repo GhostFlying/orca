@@ -15,6 +15,7 @@ import {
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
+import { clearDisconnectedAgentState } from './server-disconnected-agent-state'
 
 import { endedPresenceOf } from './agent-exit-evidence'
 
@@ -268,19 +269,8 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
       if (deleted) {
         statusChanged = true
         this.commitStatusRowMutation(deleted, undefined)
-        if (deleted.payload.agentType === 'codex') {
-          // A replacement remote process may reuse the pane; discard the lost owner's children.
-          this.state.codexSubagentRosterByPaneKey.delete(paneKey)
-          this.state.codexLeadStateByPaneKey.delete(paneKey)
-          this.state.codexAsyncQuestionsByPaneKey.delete(paneKey)
-        } else if (deleted.payload.agentType === 'claude') {
-          this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
-          this.state.claudeLeadStateByPaneKey.delete(paneKey)
-          this.state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
-          this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-          this.state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
-          this.state.claudeSessionOwnerByPaneKey.delete(paneKey)
-        }
+        // A replacement remote process may reuse the pane; discard the lost owner state.
+        clearDisconnectedAgentState(this.state, paneKey, deleted.payload.agentType)
       }
     }
     for (const [paneKey, evidence] of this.currentAuthorityObservations) {

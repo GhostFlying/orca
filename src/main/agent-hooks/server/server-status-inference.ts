@@ -13,7 +13,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contra
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { equivalentInterruptAgentType, isValidPaneKey } from './server-status-identity'
-
+import { blocksCodexCompatibleCancel } from './server-codex-status-rules'
 import { foldMainAgentWithRowChildWork } from '../../../shared/agent-hook-listener/state/agent-hook-row-child-work-fold'
 import {
   ClaudeTerminalInterruptTracker,
@@ -128,13 +128,8 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerQues
     ) {
       return false
     }
-    const childWorkEvidenced =
-      payload.subagents?.some((subagent) => subagent.state !== 'idle') === true ||
-      (agentType === 'claude' &&
-        (this.state.claudeRunningNonAgentTasksByPaneKey.has(existing.paneKey) ||
-          this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey)))
-    // Ctrl+C at an idle main prompt cannot cancel child work; older peers use the child-evidence guard.
-    if (payload.mainAgent ? payload.mainAgent.state !== 'working' : childWorkEvidenced) {
+    // An idle root cannot cancel child work; Codex-compatible aggregates must also keep live children.
+    if (blocksCodexCompatibleCancel(this.state, existing.paneKey, payload, agentType)) {
       return false
     }
     const inferred = this.settleTurnWithoutStop(existing, 'cancellation')

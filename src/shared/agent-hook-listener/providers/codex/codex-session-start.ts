@@ -11,11 +11,13 @@ import { codexRosterToSnapshots, type CodexSubagentRoster } from './codex-subage
 import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import {
+  codexCompatibleStateKey,
   codexMainAgentStatusForPayload,
   reconcileRemoteCodexState,
   resolveCodexPaneStatus,
   seedCodexStateFromSnapshot,
   setCodexMainAgentTurnState,
+  type CodexCompatibleAgentType,
   type CodexRemoteRosterAuthority
 } from './codex-state'
 
@@ -33,11 +35,16 @@ export function previousCodexTurnContext<T extends AgentHookEventPayload>(
     : previous
 }
 
-function clearCodexSessionState(state: HookListenerState, paneKey: string): void {
-  state.codexAsyncQuestionsByPaneKey.delete(paneKey)
-  state.codexSubagentRosterByPaneKey.delete(paneKey)
-  state.codexSubagentTranscriptByPaneKey.delete(paneKey)
-  state.codexLeadStateByPaneKey.delete(paneKey)
+function clearCodexSessionState(
+  state: HookListenerState,
+  paneKey: string,
+  agentType: CodexCompatibleAgentType = 'codex'
+): void {
+  const key = codexCompatibleStateKey(paneKey, agentType)
+  state.codexAsyncQuestionsByPaneKey.delete(key)
+  state.codexSubagentRosterByPaneKey.delete(key)
+  state.codexSubagentTranscriptByPaneKey.delete(key)
+  state.codexLeadStateByPaneKey.delete(key)
 }
 
 function isCodexChildSessionStart(
@@ -56,10 +63,12 @@ function isCodexChildSessionStart(
 export function applyCodexSessionStart(
   state: HookListenerState,
   paneKey: string,
-  start: { sessionId?: string; source?: string; agentId?: string; model?: string }
+  start: { sessionId?: string; source?: string; agentId?: string; model?: string },
+  agentType: CodexCompatibleAgentType = 'codex'
 ): (AgentLeadStatusResolution & { updateLead: boolean; sessionBoundary?: true }) | null {
-  const lead = state.codexLeadStateByPaneKey.get(paneKey)
-  if (isCodexChildSessionStart(start, state.codexSubagentRosterByPaneKey.get(paneKey))) {
+  const key = codexCompatibleStateKey(paneKey, agentType)
+  const lead = state.codexLeadStateByPaneKey.get(key)
+  if (isCodexChildSessionStart(start, state.codexSubagentRosterByPaneKey.get(key))) {
     return null
   }
   const idleSource =
@@ -71,20 +80,20 @@ export function applyCodexSessionStart(
   if (start.source === 'compact' || (!idleSource && lead && lead.state !== 'done')) {
     const record =
       lead ??
-      setCodexMainAgentTurnState(state, paneKey, {
+      setCodexMainAgentTurnState(state, key, {
         state: 'done',
         sessionId: start.sessionId,
         model: start.model
       })
-    const resolution = resolveCodexPaneStatus(state, paneKey, record)
+    const resolution = resolveCodexPaneStatus(state, paneKey, record, agentType)
     return {
       ...resolution,
       updateLead: false,
       ...(resolution.stateName === 'done' ? { sessionBoundary: true } : {})
     }
   }
-  clearCodexSessionState(state, paneKey)
-  setCodexMainAgentTurnState(state, paneKey, {
+  clearCodexSessionState(state, paneKey, agentType)
+  setCodexMainAgentTurnState(state, key, {
     state: 'done',
     sessionId: start.sessionId,
     model: start.model
@@ -211,6 +220,7 @@ export function reconcileCodexStatusEvent(
           event.toolAgentId,
           snapshot,
           undefined,
+          'codex',
           remoteRosterAuthority
         )
       }
@@ -259,6 +269,7 @@ export function reconcileCodexStatusEvent(
       event.toolAgentId,
       event.payload,
       replacement ? undefined : context?.payload,
+      'codex',
       remoteRosterAuthority
     )
   }

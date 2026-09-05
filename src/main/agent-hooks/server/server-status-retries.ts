@@ -37,6 +37,10 @@ type TranscriptPoll = {
   delayMs?: number
 }
 
+function transcriptPollKey(paneKey: string, source: AgentHookSource): string {
+  return source === 'trae' ? `${paneKey}\0${source}` : paneKey
+}
+
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
   private observedLocalHook?: { accepted: boolean; receivedAt?: number }
   private readonly claudeHelperKills = new ClaudeHelperKillPoller(this.state, {
@@ -113,6 +117,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   protected clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
     this.claudeHelperKills.clear(paneKey)
+    this.transcriptPollScheduler.clear(`${paneKey}\0trae`)
   }
 
   protected replaceTranscriptPollRow(
@@ -162,17 +167,19 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       return
     }
     // Nested CLIs inherit pane keys; another provider must not clear this transcript poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'codex' && source !== 'trae' && source !== 'muse') {
       return
     }
+    const pollKey = transcriptPollKey(original.paneKey, source)
+    this.transcriptPollScheduler.clear(pollKey)
     if (!shouldPollHookTranscript(this.state, source, original)) {
-      this.transcriptPollScheduler.clear(original.paneKey)
+      this.transcriptPollScheduler.clear(pollKey)
       return
     }
     // Codex keeps the scheduler's cadence; a Muse poll without a delay is a fresh hook's 1s poll.
     const museDelayMs = source === 'muse' ? (delayMs ?? nextMusePollDelay()) : undefined
     this.transcriptPollScheduler.schedule(
-      original.paneKey,
+      pollKey,
       { source, body, original, delayMs: museDelayMs },
       hookTranscriptWatchPath(this.state, source, original.paneKey),
       museDelayMs
@@ -184,7 +191,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (!paneKey) {
       return
     }
-    const poll = this.transcriptPollScheduler.peek(paneKey)
+    const poll = this.transcriptPollScheduler.peek(transcriptPollKey(paneKey, 'muse'))
     if (poll?.source === 'muse' && this.state.lastStatusByPaneKey.get(paneKey) === poll.original) {
       this.scheduleTranscriptPoll('muse', poll.body, poll.original)
     }
@@ -218,9 +225,9 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   }
 
   // Recheck ownership at callback time; newer events supersede this payload even if children remain.
-  private ownsTranscriptPoll(paneKey: string, { original }: TranscriptPoll): boolean {
+  private ownsTranscriptPoll(paneKey: string, { original, source }: TranscriptPoll): boolean {
     return (
-      paneKey === original.paneKey &&
+      paneKey === transcriptPollKey(original.paneKey, source) &&
       Boolean(this.server) &&
       this.state.lastStatusByPaneKey.get(original.paneKey) === original
     )
