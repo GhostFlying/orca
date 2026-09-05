@@ -11,7 +11,7 @@ import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/ter
 import type { TerminalSideEffectFact } from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import type { TerminalTitleTracker } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import type { ObservedAgent } from '../../../../shared/observed-agent'
 import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
 import type { RetainedTailRedrawCursor } from '../output/tail/terminal-tail-redraw-buffer'
@@ -93,7 +93,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   /** Identify flagged unmanaged --command panes before foreground reads; null for adopted/restored panes. */
   launchCommandAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
-  foregroundAgent: TerminalAgent | null
+  foregroundAgent: ObservedAgent | null
   readonly connected: boolean
   disconnectedAt: number | null
   lastExitCode: number | null

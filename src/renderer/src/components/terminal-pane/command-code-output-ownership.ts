@@ -1,8 +1,8 @@
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import type { ObservedAgent } from '../../../../shared/observed-agent'
 
 export function canCommandCodeOutputOwnPane(args: {
-  foregroundAgent?: TerminalAgent | null
+  foregroundAgent?: ObservedAgent | null
   shellForeground?: boolean
   paneOwnerAgent?: AgentType | null
   retainedPaneOwnerAgent?: AgentType | null

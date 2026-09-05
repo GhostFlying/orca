@@ -6,6 +6,7 @@ import {
 import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import { NODE_PACKAGE_SCRIPT_ENTRYPOINTS } from './agent-node-package-entrypoints'
 import type { AgentType } from '../contracts/agent-status-types'
+import type { ObservedAgent } from '../../observed-agent'
 import type { TerminalAgent } from '../identity/terminal-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from '../../command-token-scanner'
@@ -17,8 +18,14 @@ import {
 } from './agent-command-line-entrypoint'
 import { isFreshOmpLaunchCommand } from '../../agent-launch/startup/omp-fresh-launch'
 
-export type RecognizedAgentProcess = { agent: TerminalAgent; processName: string }
+export type RecognizedAgentProcess = { agent: ObservedAgent; processName: string }
 type ProcessName = string | null | undefined
+
+export function requiresAgentCommandLineVerification(
+  recognition: RecognizedAgentProcess | null
+): boolean {
+  return recognition?.agent === 'traex'
+}
 
 const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const INTERPRETER_SCRIPT_EXTENSION_RE = /\.(?:js|mjs|cjs)$/i
@@ -43,7 +50,7 @@ function normalizeProcessName(
 const FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES = new Set(['node', 'python', 'python3'])
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
-const PROCESS_TO_AGENT = new Map<string, TerminalAgent>([
+const PROCESS_TO_AGENT = new Map<string, ObservedAgent>([
   ['dsb', 'dsb'],
   ['deepseek-build', 'dsb'],
   ['deepseek-build-agent', 'dsb']
@@ -70,7 +77,11 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG)) {
   }
 }
 
-function agentForNormalizedProcess(normalized: string): TerminalAgent | undefined {
+// TraeX shares Trae's implementation and config, but is a distinct observed-only product.
+PROCESS_TO_AGENT.set('traex', 'traex')
+AGENT_TYPE_IDS.add('traex')
+
+function agentForNormalizedProcess(normalized: string): ObservedAgent | undefined {
   const exact = PROCESS_TO_AGENT.get(normalized)
   if (exact) {
     return exact
@@ -196,7 +207,7 @@ export function isExpectedAgentProcess(
 }
 
 /** Agents whose process names (orca, acli, cn, vibe) also belong to ordinary tools. */
-export const GENERIC_PROCESS_NAME_AGENTS: ReadonlySet<TerminalAgent> = new Set([
+export const GENERIC_PROCESS_NAME_AGENTS: ReadonlySet<ObservedAgent> = new Set([
   'claude-agent-teams',
   'rovo',
   'continue',

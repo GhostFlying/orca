@@ -144,9 +144,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+        const effectiveSource = normalized.event?.source ?? source
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
-              source,
+              source: effectiveSource,
               hookEventName: normalized.event.hookEventName,
               isReplay: normalized.event.isReplay,
               hasExplicitPrompt: normalized.event.hasExplicitPrompt,
@@ -181,8 +182,8 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
           if (enriched) {
             this.checkAgentPresenceAfterHook(event, enriched)
-            this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-            this.scheduleTranscriptPoll(source, aliasedBody, enriched)
+            this.scheduleAssistantMessageRetry(effectiveSource, aliasedBody, enriched)
+            this.scheduleTranscriptPoll(effectiveSource, aliasedBody, enriched)
           }
         }
         // Plugins see only calls status accepted, so a fenced or reused pane's old agent is skipped.
