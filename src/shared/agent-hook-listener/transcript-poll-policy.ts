@@ -13,11 +13,14 @@ export function shouldPollHookTranscript(
 ): boolean {
   if (source === 'codex') {
     return (
-      hasCodexTranscriptSubagents(state, event.paneKey) ||
+      hasCodexTranscriptSubagents(state, event.paneKey, source) ||
       hasPendingCodexSubagentIdentity(state.codexSubagentRosterByPaneKey.get(event.paneKey)) ||
       (state.codexLeadStateByPaneKey.get(event.paneKey)?.state !== 'done' &&
         Boolean(state.codexSubagentTranscriptByPaneKey.get(event.paneKey)?.parent.filePath))
     )
+  }
+  if (source === 'trae') {
+    return hasCodexTranscriptSubagents(state, event.paneKey, source)
   }
   if (source === 'muse') {
     // Muse question waits/answers exist only in the session log.

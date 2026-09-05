@@ -34,6 +34,10 @@ type TranscriptPoll = {
   delayMs?: number
 }
 
+function transcriptPollKey(paneKey: string, source: AgentHookSource): string {
+  return source === 'trae' ? `${paneKey}\0${source}` : paneKey
+}
+
 export type AgentHookResultRetryHost = {
   state: HookListenerState
   env: string
@@ -105,6 +109,7 @@ export class AgentHookResultRetryScheduler {
 
   clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
+    this.transcriptPollScheduler.clear(`${paneKey}\0trae`)
     this.claudeHelperKills.clear(paneKey)
   }
 
@@ -128,17 +133,19 @@ export class AgentHookResultRetryScheduler {
       return
     }
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'codex' && source !== 'trae' && source !== 'muse') {
       return
     }
+    const pollKey = transcriptPollKey(original.paneKey, source)
+    this.transcriptPollScheduler.clear(pollKey)
     if (!shouldPollHookTranscript(this.host.state, source, original)) {
-      this.transcriptPollScheduler.clear(original.paneKey)
+      this.transcriptPollScheduler.clear(pollKey)
       return
     }
     // Codex keeps the scheduler's cadence; a Muse poll without a delay is a fresh hook's 1s poll.
     const museDelayMs = source === 'muse' ? (delayMs ?? nextMusePollDelay()) : undefined
     this.transcriptPollScheduler.schedule(
-      original.paneKey,
+      pollKey,
       {
         source,
         body,
@@ -171,7 +178,7 @@ export class AgentHookResultRetryScheduler {
     // Keep the identity check at callback time: a newer event supersedes this
     // payload even when its pane still has transcript children.
     if (
-      paneKey !== original.paneKey ||
+      paneKey !== transcriptPollKey(original.paneKey, source) ||
       !this.host.isListening() ||
       this.host.state.lastStatusByPaneKey.get(original.paneKey) !== original
     ) {

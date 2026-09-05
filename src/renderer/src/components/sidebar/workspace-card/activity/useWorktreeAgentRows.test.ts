@@ -16,6 +16,7 @@ const LEAF_ID_1_SECOND = '77777777-7777-4777-8777-777777777777'
 const PANE_KEY_1 = makePaneKey('tab-1', LEAF_ID_1)
 const PANE_KEY_2 = makePaneKey('tab-2', '33333333-3333-4333-8333-333333333333')
 const PANE_KEY_3 = makePaneKey('tab-3', '55555555-5555-4555-8555-555555555555')
+const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', '11111111-1111-4111-8111-111111111111')
 
 function makeTab(id: string, overrides?: Partial<TerminalTab>): TerminalTab {
   return {
@@ -89,6 +90,32 @@ function makeSplitPaneLayout(firstLeafId: string, secondLeafId: string): Termina
 }
 
 describe('buildWorktreeAgentRows', () => {
+  it('keeps a completed Trae hook row as a canonical retained sidebar row', () => {
+    const retained = makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000, {
+      entry: makeEntry(ORPHAN_PANE_KEY, 1000, {
+        agentType: 'trae',
+        terminalTitle: 'traex'
+      }),
+      tab: makeTab('tab-orphan', { launchAgent: 'trae', title: 'traex' }),
+      agentType: 'trae'
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [],
+      retained: [retained],
+      now: 2000
+    })
+
+    expect(rows).toMatchObject([
+      {
+        paneKey: ORPHAN_PANE_KEY,
+        rowSource: 'retained',
+        state: 'done',
+        agentType: 'trae'
+      }
+    ])
+  })
+
   it('prefers a live row over a retained snapshot with the same paneKey', () => {
     const liveEntry = makeEntry(PANE_KEY_1, 2000)
     const rows = buildWorktreeAgentRows({

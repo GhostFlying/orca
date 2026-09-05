@@ -6,7 +6,10 @@ import {
   seedClaudeLeadTurnFromPersistedStatus,
   seedClaudeSubagentRosterFromSnapshots
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
-import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
+import {
+  isCodexCompatibleAgentType,
+  seedCodexStateFromSnapshot
+} from '../../../shared/agent-hook-listener/providers/codex-state'
 import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { AGENT_STATUS_HYDRATE_MAX_AGE_MS as HYDRATE_MAX_AGE_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import { LAST_STATUS_FILE_VERSION, STATUS_FLUSH_BUSY_TIMEOUT_MS } from './server-constants'
@@ -136,9 +139,14 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
             Math.max(previousWatermark ?? -1, entry.receivedAt)
           )
         }
-        // Seed child hierarchy now; provider reconciliation removes stale entries.
-        if (entry.payload.agentType === 'codex') {
-          seedCodexStateFromSnapshot(this.state, resolvedPaneKey, entry.payload)
+        // Why: restore live child hierarchy immediately; provider-specific reconciliation reaps stale seeds.
+        if (isCodexCompatibleAgentType(entry.payload.agentType)) {
+          seedCodexStateFromSnapshot(
+            this.state,
+            resolvedPaneKey,
+            entry.payload,
+            entry.payload.agentType
+          )
         } else if (entry.payload.agentType === 'claude') {
           seedClaudeLeadTurnFromPersistedStatus(this.state, resolvedPaneKey, entry)
           if (entry.payload.subagents) {
