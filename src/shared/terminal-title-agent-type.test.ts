@@ -6,6 +6,7 @@ import {
   isClaudeIdentityFrameTitle,
   isGrokRotatingWorkingTitle,
   resolveExplicitTerminalTitleAgentType,
+  resolveObservedTerminalTitleAgentType,
   resolveTerminalTitleAgentType,
   resolveTerminalTitlePolicyAgentType
 } from './terminal-title-agent-type'
@@ -38,6 +39,11 @@ describe('isGrokRotatingWorkingTitle', () => {
 })
 
 describe('resolveExplicitTerminalTitleAgentType', () => {
+  it('fails closed for observed-only identities', () => {
+    expect(resolveObservedTerminalTitleAgentType('TraeX ready')).toBe('traex')
+    expect(resolveExplicitTerminalTitleAgentType('TraeX ready')).toBeNull()
+  })
+
   it('treats Claude generic status prefixes as activity-only, not identity', () => {
     expect(resolveExplicitTerminalTitleAgentType('✳ investigating startup')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('⠸ investigating startup')).toBeNull()

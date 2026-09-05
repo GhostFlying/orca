@@ -87,7 +87,7 @@ describe('collectAgentTitleEvidence', () => {
     ['codex', 'codex'],
     ['trae', 'trae'],
     ['traecli', 'trae'],
-    ['traex', 'trae'],
+    ['traex', 'traex'],
     ['copilot', 'copilot'],
     ['cursor', 'cursor'],
     ['gemini', 'gemini'],

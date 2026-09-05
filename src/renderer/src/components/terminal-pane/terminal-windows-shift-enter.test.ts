@@ -36,6 +36,14 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     ).toBe('alt-enter')
   })
 
+  it('fails closed for observed-only agent identities', () => {
+    expect(
+      resolveWindowsShiftEnterEncoding({
+        foreground: { agent: 'traex', shellForeground: false, routingTrusted: true }
+      })
+    ).toBe('alt-enter')
+  })
+
   it.each(['dsb', 'codex'] as const)(
     'keeps pending %s input encoding when a stale title names another agent',
     (agent) => {
