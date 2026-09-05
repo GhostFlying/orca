@@ -9,8 +9,12 @@ import {
   buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
+import type { AgentHookSource } from '../../shared/agent-hook-relay'
 
-export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+export function getManagedScript(
+  target: 'local' | 'posix' = 'local',
+  source: Extract<AgentHookSource, 'codex' | 'trae'> = 'codex'
+): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
@@ -18,8 +22,8 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       // Reload the endpoint so surviving PTYs reach the current server after restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
-      WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
-      buildWindowsAgentHookCurlPostCommand('codex'),
+      ...(source === 'codex' ? [WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD] : []),
+      buildWindowsAgentHookCurlPostCommand(source),
       'exit /b 0',
       ''
     ].join('\r\n')
@@ -28,8 +32,8 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
-    ...buildPosixHookSpoolLines('codex'),
-    ...buildPosixClaudeBackgroundJobGuardLines(),
+    ...buildPosixHookSpoolLines(source),
+    ...(source === 'codex' ? buildPosixClaudeBackgroundJobGuardLines() : []),
     // Reload endpoint state so surviving PTYs keep reporting after restart.
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',
@@ -66,7 +70,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  connect_timeout="${2:-0.5}"',
     '  max_time="${3:-1.5}"',
     // Send JSON through stdin to keep it off argv and avoid path-encoding IDS alerts.
-    ...buildPosixAgentHookPostCommand('codex', {
+    ...buildPosixAgentHookPostCommand(source, {
       curlCommand: '"$curl_bin"',
       indent: '    '
     }).map((line) => `  ${line}`),

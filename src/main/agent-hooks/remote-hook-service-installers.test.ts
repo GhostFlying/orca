@@ -27,6 +27,7 @@ import { DevinHookService } from '../devin/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { JcodeHookService } from '../jcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { TraeHookService } from '../trae/hook-service'
 import {
   installRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
@@ -74,6 +75,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/codex-hook.sh',
           install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/trae-hook.sh',
+          install: (sftp: SFTPWrapper) => new TraeHookService().installRemote(sftp, '/home/dev')
         },
         {
           path: '/home/dev/.orca/agent-hooks/gemini-hook.sh',

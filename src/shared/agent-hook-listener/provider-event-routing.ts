@@ -46,6 +46,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       // SessionStart clears idle-boundary caches; UserPromptSubmit opens the actual turn.
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'codex':
+    case 'trae':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'gemini':
       return eventName === 'BeforeAgent'
@@ -107,6 +108,8 @@ export function isTurnEndEvent(source: AgentHookSource, eventName: unknown): boo
     case 'dsh':
     case 'zcode':
     case 'codex':
+    case 'trae':
+    case 'traex':
     case 'antigravity':
     case 'droid':
     case 'devin':
@@ -229,6 +232,7 @@ export function extractToolFields(
     case 'zcode':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
+    case 'trae':
       return extractCodexToolFields(eventName, hookPayload)
     case 'gemini':
       return extractGeminiToolFields(eventName, hookPayload)
