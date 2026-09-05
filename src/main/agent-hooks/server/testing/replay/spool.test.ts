@@ -13,6 +13,7 @@ import {
   AGENT_HOOK_SPOOL_MAX_FILES,
   drainAgentHookSpoolAsync,
   launchTokenHash,
+  readSpoolFile,
   type SpoolRecord
 } from '../../../../../shared/agent-hook-listener/transport/agent-hook-spool'
 import { AgentHookServer } from '../../agent-hook-server'
@@ -94,6 +95,39 @@ describe('agent hook spool', () => {
     expect(ingested).toHaveLength(0)
     expect(readFileSync(file)).toHaveLength(0)
     expect(statSync(file).ino).toBe(inode)
+  })
+
+  it('restores TraeX identity from a spooled Trae hook', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-spool-traex-'))
+    const paneKey = makePaneKey('tab-traex', '00000000-0000-4000-8000-000000000004')
+    const spoolDir = join(userDataPath, 'agent-hooks', 'spool')
+    mkdirSync(spoolDir, { recursive: true })
+    const spoolPath = join(spoolDir, 'pane-traex.jsonl')
+    const record = {
+      paneKey,
+      source: 'trae',
+      observedAgent: 'traex',
+      receivedAt: Number.MAX_SAFE_INTEGER - 1000,
+      payload: {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'hello',
+        session_id: 'traex-session'
+      }
+    }
+    writeFileSync(spoolPath, `\n${JSON.stringify(record)}\n`)
+
+    expect(readSpoolFile(spoolPath).records[0]?.observedAgent).toBe('traex')
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        paneKey,
+        agentType: 'traex',
+        providerSession: { key: 'session_id', id: 'traex-session' }
+      })
+    } finally {
+      server.stop()
+    }
   })
 
   it('rejects a stale remote replay against the hydrated launch-token fence', async () => {

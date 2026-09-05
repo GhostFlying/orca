@@ -15,6 +15,7 @@ import {
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
+  requiresAgentCommandLineVerification,
   type RecognizedAgentProcess
 } from '../../../shared/agent-status/process/agent-process-recognition'
 import { shouldInspectOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
@@ -94,10 +95,12 @@ export function createPtyForegroundProcessTracker(args: {
     }
     const fallbackIsShell = fallbackProcess !== null && isShellProcess(fallbackProcess)
     const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
+    const requiresCommandLine = requiresAgentCommandLineVerification(fallbackRecognition)
     if (
       !fallbackProcess ||
       (fallbackRecognition !== null &&
-        !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) ||
+        !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition) &&
+        !requiresCommandLine) ||
       !shouldInspectForegroundFallback(fallbackProcess)
     ) {
       return
@@ -234,7 +237,13 @@ export function createPtyForegroundProcessTracker(args: {
         const inspectOuterWrapper =
           fallbackRecognition !== null &&
           shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)
-        if (fallbackProcess && fallbackRecognition && !inspectOuterWrapper) {
+        const requiresCommandLine = requiresAgentCommandLineVerification(fallbackRecognition)
+        if (
+          fallbackProcess &&
+          fallbackRecognition &&
+          !inspectOuterWrapper &&
+          !requiresCommandLine
+        ) {
           cacheAgentForeground(fallbackProcess, null)
           return fallbackProcess
         }
@@ -252,6 +261,7 @@ export function createPtyForegroundProcessTracker(args: {
           (staticName ||
             isAgentForegroundWrapperProcess(fallbackProcess) ||
             inspectOuterWrapper ||
+            requiresCommandLine ||
             (process.platform === 'win32' && isShellProcess(fallbackProcess)))
         ) {
           return cachedAgentForeground.processName
@@ -260,7 +270,7 @@ export function createPtyForegroundProcessTracker(args: {
         if (fallbackProcess && isShellProcess(fallbackProcess) && activeStartupAgentForeground) {
           return activeStartupAgentForeground.processName
         }
-        return fallbackProcess
+        return requiresCommandLine ? null : fallbackProcess
       } catch {
         return null
       }

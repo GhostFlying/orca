@@ -210,7 +210,8 @@ export class RuntimePtyForegroundAgent {
     result: PtyForegroundProcessRead
   ): Promise<{ agent: TerminalAgent | null; superseded: boolean }> {
     const foregroundName = result.process
-    const agent = recognizeAgentProcess(foregroundName)?.agent ?? null
+    const observedAgent = recognizeAgentProcess(foregroundName)?.agent ?? null
+    const agent = observedAgent === 'traex' ? null : observedAgent
     const confirmed = this.confirmedByPtyId.get(ptyId)
     // Native Claude's p_comm is its versions/<semver> binary; only a process-table scan reads its argv.
     if (agent || !foregroundName || !NATIVE_CLAUDE_VERSION_NAME.test(foregroundName)) {
@@ -238,9 +239,10 @@ export class RuntimePtyForegroundAgent {
     if (this.deps.getPty(ptyId)?.launchAgent === 'claude') {
       return { agent: 'claude', superseded: this.foregroundEpochs.get(ptyId) !== epoch }
     }
-    const confirmedAgent =
+    const observedConfirmedAgent =
       recognizeAgentProcess(await this.confirm(result.controller, ptyId))?.agent ?? null
     const superseded = this.foregroundEpochs.get(ptyId) !== epoch
+    const confirmedAgent = observedConfirmedAgent === 'traex' ? null : observedConfirmedAgent
     if (result.controller !== this.deps.getController()) {
       return { agent: null, superseded }
     }

@@ -2,7 +2,6 @@ import { normalizeHostTurnRevision } from '../../../shared/agent-hook-listener/t
 import { readAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
-import { restoreShedStatusFields } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   MAX_PANE_KEY_LEN,
   warnOnHookEnvOrVersionMismatch
@@ -24,6 +23,7 @@ import {
 import { isValidPiProviderSessionOnly } from './server-status-identity'
 import {
   normalizeRemoteEnvelopeFields,
+  restoreRemotePayload,
   type RemoteAgentStatusEnvelope
 } from './server-remote-envelope-normalization'
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
@@ -118,14 +118,14 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       providerSession
     } = normalizeRemoteEnvelopeFields(envelope)
     if (envelope.statusUnavailable === true && envelope.payload === null) {
-      const previous = this.state.lastStatusByPaneKey.get(paneKey)
+      const previousStatus = this.state.lastStatusByPaneKey.get(paneKey)
       if (
         (source === 'opencode' || source === 'opencode2') &&
-        previous?.connectionId === trimmedConnectionId &&
+        previousStatus?.connectionId === trimmedConnectionId &&
         trimmedConnectionId !== null &&
-        previous.worktreeId === worktreeId &&
-        previous.source === source &&
-        previous.launchToken === envelope.launchToken &&
+        previousStatus.worktreeId === worktreeId &&
+        previousStatus.source === source &&
+        previousStatus.launchToken === envelope.launchToken &&
         this.getAgentStatusDisposition(paneKey) !== 'suppress'
       ) {
         this.clearPaneState(paneKey, { statusUnavailable: true })
@@ -148,11 +148,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       return
     }
     // Restore shed fields only against a matching digest and turn.
-    let normalizedPayload = restoreShedStatusFields(
-      validatedPayload,
-      envelope.shedFields,
-      this.state.lastStatusByPaneKey.get(paneKey)?.payload
-    )
+    const previous = this.state.lastStatusByPaneKey.get(paneKey)?.payload
+    let normalizedPayload = restoreRemotePayload(source, validatedPayload, envelope, previous)
     if (
       envelope.providerSessionOnly === true &&
       !readAgentProcessPresence(envelope.agentPresence)?.ended &&

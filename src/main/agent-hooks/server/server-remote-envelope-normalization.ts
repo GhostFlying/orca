@@ -1,7 +1,8 @@
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   isTurnEndDisposition,
-  type HostTurnEndFacts
+  type HostTurnEndFacts,
+  type ParsedAgentStatusPayload
 } from '../../../shared/agent-status/contracts/agent-status-types'
 import { isTurnEndedAt } from '../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
 import {
@@ -10,8 +11,10 @@ import {
 } from '../../../shared/agent-hook-listener/listener-limits'
 import {
   isAgentHookSource,
+  restoreShedStatusFields,
   type AgentHookSource
 } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { resolveObservedHookSource } from '../../../shared/agent-hook-observed-agent'
 import {
   readClaudeSettledRequests,
   type ClaudeSettledRequest
@@ -30,6 +33,7 @@ export type RemoteAgentStatusEnvelope = {
   agentPresence?: unknown
   hookEventName?: string
   source?: unknown
+  observedAgent?: unknown
   providerPromptId?: unknown
   grokPromptBoundary?: unknown
   opensTurn?: unknown
@@ -76,6 +80,7 @@ export type RemoteEnvelopeFields = {
 export function normalizeRemoteEnvelopeFields(envelope: {
   hookEventName?: string
   source?: unknown
+  observedAgent?: unknown
   providerPromptId?: unknown
   grokPromptBoundary?: unknown
   opensTurn?: unknown
@@ -92,7 +97,8 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   toolAgentType?: string
   providerSession?: unknown
 }): RemoteEnvelopeFields {
-  const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
+  const wireSource = isAgentHookSource(envelope.source) ? envelope.source : undefined
+  const source = wireSource ? resolveObservedHookSource(wireSource, envelope) : undefined
   return {
     hookEventName:
       typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
@@ -158,4 +164,17 @@ export function normalizeRemoteEnvelopeFields(envelope: {
         : undefined,
     providerSession: normalizeAgentProviderSession(envelope.providerSession) ?? undefined
   }
+}
+
+/** Restore shed fields, then project the wire's observed agent onto a compatibility-projected payload. */
+export function restoreRemotePayload(
+  source: AgentHookSource | undefined,
+  payload: ParsedAgentStatusPayload,
+  envelope: Pick<RemoteAgentStatusEnvelope, 'shedFields'>,
+  previous: ParsedAgentStatusPayload | undefined
+): ParsedAgentStatusPayload {
+  const restored = restoreShedStatusFields(payload, envelope.shedFields, previous)
+  return source === 'traex' && restored.agentType === 'trae'
+    ? { ...restored, agentType: 'traex' }
+    : restored
 }

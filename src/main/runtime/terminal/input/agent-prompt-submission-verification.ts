@@ -49,7 +49,7 @@ export function resolveAgentPromptEffectTimeoutMs(agent: TerminalAgent | null | 
 }
 
 export function isTerminalSendSettlementAgent(
-  agent: TerminalAgent | null | undefined
+  agent: unknown
 ): agent is 'antigravity' | 'claude' | 'codex' {
   return agent === 'antigravity' || agent === 'claude' || agent === 'codex'
 }

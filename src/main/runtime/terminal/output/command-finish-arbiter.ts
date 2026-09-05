@@ -1,13 +1,13 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import type { ObservedAgent } from '../../../../shared/observed-agent'
 import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
 
 /** The agent a pane runs, launched or recognized in front: the program whose own marks are not the shell's. */
 export function commandMarkAgent(record: {
   launchAgent?: TuiAgent | null
   launchCommandAgent?: TuiAgent | null
-  foregroundAgent?: TerminalAgent | null
+  foregroundAgent?: ObservedAgent | null
 }): TuiAgent | null {
   const agent = record.launchAgent ?? record.launchCommandAgent ?? record.foregroundAgent ?? null
   return isTuiAgent(agent) ? agent : null

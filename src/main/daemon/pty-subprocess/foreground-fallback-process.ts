@@ -1,7 +1,11 @@
 import { win32 as pathWin32 } from 'node:path'
 import { isTerminalScopeWrapper } from '../process-scopes/terminal-scopes-runtime'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
-import { isAgentForegroundWrapperProcess } from '../../../shared/agent-status/process/agent-process-recognition'
+import {
+  isAgentForegroundWrapperProcess,
+  recognizeAgentProcess,
+  requiresAgentCommandLineVerification
+} from '../../../shared/agent-status/process/agent-process-recognition'
 import { shouldInspectOuterWrapperForegroundName } from '../../../shared/agent-status/process/foreground-wrapper-agent'
 
 function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
@@ -34,6 +38,7 @@ export function shouldInspectForegroundFallback(fallbackProcess: string | null):
     (isShellProcess(fallbackProcess) ||
       isAgentForegroundWrapperProcess(fallbackProcess) ||
       shouldInspectOuterWrapperForegroundName(fallbackProcess) ||
+      requiresAgentCommandLineVerification(recognizeAgentProcess(fallbackProcess)) ||
       process.platform !== 'win32')
   )
 }

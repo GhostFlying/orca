@@ -9,7 +9,6 @@ import {
 import type { HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
-import type { AgentHookSource } from '../transport/agent-hook-relay'
 import { codexWaitBesideQuestion, pendingCodexAsyncQuestion } from './codex/codex-async-questions'
 import {
   codexMainAgentStatusForPayload,
@@ -33,13 +32,11 @@ export function buildCodexStatusPayload(
   agentType: CodexCompatibleAgentType = 'codex'
 ): ParsedAgentStatusPayload | null {
   const stateKey = codexCompatibleStateKey(paneKey, agentType)
-  // TraeX shares Trae's hook protocol, so its tool fields and turn boundaries read as trae.
-  const hookSource: AgentHookSource = agentType === 'traex' ? 'trae' : agentType
   const reviewed = options.reviewerOwnsApproval === true
   const snapshot = options.updateLead
     ? (codexWaitBesideQuestion(state, stateKey, eventName, hookPayload, reviewed) ??
-      resolveToolState(state, stateKey, extractToolFields(hookSource, eventName, hookPayload), {
-        resetOnNewTurn: isNewTurnEvent(hookSource, eventName)
+      resolveToolState(state, stateKey, extractToolFields(agentType, eventName, hookPayload), {
+        resetOnNewTurn: isNewTurnEvent(agentType, eventName)
       }))
     : (state.lastToolByPaneKey.get(stateKey) ?? {})
   const lead = state.codexLeadStateByPaneKey.get(stateKey)
@@ -54,7 +51,7 @@ export function buildCodexStatusPayload(
     workingMode: options.workingMode,
     sessionBoundary: options.sessionBoundary,
     prompt: resolvePrompt(state, stateKey, promptText, {
-      resetOnNewTurn: options.updateLead && isNewTurnEvent(hookSource, eventName)
+      resetOnNewTurn: options.updateLead && isNewTurnEvent(agentType, eventName)
     }),
     agentType,
     model: lead?.model,

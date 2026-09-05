@@ -284,7 +284,9 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
   /** Rank launch authority first, then foreground evidence for agents Orca did not launch. */
   getPaneTerminalAgent(ptyId: string | null | undefined): TerminalAgent | null {
     const pty = ptyId ? this.ptysById.get(ptyId) : undefined
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? pty?.launchCommandAgent ?? null
+    const agent = pty?.launchAgent ?? pty?.foregroundAgent ?? pty?.launchCommandAgent ?? null
+    // TraeX is observable but not launchable, so it never becomes the pane's terminal agent.
+    return agent === 'traex' ? null : agent
   }
 
   protected getPaneAgentForTuiIdle(ptyId: string | null | undefined): TuiAgent | null {

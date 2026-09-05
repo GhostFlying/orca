@@ -6,6 +6,7 @@ import { buildPosixAgentHookPostCommand } from '../../../agent-hooks/installatio
 import { buildHookTmuxPaneCapture } from '../../../agent-hooks/installation/scripts/hook-process-capture'
 import {
   buildPosixHookPayloadCapture,
+  buildPosixHookObservedAgentLines,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines,
   POSIX_HOOK_STDIN_EXEC
@@ -36,6 +37,7 @@ export function getManagedScript(
     // Same bytes as the default reader; the capture subshell execs cat instead of forking it.
     ...buildPosixHookPayloadCapture('exit', POSIX_HOOK_STDIN_EXEC),
     ...buildHookTmuxPaneCapture(),
+    ...buildPosixHookObservedAgentLines(source),
     ...buildPosixHookSpoolLines(source),
     ...(source === 'codex' ? buildPosixClaudeBackgroundJobGuardLines() : []),
     // Reload endpoint state so surviving PTYs keep reporting after restart.

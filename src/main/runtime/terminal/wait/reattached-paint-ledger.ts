@@ -4,7 +4,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
-import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import type { ObservedAgent } from '../../../../shared/observed-agent'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
@@ -138,7 +138,7 @@ export function retainedFrameIsProven(
 export type PaintLedgerPty = TerminalCommandPaintRecord & {
   connected: boolean
   incarnationId: string | null
-  foregroundAgent: TerminalAgent | null
+  foregroundAgent: ObservedAgent | null
   launchAgent: TuiAgent | null
   launchCommandAgent: TuiAgent | null
 }

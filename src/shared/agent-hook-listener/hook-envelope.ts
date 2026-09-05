@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import type { IncomingHttpHeaders } from 'node:http'
 
 import type { AgentHookSource } from './transport/agent-hook-relay'
+import { readAgentHookObservedAgent } from '../agent-hook-observed-agent'
 import { parsePaneKey } from '../workspace-layout/stable-pane-id'
 import { MAX_PANE_KEY_LEN, warnOnHookEnvOrVersionMismatch } from './listener-limits'
 import type { HookListenerState } from './listener-state'
@@ -109,6 +110,9 @@ export function mergeAgentHookRequestHeaders(body: unknown, headers: IncomingHtt
     ...metadata,
     agentProcess: readHookHeader(headers, 'x-orca-agent-process'),
     tmuxPane: readHookHeader(headers, 'x-orca-tmux-pane'),
+    observedAgent: readAgentHookObservedAgent(
+      readHookHeader(headers, 'x-orca-agent-hook-observed-agent')
+    ),
     payload: body
   }
 }

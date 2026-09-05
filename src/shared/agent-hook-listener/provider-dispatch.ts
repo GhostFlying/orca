@@ -126,6 +126,17 @@ export function normalizeProviderEvent(input: {
         input.eventName
       )
       break
+    case 'traex':
+      payload = normalizeCodexEvent(
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload,
+        'traex',
+        input.eventName
+      )
+      break
     case 'gemini':
       payload = normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayload)
       break

@@ -208,9 +208,10 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (source === 'muse' && !normalized.event) {
       this.rearmIgnoredMuseHook(aliasedBody)
     }
+    const effectiveSource = normalized.event?.source ?? source
     const statusDisposition = normalized.event
       ? this.getAgentStatusDisposition(normalized.event.paneKey, {
-          source,
+          source: effectiveSource,
           hookEventName: normalized.event.hookEventName,
           isReplay: normalized.event.isReplay,
           hasExplicitPrompt: normalized.event.hasExplicitPrompt,
@@ -243,10 +244,10 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       }
       this.recordCurrentAuthorityObservation(event)
       toolCallOwner = event
-      const enriched = this.applyLocalHookAndReply(source, aliasedBody, event, normalized)
+      const enriched = this.applyLocalHookAndReply(effectiveSource, aliasedBody, event, normalized)
       if (enriched) {
         this.checkAgentPresenceAfterHook(event, enriched)
-        this.scheduleTranscriptPoll(source, aliasedBody, enriched)
+        this.scheduleTranscriptPoll(effectiveSource, aliasedBody, enriched)
       }
     }
     return toolCallOwner
@@ -298,8 +299,9 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       return
     }
     const replay = { ...normalized.event, isReplay: true as const }
+    const effectiveSource = replay.source ?? record.source
     const statusDisposition = this.getAgentStatusDisposition(replay.paneKey, {
-      source: record.source,
+      source: effectiveSource,
       hookEventName: replay.hookEventName,
       isReplay: true,
       hasExplicitPrompt: replay.hasExplicitPrompt,
