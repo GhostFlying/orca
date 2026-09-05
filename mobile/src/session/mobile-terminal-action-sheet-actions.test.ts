@@ -17,6 +17,7 @@ function buildActions(overrides: Partial<SheetArgs> = {}) {
     tabs: [],
     isTabChatView: () => false,
     nativeChatTranscriptIsLocalReadable: true,
+    traexChatSupported: true,
     onDismiss: vi.fn(),
     onToggleChat: vi.fn(),
     isPhoneMode: () => false,

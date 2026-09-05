@@ -84,6 +84,43 @@ describe('resolveMobileNativeChat', () => {
     expect(resolveMobileNativeChat({ type: 'terminal', launchAgent: 'gemini' })).toBeNull()
   })
 
+  it('admits only capability-gated hook-confirmed TraeX sessions', () => {
+    const confirmed = {
+      type: 'terminal',
+      agentStatus: status({
+        agentType: 'traex',
+        providerSession: {
+          key: 'session_id',
+          id: 'traex-session',
+          transcriptPath: '/remote/trae/rollout.jsonl'
+        }
+      })
+    }
+
+    expect(resolveMobileNativeChat(confirmed, false, false)).toBeNull()
+    expect(resolveMobileNativeChat(confirmed, false, true)).toEqual({
+      agent: 'traex',
+      sessionId: 'traex-session',
+      transcriptPath: '/remote/trae/rollout.jsonl'
+    })
+    expect(
+      resolveMobileNativeChat(
+        { type: 'terminal', agentStatus: status({ agentType: 'traex' }) },
+        false,
+        true
+      )
+    ).toBeNull()
+  })
+
+  it('never treats a Trae or TraeX launch hint as native chat authority', () => {
+    expect(
+      resolveMobileNativeChat({ type: 'terminal', launchAgent: 'trae' }, false, true)
+    ).toBeNull()
+    expect(
+      resolveMobileNativeChat({ type: 'terminal', launchAgent: 'traex' }, false, true)
+    ).toBeNull()
+  })
+
   it('admits Grok only when its transcript is readable by the serving host', () => {
     const tab = { type: 'terminal', launchAgent: 'grok' }
     expect(resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable(null))).toMatchObject({
