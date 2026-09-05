@@ -55,8 +55,16 @@ export function NewWorktreeModal(props: NewWorktreeModalProps) {
 }
 
 function NewWorktreeModalContent(props: NewWorktreeModalProps) {
-  const { visible, client, hostId, existingWorktreePaths, existingWorktrees, onCreated, onClose } =
-    props
+  const {
+    visible,
+    client,
+    hostId,
+    hostLabelById,
+    existingWorktreePaths,
+    existingWorktrees,
+    onCreated,
+    onClose
+  } = props
   const { repos, selectedRepo, setSelectedRepo, loading } = useNewWorkspaceRepositories({
     client,
     hostId,
@@ -150,11 +158,11 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const selectedProject =
     projectPickerItems.find((project) => project.id === selectedProjectId) ?? null
   const runTargetPickerItems = useMemo(
-    () => buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform),
-    [hostPlatform, repos, selectedProjectId]
+    () => buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform, hostLabelById),
+    [hostLabelById, hostPlatform, repos, selectedProjectId]
   )
   const selectedRunTarget = selectedRepo
-    ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform)
+    ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform, hostLabelById)
     : null
   const needsSetupChoice = Boolean(setupScript.setupCommand) && setupScript.setupRunPolicy === 'ask'
   const canCreate =
