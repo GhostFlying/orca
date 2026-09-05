@@ -105,6 +105,32 @@ describe('buildWorktreeAgentRows', () => {
     expect(rows[0].state).toBe('done')
   })
 
+  it('keeps a completed Trae hook row as a canonical retained sidebar row', () => {
+    const retained = makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000, {
+      entry: makeEntry(ORPHAN_PANE_KEY, 1000, {
+        agentType: 'trae',
+        terminalTitle: 'traex'
+      }),
+      tab: makeTab('tab-orphan', { launchAgent: 'trae', title: 'traex' }),
+      agentType: 'trae'
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [],
+      retained: [retained],
+      now: 2000
+    })
+
+    expect(rows).toMatchObject([
+      {
+        paneKey: ORPHAN_PANE_KEY,
+        rowSource: 'retained',
+        state: 'done',
+        agentType: 'trae'
+      }
+    ])
+  })
+
   it('resolves retained unknown Claude rows from their terminal title', () => {
     const retained = makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000, {
       entry: makeEntry(ORPHAN_PANE_KEY, 1000, {
