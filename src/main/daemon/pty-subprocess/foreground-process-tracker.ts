@@ -11,10 +11,10 @@ import {
   readWindowsPtyJobProcessIds
 } from '../../providers/windows-pty-job-membership'
 
-import { readWindowsConsoleAttachedProcessIds } from '../../providers/windows-console-attached-processes'
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
+  requiresAgentCommandLineVerification,
   type RecognizedAgentProcess
 } from '../../../shared/agent-process-recognition'
 import {
@@ -23,20 +23,21 @@ import {
 } from '../../../shared/foreground-wrapper-agent'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import { resolveFallbackForegroundProcess } from './foreground-fallback-process'
+import { confirmTrackedForegroundProcess } from './foreground-process-confirmation'
+import {
+  type CachedAgentForeground,
+  FOREGROUND_AGENT_CACHE_TTL_MS,
+  SHELL_FOREGROUND_OUTPUT_HOT_WINDOW_MS,
+  SHELL_FOREGROUND_REFRESH_RETRY_MS,
+  STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS,
+  WINDOWS_IDLE_SHELL_FOREGROUND_REFRESH_RETRY_MS
+} from './foreground-process-tracker-state'
 import { parsePtySessionId } from '../pty-session-id'
 import {
   ptyProcessNameIsSpawnFile,
   createPtyForegroundResolver,
   shouldCachePtyForeground
 } from './spawn-file-foreground-process'
-
-const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
-const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
-const WINDOWS_IDLE_SHELL_FOREGROUND_REFRESH_RETRY_MS = 15_000
-const SHELL_FOREGROUND_OUTPUT_HOT_WINDOW_MS = 10_000
-const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
-
-type CachedAgentForeground = { processName: string; pid: number | null; refreshedAt: number }
 
 export type PtyForegroundProcessTracker = {
   recordOutput(data: string): void
@@ -90,6 +91,7 @@ export function createPtyForegroundProcessTracker(args: {
     (isShellProcess(fallbackProcess) ||
       isAgentForegroundWrapperProcess(fallbackProcess) ||
       shouldInspectOuterWrapperForegroundName(fallbackProcess) ||
+      requiresAgentCommandLineVerification(recognizeAgentProcess(fallbackProcess)) ||
       process.platform !== 'win32')
 
   const scheduleRefresh = (fallbackProcess: string | null): void => {
@@ -98,10 +100,12 @@ export function createPtyForegroundProcessTracker(args: {
     }
     const fallbackIsShell = fallbackProcess !== null && isShellProcess(fallbackProcess)
     const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
+    const requiresCommandLine = requiresAgentCommandLineVerification(fallbackRecognition)
     if (
       !fallbackProcess ||
       (fallbackRecognition !== null &&
-        !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) ||
+        !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition) &&
+        !requiresCommandLine) ||
       !shouldInspectFallback(fallbackProcess)
     ) {
       return
@@ -231,7 +235,13 @@ export function createPtyForegroundProcessTracker(args: {
         const inspectOuterWrapper =
           fallbackRecognition !== null &&
           shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)
-        if (fallbackProcess && fallbackRecognition && !inspectOuterWrapper) {
+        const requiresCommandLine = requiresAgentCommandLineVerification(fallbackRecognition)
+        if (
+          fallbackProcess &&
+          fallbackRecognition &&
+          !inspectOuterWrapper &&
+          !requiresCommandLine
+        ) {
           cachedAgentForeground = {
             processName: fallbackProcess,
             pid: null,
@@ -254,6 +264,7 @@ export function createPtyForegroundProcessTracker(args: {
           (staticName ||
             isAgentForegroundWrapperProcess(fallbackProcess) ||
             inspectOuterWrapper ||
+            requiresCommandLine ||
             (process.platform === 'win32' && isShellProcess(fallbackProcess)))
         ) {
           return cachedAgentForeground.processName
@@ -262,7 +273,7 @@ export function createPtyForegroundProcessTracker(args: {
         if (fallbackProcess && isShellProcess(fallbackProcess) && activeStartupAgentForeground) {
           return activeStartupAgentForeground.processName
         }
-        return fallbackProcess
+        return requiresCommandLine ? null : fallbackProcess
       } catch {
         return null
       }
@@ -273,40 +284,25 @@ export function createPtyForegroundProcessTracker(args: {
       }
       try {
         const fallbackProcess = getFallbackProcess()
-        const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
-        if (
-          !fallbackProcess ||
-          (fallbackRecognition !== null &&
-            process.platform !== 'win32' &&
-            !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) ||
-          (process.platform !== 'win32' && !shouldInspectFallback(fallbackProcess))
-        ) {
-          return fallbackProcess
-        }
-        const resolution = await resolveForeground(proc.pid, fallbackProcess, {
+        const resolution = await confirmTrackedForegroundProcess({
+          process: proc,
+          fallbackProcess,
           contextPaths,
-          fresh: true,
-          ...(process.platform === 'win32'
-            ? {
-                forceProcessScan: true,
-                readWindowsConsoleAttachedProcessIds: () =>
-                  readWindowsConsoleAttachedProcessIds(proc.pid)
-              }
-            : {})
+          resolveForeground,
+          shouldInspectFallback,
+          isDead: args.isDead
         })
-        if (args.isDead() || !resolution.available) {
+        if (!resolution) {
           return null
         }
-        const processName =
-          recognizeAgentProcess(resolution.processName)?.processName ?? resolution.processName
-        if (shouldCachePtyForeground(processName, staticName)) {
+        if (shouldCachePtyForeground(resolution.processName, staticName)) {
           cachedAgentForeground = {
-            processName,
-            pid: resolution.processId ?? null,
+            processName: resolution.processName,
+            pid: resolution.pid,
             refreshedAt: Date.now()
           }
           startupAgentForeground = null
-          return cachedAgentForeground.processName
+          return resolution.processName
         }
         cachedAgentForeground = null
         startupAgentForeground = null

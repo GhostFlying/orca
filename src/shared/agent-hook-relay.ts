@@ -28,6 +28,7 @@ import { createHash } from 'node:crypto'
 import type { AgentSubagentSnapshot, ParsedAgentStatusPayload } from './agent-status-types'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentHookTarget } from './agent-hook-types'
+import type { AgentHookObservedAgent } from './agent-hook-observed-agent'
 
 // Why: the local hook server knows the discriminator from URL pathname routing
 // (`/hook/<source>`); the relay equally must tag each forwarded notification
@@ -41,6 +42,7 @@ const AGENT_HOOK_SOURCES = [
   'qoder',
   'codebuddy',
   'trae',
+  'traex',
   'gemini',
   'antigravity',
   'amp',
@@ -78,6 +80,8 @@ export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
 /** Wire envelope for a single hook event flowing relay → Orca. */
 export type AgentHookRelayEnvelope = {
   source: AgentHookSource
+  /** Refines a compatibility-projected source without requiring old hosts to know it. */
+  observedAgent?: AgentHookObservedAgent
   paneKey: string
   agentPresence?: AgentProcessPresence
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */

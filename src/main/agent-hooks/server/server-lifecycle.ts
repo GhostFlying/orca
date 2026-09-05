@@ -104,9 +104,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
         trackEmptyPaneKeyHook(hookBody)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+        const effectiveSource = normalized.event?.source ?? source
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
-              source,
+              source: effectiveSource,
               hookEventName: normalized.event.hookEventName,
               isReplay: normalized.event.isReplay,
               hasExplicitPrompt: normalized.event.hasExplicitPrompt,
@@ -140,8 +141,8 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           if (enriched) {
             this.checkAgentPresenceAfterHook(event, enriched)
-            this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-            this.scheduleTranscriptPoll(source, aliasedBody, enriched)
+            this.scheduleAssistantMessageRetry(effectiveSource, aliasedBody, enriched)
+            this.scheduleTranscriptPoll(effectiveSource, aliasedBody, enriched)
           }
         }
         res.writeHead(204)
