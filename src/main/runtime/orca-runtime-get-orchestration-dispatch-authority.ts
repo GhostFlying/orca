@@ -1,14 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from './orca-runtime-verify-orchestration-compatibility-caller'
-import type { OrchestrationCompatibilityTerminalAuthority } from './runtime-terminal-contracts'
-import { createHash } from 'node:crypto'
-import {
-  isTerminalLeafId,
-  makePaneKey,
-  parseLegacyNumericPaneKey,
-  parsePaneKey
-} from '../../shared/stable-pane-id'
-import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { OrcaRuntimeWithOrchestrationPaneAuthority } from './orca-runtime-orchestration-pane-authority'
 import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import { appendRecentPtyPathCandidates } from './terminal-output-path-candidates'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
@@ -30,133 +21,11 @@ import {
 } from './orchestration/cli-command'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import { readOrchestrationFleetAgentStatusSnapshot } from './orchestration-fleet-agent-status-snapshot'
-import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { isStructuredWorkerHandle } from './structured-worker-identity'
 import { parseOrcaSessionAddress } from '../../shared/orca-session-address'
 import { matchesProcessIncarnation } from './orchestration/worker-terminal-process-liveness'
 
-export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
-  /** Every pane key this PTY could be addressed by, including restored receipts. */
-  protected collectPaneKeysForPty(ptyId: string): Set<string> {
-    const paneKeys = new Set<string>()
-    const pty = this.ptysById.get(ptyId)
-    if (pty?.paneKey && parsePaneKey(pty.paneKey)) {
-      paneKeys.add(pty.paneKey)
-    }
-    const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
-    if (receipt?.paneKey && parsePaneKey(receipt.paneKey)) {
-      paneKeys.add(receipt.paneKey)
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      if (isValidTerminalTabId(leaf.tabId) && isTerminalLeafId(leaf.leafId)) {
-        paneKeys.add(makePaneKey(leaf.tabId, leaf.leafId))
-      }
-    }
-    return paneKeys
-  }
-
-  /** Status cleanup also owns runtime-admitted legacy OSC rows; orchestration authority does not. */
-  protected collectAgentStatusPaneKeysForPty(ptyId: string): Set<string> {
-    const paneKeys = this.collectPaneKeysForPty(ptyId)
-    const terminalHandles = new Set(this.getExistingTerminalHandlesForPtyId(ptyId))
-    // The provider-session snapshot is the unfiltered store view, so certified exit can also
-    // retire a dismissed row's identity-only remnant after its pane binding moved.
-    for (const row of this.getAgentProviderSessionSnapshotFn?.() ?? []) {
-      if (row.terminalHandle && terminalHandles.has(row.terminalHandle)) {
-        paneKeys.add(row.paneKey)
-      }
-    }
-    const ptyPaneKey = this.ptysById.get(ptyId)?.paneKey
-    if (ptyPaneKey && parseLegacyNumericPaneKey(ptyPaneKey)) {
-      paneKeys.add(ptyPaneKey)
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      const paneKey = this.makeRuntimePaneKey(leaf)
-      if (parseLegacyNumericPaneKey(paneKey)) {
-        paneKeys.add(paneKey)
-      }
-    }
-    return paneKeys
-  }
-
-  getOrchestrationDispatchAuthority(
-    terminalHandle: string
-  ): OrchestrationCompatibilityTerminalAuthority | null {
-    const structured = resolveStructuredWorkerAuthority(
-      terminalHandle,
-      this.getOrchestrationDbIfAvailable?.() ?? null
-    )
-    if (structured) {
-      return {
-        runtimeId: this.runtimeId,
-        terminalHandle,
-        // Both EMPTY on purpose. `verifyOrchestrationCompatibilityCaller` falls back to the
-        // restored-authority receipt keyed by ptyId when there is no launch token, so filling
-        // either of these in would silently open hook attestation to a session that has no PTY,
-        // no launch secret, and no hook to attest with.
-        ptyId: '',
-        worktreeId: structured.identity.worktreeId,
-        processIncarnation: structured.identity.processIncarnation,
-        paneKey: structured.identity.paneKey,
-        launchTokenHash: null,
-        hostScope: structured.identity.hostScope
-      }
-    }
-    let ptyId: string | null
-    try {
-      ptyId =
-        this.getLivePtyForHandle(terminalHandle)?.pty.ptyId ??
-        this.resolveLiveLeafForHandle(terminalHandle)?.ptyId ??
-        null
-    } catch {
-      return null
-    }
-    if (!ptyId) {
-      return null
-    }
-    const pty = this.ptysById.get(ptyId)
-    if (!pty?.connected) {
-      return null
-    }
-    const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
-    if (!hostScope) {
-      return null
-    }
-    return {
-      runtimeId: this.runtimeId,
-      terminalHandle,
-      ptyId,
-      worktreeId: pty.worktreeId,
-      processIncarnation: this.getTerminalProcessIncarnation(terminalHandle),
-      paneKey: pty.paneKey,
-      launchTokenHash: pty.launchToken
-        ? createHash('sha256').update(pty.launchToken).digest('hex')
-        : null,
-      hostScope
-    }
-  }
-
-  protected retirePtyAgentLaunchAuthority(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
-    if (!pty) {
-      return
-    }
-    const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
-    if (!pty.launchToken && !receipt && !pty.launchAgent) {
-      return
-    }
-    // Why: collect before the delete below, which drops the restored-authority receipt a
-    // receipt-only pane's key comes from.
-    const paneKeys = this.collectPaneKeysForPty(ptyId)
-    this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
-    pty.launchToken = null
-    pty.launchIncarnationId = null
-    pty.launchAgent = null
-    for (const paneKey of paneKeys) {
-      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
-    }
-  }
-
+export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithOrchestrationPaneAuthority {
   async resolveTerminalCwd(handle: string): Promise<string | null> {
     const ptyId = this.resolveLeafForHandle(handle)?.ptyId
     if (!ptyId) {
@@ -244,6 +113,41 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     const ptyId = this.resolveLeafForHandle(handle)?.ptyId
     const pty = ptyId ? this.ptysById.get(ptyId) : null
     return pty ? { worktreeId: pty.worktreeId, connectionId: pty.connectionId } : null
+  }
+
+  resolveNativeChatTraexSession(
+    handle: string,
+    worktreeId: string,
+    sessionId: string
+  ): { transcriptPath?: string; connectionId: string | null } | null {
+    const terminal = this.resolveTerminalContext(handle)
+    const paneKey = this.getTerminalPaneKey(handle)
+    if (!terminal || terminal.worktreeId !== worktreeId || !paneKey) {
+      return null
+    }
+    const rows =
+      this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ??
+      (this.getAgentProviderSessionSnapshotFn?.() ?? []).filter((row) => row.paneKey === paneKey)
+    const match = rows
+      .filter(
+        (row) =>
+          row.agentType === 'traex' &&
+          row.providerSession?.id === sessionId &&
+          row.connectionId === terminal.connectionId
+      )
+      .reduce<(typeof rows)[number] | undefined>(
+        (latest, row) => (!latest || row.receivedAt > latest.receivedAt ? row : latest),
+        undefined
+      )
+    if (!match?.providerSession) {
+      return null
+    }
+    return {
+      connectionId: terminal.connectionId,
+      ...(match.providerSession.transcriptPath
+        ? { transcriptPath: match.providerSession.transcriptPath }
+        : {})
+    }
   }
 
   // Why: remote clients cannot resolve this runtime's WSL project preference,
