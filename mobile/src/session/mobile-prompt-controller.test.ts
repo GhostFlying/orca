@@ -6,12 +6,10 @@ import './structured-agent-send-result.test-fixture'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
-
+import { baseTab, permissionTab } from './mobile-native-chat-controller-test-fixtures'
 import {
   session,
   structuredSession,
-  baseTab,
-  permissionTab,
   response,
   render,
   reset,

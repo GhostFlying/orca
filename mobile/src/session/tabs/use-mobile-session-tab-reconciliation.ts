@@ -4,6 +4,7 @@ import { supportsMobileQuickCommands } from '../../terminal/quick-commands'
 import { terminalQuickCommandAgentPromptMaxLength } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../../agent-history/agent-history-capability'
 import '../../../../src/shared/protocol-version'
+import { MOBILE_TRAEX_CHAT_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-runtime-capabilities'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../../src/shared/program-status/protocol'
 import { structuredAgentSessionHostSupport } from '../mobile-structured-agent-session-host-support'
@@ -42,6 +43,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setAgentSessionHostSupport,
     setQuickCommandsSupported,
     setQuickCommandAgentPromptMaxLength,
+    setTraexChatSupported,
     nativeChatStream,
     fetchTerminals,
     applySessionTabs,
@@ -179,6 +181,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setAgentSessionHostSupport(null)
       setQuickCommandsSupported(null)
       setQuickCommandAgentPromptMaxLength(null)
+      setTraexChatSupported(null)
       setShowQuickCommands(false)
       hostQueryReplyInputSupportedRef.current = false
       hostProgramStatusSupportedRef.current = false
@@ -190,6 +193,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setAgentSessionHostSupport(null)
     setQuickCommandsSupported(null)
     setQuickCommandAgentPromptMaxLength(null)
+    setTraexChatSupported(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
     hostProgramStatusSupportedRef.current = false
@@ -200,6 +204,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setAgentSessionHostSupport(structuredAgentSessionHostSupport(capabilities))
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
       setQuickCommandAgentPromptMaxLength(terminalQuickCommandAgentPromptMaxLength(capabilities))
+      setTraexChatSupported(capabilities.includes(MOBILE_TRAEX_CHAT_RUNTIME_CAPABILITY))
       // Older hosts discard inputKind, turning forwarded xterm replies into floor-stealing shell input.
       hostQueryReplyInputSupportedRef.current = capabilities.includes(
         TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY

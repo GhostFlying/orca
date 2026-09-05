@@ -3,6 +3,11 @@ import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-ses
 import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import type { StructuredMobileSendAttachment } from '../use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../../storage/session-view-preferences'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import type { StructuredAgentSessionHostSupport } from '../mobile-structured-agent-session-host-support'
+import type { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   AskAnswerSelection,
@@ -132,4 +137,29 @@ export type MobileNativeChatController = {
   /** The structured chat's options read on whether its agent forks; absent until it answers. */
   nativeChatForkSupport?: AgentSessionOptionsResult['forkSupport']
   nativeChatUsageLimit: MobileNativeChatUsageLimit | null
+}
+
+export type MobileNativeChatControllerArgs = {
+  client: RpcClient | null
+  /** The route's paired host; differs from client when a server executes the workspace. */
+  pairedHostClient: RpcClient | null
+  hostId: string
+  worktreeId: string
+  activeSessionTab: MobileNativeChatTab | null
+  activeSessionTabId: string | null
+  activeHandleRef: MutableRefObject<string | null>
+  deviceTokenRef: MutableRefObject<string | null>
+  nativeChatTranscriptIsLocalReadable: boolean
+  traexChatSupported: boolean
+  nativeChatInputLeaseReady: boolean
+  /** Live socket state; the lease collapses on disconnect but one render later. */
+  connState: ConnectionState
+  /** Host capability fact from the shared runtime status probe. */
+  agentSessionHostSupport?: StructuredAgentSessionHostSupport | null
+  /** Forwarded to the session lane, a refusal's cause with it. */
+  onSendError: Parameters<typeof useMobileNativeChatSessionLane>[0]['onSendError']
+  onQueuedEditNotice?: Parameters<typeof useMobileNativeChatSessionLane>[0]['onQueuedEditNotice']
+  /** Retires a held failure banner. Any accepted chat write clears it — a delivered
+   *  answer or permission reply must not sit under a stale "not sent". */
+  onSendResolved: () => void
 }
