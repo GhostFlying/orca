@@ -1,5 +1,7 @@
 import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
 import {
+  type CodexCompatibleAgentType,
+  isCodexCompatibleAgentType,
   reconcileRemoteCodexState,
   markCodexLeadTurnInterrupted
 } from '../../../shared/agent-hook-listener/providers/codex-state'
@@ -120,9 +122,13 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.emitEnrichedStatus(enriched)
       return enriched
     }
+    const codexCompatibleAgentType: CodexCompatibleAgentType | undefined =
+      isCodexCompatibleAgentType(terminalOwnedPayload.payload.agentType)
+        ? terminalOwnedPayload.payload.agentType
+        : undefined
     const stateReconciledPayload =
       terminalOwnedPayload.connectionId &&
-      terminalOwnedPayload.payload.agentType === 'codex' &&
+      codexCompatibleAgentType &&
       (terminalOwnedPayload.hookEventName || terminalOwnedPayload.payload.mainAgent)
         ? {
             ...terminalOwnedPayload,
@@ -132,21 +138,22 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
               terminalOwnedPayload.hookEventName,
               terminalOwnedPayload.toolAgentId,
               terminalOwnedPayload.payload,
-              previous?.payload
+              previous?.payload,
+              codexCompatibleAgentType
             )
           }
         : terminalOwnedPayload
-    const previousCodexRoot =
-      stateReconciledPayload.payload.agentType === 'codex' &&
+    const previousCompatibleRoot =
+      codexCompatibleAgentType !== undefined &&
       stateReconciledPayload.toolAgentId &&
-      previous?.payload.agentType === 'codex'
+      previous?.payload.agentType === codexCompatibleAgentType
         ? previous
         : undefined
     const preservedProviderSession = !stateReconciledPayload.providerSession
-      ? previousCodexRoot?.providerSession
+      ? previousCompatibleRoot?.providerSession
       : undefined
     const preservedRootModel = !stateReconciledPayload.payload.model
-      ? previousCodexRoot?.payload.model
+      ? previousCompatibleRoot?.payload.model
       : undefined
     // Why: an SSH relay restart forgets root-only fields; child hooks must not erase durable resume/model identity.
     const rootContextPreservingPayload =
@@ -204,10 +211,14 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         setClaudeMainAgentTurnState(this.state, attachedPayload.paneKey, previous.payload.mainAgent)
       }
       if (
-        attachedPayload.payload.agentType === 'codex' &&
+        isCodexCompatibleAgentType(attachedPayload.payload.agentType) &&
         attachedPayload.payload.state === 'working'
       ) {
-        markCodexLeadTurnInterrupted(this.state, attachedPayload.paneKey)
+        markCodexLeadTurnInterrupted(
+          this.state,
+          attachedPayload.paneKey,
+          attachedPayload.payload.agentType
+        )
       }
       this.commitStatusRowMutation(rowBefore, previous)
       return previous

@@ -49,6 +49,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       // tool/prompt caches, while UserPromptSubmit is the actual turn boundary.
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'codex':
+    case 'trae':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'gemini':
       return eventName === 'BeforeAgent'
@@ -179,6 +180,7 @@ export function extractToolFields(
     case 'zcode':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
+    case 'trae':
       return extractCodexToolFields(eventName, hookPayload)
     case 'gemini':
       return extractGeminiToolFields(eventName, hookPayload)
