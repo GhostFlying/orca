@@ -59,6 +59,7 @@ export function useMobileSessionNativeChatDictation(
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
+    traexChatSupported: scope.traexChatSupported === true,
     nativeChatInputLeaseReady,
     connState,
     agentSessionHostSupport,
