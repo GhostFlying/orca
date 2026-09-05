@@ -190,7 +190,8 @@ export function extractAgentProviderSession(
     // since recent Claude Code names the transcript file with a UUID that differs
     // from the hook session_id (so the id-based glob no longer finds it).
     case 'claude':
-    case 'codex': {
+    case 'codex':
+    case 'traex': {
       const id = readSessionId(payload, ['session_id'])
       return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
     }

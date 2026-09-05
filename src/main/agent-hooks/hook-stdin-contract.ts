@@ -22,6 +22,27 @@ export function buildPosixHookPayloadCapture(
   ]
 }
 
+export function buildPosixHookObservedAgentLines(source: string): string[] {
+  if (source !== 'trae') {
+    return []
+  }
+  return [
+    'ORCA_AGENT_HOOK_OBSERVED_AGENT=',
+    'ancestor_pid=$PPID',
+    'ancestor_depth=0',
+    'while [ "$ancestor_depth" -lt 8 ]; do',
+    '  ancestor_command=$(ps -p "$ancestor_pid" -o command= 2>/dev/null | sed -n "1{s/^[[:space:]]*//;p;}")',
+    '  case "$ancestor_command" in',
+    '    traex|traex\\ *|*/traex|*/traex\\ *) ORCA_AGENT_HOOK_OBSERVED_AGENT=traex; break ;;',
+    '  esac',
+    '  ancestor_pid=$(ps -p "$ancestor_pid" -o ppid= 2>/dev/null | tr -d "[:space:]")',
+    '  case "$ancestor_pid" in ""|*[!0-9]*) break ;; esac',
+    '  [ "$ancestor_pid" -gt 1 ] || break',
+    '  ancestor_depth=$((ancestor_depth + 1))',
+    'done'
+  ]
+}
+
 /** Shell-side durable fallback shared by every POSIX managed hook.
  *  `eventNameVar` is for providers that send the event name out-of-band rather than in the
  *  payload JSON; without it both the progress filter and replay would miss the event name. */
@@ -32,9 +53,9 @@ export function buildPosixHookSpoolLines(source: string, eventNameVar?: string):
   const eventArg = eventNameVar ? ` "$(spool_json_escape "\${${eventNameVar}:-}")"` : ''
   const spoolRecordLine = "  { printf '\\n{".concat(
     eventFormat,
-    '"paneKey":"%s","tabId":"%s","worktreeId":"%s","env":"%s","version":"%s","launchToken":"%s","source":"%s","receivedAt":%s,"payload":%s}\\n\'',
+    '"paneKey":"%s","tabId":"%s","worktreeId":"%s","env":"%s","version":"%s","launchToken":"%s","observedAgent":"%s","source":"%s","receivedAt":%s,"payload":%s}\\n\'',
     eventArg,
-    ' "$(spool_json_escape "${ORCA_PANE_KEY:-}")" "$(spool_json_escape "${ORCA_TAB_ID:-}")" "$(spool_json_escape "${ORCA_WORKTREE_ID:-}")" "$(spool_json_escape "${ORCA_AGENT_HOOK_ENV:-}")" "$(spool_json_escape "${ORCA_AGENT_HOOK_VERSION:-}")" "$(spool_json_escape "${ORCA_AGENT_LAUNCH_TOKEN:-}")" "$(spool_json_escape "',
+    ' "$(spool_json_escape "${ORCA_PANE_KEY:-}")" "$(spool_json_escape "${ORCA_TAB_ID:-}")" "$(spool_json_escape "${ORCA_WORKTREE_ID:-}")" "$(spool_json_escape "${ORCA_AGENT_HOOK_ENV:-}")" "$(spool_json_escape "${ORCA_AGENT_HOOK_VERSION:-}")" "$(spool_json_escape "${ORCA_AGENT_LAUNCH_TOKEN:-}")" "$(spool_json_escape "${ORCA_AGENT_HOOK_OBSERVED_AGENT:-}")" "$(spool_json_escape "',
     source,
     '")" "$spool_now" "$payload"; } >> "$spool_file" 2>/dev/null || :'
   )

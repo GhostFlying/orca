@@ -31,7 +31,10 @@ import {
   type HooksConfig
 } from './installer-utils'
 import { buildPosixAgentHookPostCommand } from './hook-post-command'
-import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
+import {
+  buildPosixHookObservedAgentLines,
+  POSIX_HOOK_STDIN_DRAIN_COMMAND
+} from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 
 let tmpDir: string
@@ -900,6 +903,26 @@ describe('buildPosixAgentHookPostCommand', () => {
     expect(command).toContain('--data-binary @-')
     expect(command).toContain('Content-Type: application/x-www-form-urlencoded')
     expect(command).toContain('--data-urlencode "payload@-"')
+  })
+
+  it('sends the observed agent exactly once on both POSIX transports', () => {
+    const command = buildPosixAgentHookPostCommand('trae').join('\n')
+
+    expect(command.match(/X-Orca-Agent-Hook-Observed-Agent/g)).toHaveLength(1)
+    expect(command.match(/observedAgent=/g)).toHaveLength(1)
+  })
+})
+
+describe('buildPosixHookObservedAgentLines', () => {
+  it('detects only an exact TraeX ancestor for the shared Trae hook', () => {
+    const script = buildPosixHookObservedAgentLines('trae').join('\n')
+
+    expect(script).toContain('ancestor_depth=0')
+    expect(script).toContain('ancestor_depth" -lt 8')
+    expect(script).toContain(String.raw`traex|traex\ *|*/traex|*/traex\ *`)
+    expect(script).toContain('ORCA_AGENT_HOOK_OBSERVED_AGENT=traex')
+    expect(script).not.toContain('traex-code-mode-host')
+    expect(buildPosixHookObservedAgentLines('codex')).toEqual([])
   })
 })
 

@@ -5,6 +5,14 @@ import {
 } from './terminal-windows-shift-enter'
 
 describe('resolveWindowsShiftEnterEncoding', () => {
+  it('fails closed for observed-only agent identities', () => {
+    expect(
+      resolveWindowsShiftEnterEncoding({
+        foreground: { agent: 'traex', shellForeground: false, routingTrusted: true }
+      })
+    ).toBe('alt-enter')
+  })
+
   it('uses CSI-u only for trusted Droid process evidence', () => {
     expect(
       resolveWindowsShiftEnterEncoding({

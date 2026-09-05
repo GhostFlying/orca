@@ -6,7 +6,8 @@ import { promisify } from 'node:util'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
-  recognizeAgentProcess
+  recognizeAgentProcess,
+  requiresAgentCommandLineVerification
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
 import { getProcessTableIndex, type ProcessTableIndex } from '../shared/process-table-index'
@@ -304,16 +305,25 @@ export async function getForegroundProcessName(
     if (fallbackRecognition) {
       // Why: node-pty can report OMP's wrapped Pi; enrich only that ambiguous
       // fallback so authoritative OMP reads keep the zero-subprocess fast path.
-      if (shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) {
+      if (
+        shouldInspectOuterWrapperForegroundProcess(fallbackRecognition) ||
+        requiresAgentCommandLineVerification(fallbackRecognition)
+      ) {
         if (process.platform === 'win32') {
+          const inspected = await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})
           return (
-            (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ??
-            fallbackRecognition.processName
+            inspected ??
+            (requiresAgentCommandLineVerification(fallbackRecognition)
+              ? null
+              : fallbackRecognition.processName)
           )
         }
+        const inspected = await getRecognizedForegroundDescendant(pid, fallbackProcess)
         return (
-          (await getRecognizedForegroundDescendant(pid, fallbackProcess)) ??
-          fallbackRecognition.processName
+          inspected ??
+          (requiresAgentCommandLineVerification(fallbackRecognition)
+            ? null
+            : fallbackRecognition.processName)
         )
       }
       return fallbackRecognition.processName

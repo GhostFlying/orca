@@ -43,7 +43,7 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     expect(resolveExplicitTerminalTitleAgentType('⠋ Codex')).toBe('codex')
     expect(resolveExplicitTerminalTitleAgentType('Trae ready')).toBe('trae')
     expect(resolveExplicitTerminalTitleAgentType('traecli.exe')).toBe('trae')
-    expect(resolveExplicitTerminalTitleAgentType('traex')).toBe('trae')
+    expect(resolveExplicitTerminalTitleAgentType('traex')).toBeNull()
     expect(resolveExplicitTerminalTitleAgentType('✦ Gemini CLI')).toBe('gemini')
     expect(resolveExplicitTerminalTitleAgentType('MiMo Code')).toBe('mimo-code')
     expect(resolveExplicitTerminalTitleAgentType('⠋ OpenClaude')).toBe('openclaude')

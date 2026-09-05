@@ -51,6 +51,7 @@ describe('agent-hook-relay wire shape', () => {
     expect(isAgentHookSource('kimi')).toBe(true)
     expect(isAgentHookSource('prime-agent')).toBe(true)
     expect(isAgentHookSource('trae')).toBe(true)
+    expect(isAgentHookSource('traex')).toBe(true)
     expect(isAgentHookSource('claude\0codex')).toBe(false)
     expect(isAgentHookSource('unknown')).toBe(false)
     expect(isAgentHookSource({ source: 'claude' })).toBe(false)
