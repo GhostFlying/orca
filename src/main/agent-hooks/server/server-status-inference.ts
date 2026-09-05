@@ -4,6 +4,10 @@ import {
   clearClaudeAnsweredQuestionWait
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
+  isCodexCompatibleAgentType,
+  markCodexLeadTurnInterrupted
+} from '../../../shared/agent-hook-listener/providers/codex-state'
+import {
   isAgentInterruptInputIntent,
   isNavigationEscapeIntent,
   requiresDoubleEscapeInterrupt,
@@ -137,8 +141,14 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
           this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey)))
     // Why: a 'working' pane can be child-driven, and Ctrl+C at the idle prompt of a main agent that
     // child work holds open cancels nothing, so the main agent fact decides. A row from a host too
-    // old to publish `mainAgent` keeps the evidence guard.
-    if (payload.mainAgent ? payload.mainAgent.state !== 'working' : childWorkEvidenced) {
+    // old to publish `mainAgent` keeps the evidence guard, and so does Codex: its synthesized row is
+    // a plain done, which would retire the live children its combine keeps working.
+    if (
+      payload.mainAgent
+        ? payload.mainAgent.state !== 'working' ||
+          (isCodexCompatibleAgentType(agentType) && childWorkEvidenced)
+        : childWorkEvidenced
+    ) {
       return false
     }
     // Why: whoever owns the provider records folds the cancel with the child work the turn left
@@ -152,6 +162,9 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
       agentType === 'claude' && existing.connectionId
         ? foldMainAgentWithRowChildWork('done', existing)
         : undefined
+    if (isCodexCompatibleAgentType(agentType)) {
+      markCodexLeadTurnInterrupted(this.state, existing.paneKey, agentType)
+    }
     const state = local?.state ?? relayed?.stateName ?? 'done'
     const workingMode = local?.workingMode ?? relayed?.workingMode
     const inferred = this.applyNormalizedStatus({
