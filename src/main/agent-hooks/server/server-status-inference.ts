@@ -2,7 +2,10 @@ import {
   markClaudeLeadTurnInterrupted,
   clearClaudeAnsweredQuestionWait
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
-import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex-state'
+import {
+  isCodexCompatibleAgentType,
+  markCodexLeadTurnInterrupted
+} from '../../../shared/agent-hook-listener/providers/codex-state'
 import {
   isAgentInterruptInputIntent,
   type AgentInterruptInferenceRequest
@@ -86,8 +89,8 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerList
     if (agentType === 'claude') {
       markClaudeLeadTurnInterrupted(this.state, existing.paneKey)
     }
-    if (agentType === 'codex') {
-      markCodexLeadTurnInterrupted(this.state, existing.paneKey)
+    if (isCodexCompatibleAgentType(agentType)) {
+      markCodexLeadTurnInterrupted(this.state, existing.paneKey, agentType)
     }
     const inferred = this.applyNormalizedStatus({
       paneKey: existing.paneKey,

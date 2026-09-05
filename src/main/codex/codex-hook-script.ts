@@ -6,8 +6,12 @@ import {
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
+import type { AgentHookSource } from '../../shared/agent-hook-relay'
 
-export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+export function getManagedScript(
+  target: 'local' | 'posix' = 'local',
+  source: Extract<AgentHookSource, 'codex' | 'trae'> = 'codex'
+): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
@@ -15,7 +19,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       // Why: the endpoint file holds this install's live port/token; sourcing it lets a surviving PTY reach the current server (see claude/hook-service.ts).
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
-      buildWindowsAgentHookCurlPostCommand('codex'),
+      buildWindowsAgentHookCurlPostCommand(source),
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),
       ''
@@ -25,7 +29,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
-    ...buildPosixHookSpoolLines('codex'),
+    ...buildPosixHookSpoolLines(source),
     // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',
@@ -62,7 +66,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  connect_timeout="${2:-0.5}"',
     '  max_time="${3:-1.5}"',
     // Why: keep full hook JSON off the command line and avoid URL-encoding paths/commands into IDS-friendly traversal signatures.
-    ...buildPosixAgentHookPostCommand('codex', {
+    ...buildPosixAgentHookPostCommand(source, {
       curlCommand: '"$curl_bin"',
       indent: '    '
     }).map((line) => `  ${line}`),

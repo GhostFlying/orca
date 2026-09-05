@@ -263,10 +263,15 @@ export function isExpectedAgentProcess(
   if (!normalizedProcess || !normalizedExpected) {
     return false
   }
-  return (
+  if (
     normalizedProcess === normalizedExpected ||
     normalizedProcess.startsWith(`${normalizedExpected}.`)
-  )
+  ) {
+    return true
+  }
+  const processAgent = agentForNormalizedProcess(normalizedProcess)
+  const expectedAgent = agentForNormalizedProcess(normalizedExpected)
+  return processAgent !== undefined && processAgent === expectedAgent
 }
 
 export function recognizeAgentProcess(

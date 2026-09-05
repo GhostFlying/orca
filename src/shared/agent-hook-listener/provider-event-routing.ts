@@ -46,6 +46,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
       return eventName === 'UserPromptSubmit'
     case 'codex':
+    case 'trae':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'gemini':
       return eventName === 'BeforeAgent'
@@ -142,6 +143,7 @@ export function extractToolFields(
     case 'kimi':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
+    case 'trae':
       return extractCodexToolFields(eventName, hookPayload)
     case 'gemini':
       return extractGeminiToolFields(eventName, hookPayload)

@@ -4,7 +4,10 @@ import {
   seedClaudeLeadTurnFromPersistedStatus,
   seedClaudeSubagentRosterFromSnapshots
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
-import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
+import {
+  isCodexCompatibleAgentType,
+  seedCodexStateFromSnapshot
+} from '../../../shared/agent-hook-listener/providers/codex-state'
 import { HYDRATE_MAX_AGE_MS, LAST_STATUS_FILE_VERSION } from './server-constants'
 import type { LastStatusFile } from './server-types'
 import {
@@ -110,8 +113,13 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
           )
         }
         // Why: restore live child hierarchy immediately; provider-specific reconciliation reaps stale seeds.
-        if (entry.payload.agentType === 'codex') {
-          seedCodexStateFromSnapshot(this.state, resolvedPaneKey, entry.payload)
+        if (isCodexCompatibleAgentType(entry.payload.agentType)) {
+          seedCodexStateFromSnapshot(
+            this.state,
+            resolvedPaneKey,
+            entry.payload,
+            entry.payload.agentType
+          )
         } else if (entry.payload.agentType === 'claude') {
           seedClaudeLeadTurnFromPersistedStatus(this.state, resolvedPaneKey, entry, {
             childOnlyBoundary: entry.claudeLeadBoundaryChildOnly === true
