@@ -21,6 +21,8 @@ import { dshHookService } from '../dsh/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { traeHookService } from '../trae/hook-service'
+import type { TraeHomePaths } from '../trae/trae-home-paths'
 
 export type RemoteManagedHookInstallOptions = {
   /** Explicit CODEX_HOME dir for redirected runtimes (for example WSL's managed runtime home). */
@@ -31,6 +33,8 @@ export type RemoteManagedHookInstallOptions = {
   grokHomeDir?: string
   /** Version reported by Claude on this execution host. */
   claudeVersion?: string
+  /** Resolved in the remote login environment; never inherited from the client host. */
+  traeHomePaths?: Partial<TraeHomePaths>
   /** Stops before starting the next installer when the owning relay request
    *  is cancelled. Individual filesystem mutations remain atomic. */
   signal?: AbortSignal
@@ -64,6 +68,11 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
         codexHomeDir: options?.codexHomeDir,
         deferTrustUntilConfigToml: options?.deferTrustUntilConfigToml
       })
+  ],
+  [
+    'trae',
+    (sftp, remoteHome, options) =>
+      traeHookService.installRemote(sftp, remoteHome, options?.traeHomePaths)
   ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
   ['qoder', (sftp, remoteHome) => qoderHookService.installRemote(sftp, remoteHome)],
