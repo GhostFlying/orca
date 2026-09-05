@@ -23,6 +23,7 @@ import { getDevinManagedCommand, getDevinRemoteManagedCommand } from '../devin/h
 import { getGrokManagedCommand } from '../grok/grok-hook-script'
 import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook-settings'
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
+import { getTraeManagedCommand } from '../trae/trae-hook-definition'
 import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -86,6 +87,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getCodexCommand(path), wrapReadablePosixHookCommand(path)],
       remote: (path) => [wrapPosixHookCommand(path), wrapReadablePosixHookCommand(path)]
+    }
+  ],
+  [
+    'trae',
+    {
+      local: (path) => [getTraeManagedCommand(path)],
+      remote: (path) => [wrapPosixHookCommand(path)]
     }
   ],
   ['gemini', standardCommands],

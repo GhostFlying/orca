@@ -2,7 +2,10 @@ import {
   markClaudeLeadTurnInterrupted,
   clearClaudeAnsweredQuestionWait
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
-import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex-state'
+import {
+  isCodexCompatibleAgentType,
+  markCodexLeadTurnInterrupted
+} from '../../../shared/agent-hook-listener/providers/codex-state'
 import {
   isAgentInterruptInputIntent,
   isNavigationEscapeIntent,
@@ -85,7 +88,8 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     // a plain done, which would retire the live children its combine keeps working.
     if (
       payload.mainAgent
-        ? payload.mainAgent.state !== 'working' || (agentType === 'codex' && childWorkEvidenced)
+        ? payload.mainAgent.state !== 'working' ||
+          (isCodexCompatibleAgentType(agentType) && childWorkEvidenced)
         : childWorkEvidenced
     ) {
       return false
@@ -101,8 +105,8 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
       agentType === 'claude' && existing.connectionId
         ? foldMainAgentWithRowChildWork('done', existing)
         : undefined
-    if (agentType === 'codex') {
-      markCodexLeadTurnInterrupted(this.state, existing.paneKey)
+    if (isCodexCompatibleAgentType(agentType)) {
+      markCodexLeadTurnInterrupted(this.state, existing.paneKey, agentType)
     }
     const state = local?.state ?? relayed?.stateName ?? 'done'
     const workingMode = local?.workingMode ?? relayed?.workingMode

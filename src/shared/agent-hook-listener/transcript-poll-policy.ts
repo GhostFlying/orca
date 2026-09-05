@@ -10,8 +10,8 @@ export function shouldPollHookTranscript(
   source: AgentHookSource,
   event: AgentHookEventPayload
 ): boolean {
-  if (source === 'codex') {
-    return hasCodexTranscriptSubagents(state, event.paneKey)
+  if (source === 'codex' || source === 'trae') {
+    return hasCodexTranscriptSubagents(state, event.paneKey, source)
   }
   if (source === 'muse') {
     // Why: Muse's question tool fires no hook, so only its session log shows the wait and its answer.
