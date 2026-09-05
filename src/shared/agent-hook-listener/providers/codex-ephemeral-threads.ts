@@ -1,6 +1,7 @@
 import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
+import { codexCompatibleStateKey, type CodexCompatibleAgentType } from './codex-state'
 
 // Enough for any run of /side chats in one pane; the oldest ended long ago.
 const MAX_FORKS_PER_PANE = 16
@@ -19,19 +20,21 @@ export function codexHookEventForEphemeralThread(
   state: HookListenerState,
   paneKey: string,
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  agentType: CodexCompatibleAgentType = 'codex'
 ): unknown {
   const sessionId = readString(hookPayload, 'session_id')
   if (!sessionId || readString(hookPayload, 'agent_id') || hookPayload.transcript_path !== null) {
     return eventName
   }
-  const forks = state.codexEphemeralForkSessionsByPaneKey.get(paneKey) ?? []
+  const stateKey = codexCompatibleStateKey(paneKey, agentType)
+  const forks = state.codexEphemeralForkSessionsByPaneKey.get(stateKey) ?? []
   if (forks.includes(sessionId)) {
     return undefined
   }
   const recordFork = (): undefined => {
     state.codexEphemeralForkSessionsByPaneKey.set(
-      paneKey,
+      stateKey,
       [...forks, sessionId].slice(-MAX_FORKS_PER_PANE)
     )
     return undefined
@@ -40,17 +43,17 @@ export function codexHookEventForEphemeralThread(
   if (source === 'fork') {
     return recordFork()
   }
-  const row = state.lastStatusByPaneKey.get(paneKey)
+  const row = state.lastStatusByPaneKey.get(stateKey)
   // Codex's hidden threads start like a new conversation; only their prompt tells them apart.
   if (source === 'startup' && rowHoldsOtherCodexThread(row, sessionId)) {
-    state.codexHeldEphemeralStartByPaneKey.set(paneKey, sessionId)
+    state.codexHeldEphemeralStartByPaneKey.set(stateKey, sessionId)
     return undefined
   }
-  if (state.codexHeldEphemeralStartByPaneKey.get(paneKey) === sessionId) {
+  if (state.codexHeldEphemeralStartByPaneKey.get(stateKey) === sessionId) {
     if (eventName !== 'UserPromptSubmit') {
       return undefined
     }
-    state.codexHeldEphemeralStartByPaneKey.delete(paneKey)
+    state.codexHeldEphemeralStartByPaneKey.delete(stateKey)
     const prompt = readString(hookPayload, 'prompt')
     // Replay the held start so every receiver lets the new conversation take the pane.
     return CODEX_HIDDEN_THREAD_PROMPT_PREFIXES.some((prefix) => prompt?.startsWith(prefix))
@@ -60,14 +63,15 @@ export function codexHookEventForEphemeralThread(
   if (source === 'startup' || source === 'clear') {
     return eventName
   }
-  return rowHoldsOtherCodexThread(row, sessionId) ? undefined : eventName
+  return rowHoldsOtherCodexThread(row, sessionId, agentType) ? undefined : eventName
 }
 
 /** Whether the pane's stored Codex row is a different thread, one with a rollout. */
 export function rowHoldsOtherCodexThread(
   row: Pick<AgentHookEventPayload, 'payload' | 'providerSession'> | undefined,
-  sessionId: string
+  sessionId: string,
+  agentType: CodexCompatibleAgentType = 'codex'
 ): boolean {
-  const thread = row?.payload.agentType === 'codex' ? row.providerSession : undefined
+  const thread = row?.payload.agentType === agentType ? row.providerSession : undefined
   return Boolean(thread?.transcriptPath && thread.id !== sessionId)
 }
