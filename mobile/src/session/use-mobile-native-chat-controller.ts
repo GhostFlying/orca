@@ -35,6 +35,7 @@ export function useMobileNativeChatController(args: {
   activeHandleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
+  traexChatSupported: boolean
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
@@ -54,7 +55,6 @@ export function useMobileNativeChatController(args: {
     activeSessionTabId,
     activeHandleRef,
     deviceTokenRef,
-    nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
     agentSessionHostSupport = null,
@@ -76,14 +76,7 @@ export function useMobileNativeChatController(args: {
     streamIdentity,
     streamScopeKey,
     toggleTabChatView
-  } = useMobileNativeChatActiveResolution({
-    hostId,
-    worktreeId,
-    activeSessionTab,
-    activeSessionTabId,
-    activeHandleRef,
-    nativeChatTranscriptIsLocalReadable
-  })
+  } = useMobileNativeChatActiveResolution(args)
 
   // The lane runs before the drafts hook (fixed hook order); Edit's composer
   // append reaches the drafts state through this ref, set below once they exist.
@@ -98,6 +91,8 @@ export function useMobileNativeChatController(args: {
       transcriptPath: activeChatResolution?.transcriptPath ?? null,
       sessionId: activeChatSessionId,
       sourceIdentity,
+      terminal: activeChatResolution?.agent === 'traex' ? activeHandleRef.current : null,
+      worktree: activeChatResolution?.agent === 'traex' ? worktreeId : null,
       enabled: showNativeChat,
       connState,
       hostSupport: agentSessionHostSupport,

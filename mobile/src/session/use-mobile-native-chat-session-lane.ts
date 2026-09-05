@@ -19,6 +19,8 @@ export function useMobileNativeChatSessionLane({
   sourceIdentity,
   hostSupport,
   appendComposerTextRef,
+  terminal,
+  worktree,
   enabled,
   connState,
   onSendError,
@@ -37,6 +39,8 @@ export function useMobileNativeChatSessionLane({
   /** The active pane's live composer; a queued card's Edit copies through it.
    *  A ref because the drafts (and their append) mount after this lane. */
   appendComposerTextRef: { readonly current: (text: string) => boolean }
+  terminal: string | null
+  worktree: string | null
   enabled: boolean
   connState: ConnectionState
   onSendError: MobileNativeChatSendErrorReporter
@@ -55,7 +59,9 @@ export function useMobileNativeChatSessionLane({
     sourceIdentity,
     agent: structured ? null : resolvedAgent,
     sessionId: structured ? null : sessionId,
-    transcriptPath: structured ? null : transcriptPath
+    transcriptPath: structured ? null : transcriptPath,
+    terminal: structured ? null : terminal,
+    worktree: structured ? null : worktree
   })
   const structuredSession = useMobileStructuredAgentSession({
     client,
