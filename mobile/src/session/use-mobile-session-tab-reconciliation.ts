@@ -5,7 +5,10 @@ import {
   terminalQuickCommandAgentPromptMaxLength
 } from '../terminal/quick-commands'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
-import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  MOBILE_TRAEX_CHAT_RUNTIME_CAPABILITY,
+  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { runAcceptedMobileSessionTabsEffects } from './mobile-session-tabs-accepted-effects'
 import type { SessionTabsStreamSource } from './mobile-session-tabs-stream-health'
@@ -38,6 +41,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setAgentSessionHostSupport,
     setQuickCommandsSupported,
     setQuickCommandAgentPromptMaxLength,
+    setTraexChatSupported,
     nativeChatStream,
     fetchTerminals,
     applySessionTabs,
@@ -157,6 +161,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setAgentSessionHostSupport(null)
       setQuickCommandsSupported(null)
       setQuickCommandAgentPromptMaxLength(null)
+      setTraexChatSupported(null)
       setShowQuickCommands(false)
       hostQueryReplyInputSupportedRef.current = false
       return
@@ -168,6 +173,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setAgentSessionHostSupport(null)
     setQuickCommandsSupported(null)
     setQuickCommandAgentPromptMaxLength(null)
+    setTraexChatSupported(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
     // Why: the probe retries — a relay→direct cutover or request timeout rejects
@@ -178,6 +184,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setAgentSessionHostSupport(structuredAgentSessionHostSupport(capabilities))
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
       setQuickCommandAgentPromptMaxLength(terminalQuickCommandAgentPromptMaxLength(capabilities))
+      setTraexChatSupported(capabilities.includes(MOBILE_TRAEX_CHAT_RUNTIME_CAPABILITY))
       // Why: hosts without this capability strip inputKind from terminal.send,
       // so a forwarded xterm reply would become floor-stealing shell input.
       hostQueryReplyInputSupportedRef.current = capabilities.includes(
