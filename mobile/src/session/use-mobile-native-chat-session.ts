@@ -79,14 +79,18 @@ export function useMobileNativeChatSession(args: {
   agent: string | null
   sessionId: string | null
   transcriptPath: string | null
+  terminal: string | null
+  worktree: string | null
 }): MobileNativeChatSession {
-  const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
+  const { client, sourceIdentity, agent, sessionId, transcriptPath, terminal, worktree } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
   const identity = encodeNativeChatTranscriptIdentity([
     sourceIdentity,
     agent,
     sessionId,
-    transcriptPath
+    transcriptPath,
+    terminal,
+    worktree
   ])
   // Pre-read status is a pure function of the props, so derive it rather than
   // letting the effect write it a commit later.
@@ -171,6 +175,8 @@ export function useMobileNativeChatSession(args: {
         // Why: a token of its own, so another screen on this chat never evicts this feed on the host.
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid()),
         capabilities: { transcriptPending: 1 },
+        ...(terminal ? { terminal } : {}),
+        ...(worktree ? { worktree } : {}),
         ...(transcriptPath ? { transcriptPath } : {})
       },
       (raw) => {
@@ -236,7 +242,7 @@ export function useMobileNativeChatSession(args: {
       supersede()
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList, supersede])
+  }, [client, agent, sessionId, transcriptPath, terminal, worktree, identity, setList, supersede])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || !hasMore) {
@@ -260,7 +266,9 @@ export function useMobileNativeChatSession(args: {
           sessionId,
           limit: beforeOffset === null ? nextLimit : pageLimit,
           ...(beforeOffset === null ? {} : { beforeOffset }),
-          ...(transcriptPath ? { transcriptPath } : {})
+          ...(transcriptPath ? { transcriptPath } : {}),
+          ...(terminal ? { terminal } : {}),
+          ...(worktree ? { worktree } : {})
         },
         { timeoutMs, budgetSpansConnect: true }
       )
@@ -305,7 +313,17 @@ export function useMobileNativeChatSession(args: {
       setHasMore(more)
       return more ? 'drew' : 'end'
     })
-  }, [client, agent, sessionId, transcriptPath, hasMore, setList, loadOlderPages])
+  }, [
+    client,
+    agent,
+    sessionId,
+    transcriptPath,
+    terminal,
+    worktree,
+    hasMore,
+    setList,
+    loadOlderPages
+  ])
 
   // Held for any unsettled read, not just an in-flight one: a stream error or a
   // dropped client would otherwise trade the conversation for an error card.
