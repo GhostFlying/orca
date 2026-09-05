@@ -199,7 +199,8 @@ export function extractAgentProviderSession(
     case 'qoder':
     case 'codebuddy':
     case 'claude':
-    case 'codex': {
+    case 'codex':
+    case 'traex': {
       const id = readSessionId(payload, ['session_id'])
       return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
     }

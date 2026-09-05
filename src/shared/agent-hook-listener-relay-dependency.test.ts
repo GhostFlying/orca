@@ -122,11 +122,7 @@ describe('agent hook listener relay dependency boundary', () => {
       'agent-hook-listener.ts',
       'agent-hook-listener/endpoint-publication.ts',
       'agent-hook-listener/grok-result-discovery.ts',
-      'agent-hook-listener/hook-envelope.ts',
-      'agent-hook-listener/listener-limits.ts',
       'agent-hook-listener/listener-state.ts',
-      'agent-hook-listener/request-body.ts',
-      'agent-hook-listener/source-routing.ts',
       'agent-hook-listener/transcript-poll-policy.ts'
     ])
     expect(

@@ -67,8 +67,9 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       return
     }
     const replay = { ...normalized.event, isReplay: true as const }
+    const effectiveSource = replay.source ?? record.source
     const statusDisposition = this.getAgentStatusDisposition(replay.paneKey, {
-      source: record.source,
+      source: effectiveSource,
       hookEventName: replay.hookEventName,
       isReplay: true,
       hasExplicitPrompt: replay.hasExplicitPrompt,

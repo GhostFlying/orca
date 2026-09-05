@@ -1,6 +1,7 @@
 import { track } from '../../telemetry/client'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { restoreShedStatusFields } from '../../../shared/agent-hook-relay'
+import { resolveObservedHookSource } from '../../../shared/agent-hook-observed-agent'
 import {
   MAX_PANE_KEY_LEN,
   warnOnHookEnvOrVersionMismatch
@@ -37,6 +38,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       promptInteractionKey?: string
       hookEventName?: string
       source?: unknown
+      observedAgent?: unknown
       providerPromptId?: unknown
       grokPromptBoundary?: unknown
       compactTrigger?: unknown
@@ -124,7 +126,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     let tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
     const {
       hookEventName,
-      source,
+      source: wireSource,
       providerPromptId,
       grokPromptBoundary,
       compactTrigger,
@@ -136,6 +138,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       toolAgentType,
       providerSession
     } = normalizeRemoteEnvelopeFields(envelope)
+    const source = wireSource ? resolveObservedHookSource(wireSource, envelope) : undefined
     // Why: relay crosses a trust boundary — re-run the canonical normalizer to enforce caps/invariants (returns null on malformed).
     const validatedPayload = normalizeAgentStatusPayload(envelope.payload)
     if (!validatedPayload) {
@@ -154,6 +157,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       envelope.shedFields,
       this.state.lastStatusByPaneKey.get(paneKey)?.payload
     )
+    if (source === 'traex' && normalizedPayload.agentType === 'trae') {
+      normalizedPayload = { ...normalizedPayload, agentType: 'traex' }
+    }
     if (
       envelope.providerSessionOnly === true &&
       !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
