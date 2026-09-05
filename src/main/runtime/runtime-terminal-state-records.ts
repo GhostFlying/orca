@@ -7,7 +7,7 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 import type { TerminalSideEffectFact } from '../../shared/terminal-side-effect-facts'
 import type { TerminalTitleTracker } from '../../shared/terminal-output-side-effects'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { TerminalAgent } from '../../shared/terminal-agent'
+import type { ObservedAgent } from '../../shared/observed-agent'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
@@ -67,7 +67,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
-  foregroundAgent: TerminalAgent | null
+  foregroundAgent: ObservedAgent | null
   connected: boolean
   disconnectedAt: number | null
   lastExitCode: number | null

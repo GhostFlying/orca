@@ -15,6 +15,7 @@ import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalAgent } from '../../shared/terminal-agent'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { AgentPromptActivity } from './agent-prompt-submission-verification'
 import { readTuiIdleHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
 
@@ -187,7 +188,8 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
 
   protected getPtyAgent(ptyId: string): TerminalAgent | null {
     const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    const observedAgent = pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    return isTuiAgent(observedAgent) ? observedAgent : null
   }
 
   protected assertAgentPromptPermissionSafe(

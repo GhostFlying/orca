@@ -31,7 +31,7 @@ type TranscriptPoll = {
 }
 
 function transcriptPollKey(paneKey: string, source: AgentHookSource): string {
-  return source === 'trae' ? `${paneKey}\0${source}` : paneKey
+  return source === 'codex' ? paneKey : `${paneKey}\0${source}`
 }
 
 export type AgentHookResultRetryHost = {
@@ -80,6 +80,8 @@ export class AgentHookResultRetryScheduler {
   clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
     this.transcriptPollScheduler.clear(`${paneKey}\0trae`)
+    this.transcriptPollScheduler.clear(`${paneKey}\0traex`)
+    this.transcriptPollScheduler.clear(`${paneKey}\0muse`)
   }
 
   scheduleTranscriptPoll(
@@ -90,7 +92,7 @@ export class AgentHookResultRetryScheduler {
     version?: string
   ): void {
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
-    if (source !== 'codex' && source !== 'trae' && source !== 'muse') {
+    if (source !== 'codex' && source !== 'trae' && source !== 'traex' && source !== 'muse') {
       return
     }
     const pollKey = transcriptPollKey(original.paneKey, source)
