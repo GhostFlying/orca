@@ -3,6 +3,7 @@ import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
 import {
   applyDesktopViewSettings,
   buildWorkspaceViewSettingsUpdate,
+  getShowPinnedWorktreesInGroups,
   groupModeFromDesktop,
   groupModeToDesktop,
   sortModeFromDesktop,
@@ -41,6 +42,21 @@ describe('sort mode mapping', () => {
     expect(sortModeFromDesktop('smart')).toBe('smart')
     expect(sortModeFromDesktop(undefined)).toBeNull()
     expect(sortModeFromDesktop('bogus' as never)).toBeNull()
+  })
+})
+
+describe('pinned workspace display preference', () => {
+  it('defaults missing and older-host settings to one location', () => {
+    expect(getShowPinnedWorktreesInGroups(undefined)).toBe(false)
+    expect(getShowPinnedWorktreesInGroups(null)).toBe(false)
+    expect(getShowPinnedWorktreesInGroups('legacy')).toBe(false)
+    expect(getShowPinnedWorktreesInGroups({})).toBe(false)
+  })
+
+  it('duplicates pinned workspaces only when explicitly enabled', () => {
+    expect(getShowPinnedWorktreesInGroups({ showPinnedWorktreesInGroups: false })).toBe(false)
+    expect(getShowPinnedWorktreesInGroups({ showPinnedWorktreesInGroups: 'true' })).toBe(false)
+    expect(getShowPinnedWorktreesInGroups({ showPinnedWorktreesInGroups: true })).toBe(true)
   })
 })
 
