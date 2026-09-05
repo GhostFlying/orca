@@ -10,6 +10,7 @@ export function useMobileNativeChatActiveResolution(args: {
   activeSessionTabId: string | null
   activeHandleRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
+  traexChatSupported: boolean
 }): {
   isTabChatView: (tabId: string) => boolean
   toggleTabChatView: (tabId: string) => void
@@ -32,6 +33,7 @@ export function useMobileNativeChatActiveResolution(args: {
     activeSessionTabId,
     hostId,
     nativeChatTranscriptIsLocalReadable,
+    traexChatSupported,
     worktreeId
   } = args
   const { isTabChatView, toggleTabChatView } = useMobileSessionViewMode({ hostId, worktreeId })
@@ -40,7 +42,11 @@ export function useMobileNativeChatActiveResolution(args: {
     (activeSessionTabId ? isTabChatView(activeSessionTabId) : false)
   const activeChatResolution =
     activeSessionTab && activeSessionTabId && tabWantsChat
-      ? resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable)
+      ? resolveMobileNativeChat(
+          activeSessionTab,
+          nativeChatTranscriptIsLocalReadable,
+          traexChatSupported
+        )
       : null
   const showNativeChat = activeChatResolution != null
   const showNativeChatRef = useRef(showNativeChat)

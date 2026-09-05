@@ -207,6 +207,7 @@ function Harness(props: HarnessProps) {
     activeHandleRef: handleRef,
     deviceTokenRef: { current: null },
     nativeChatTranscriptIsLocalReadable: true,
+    traexChatSupported: true,
     nativeChatInputLeaseReady: true,
     connState,
     onSendError: sendError,

@@ -164,6 +164,7 @@ import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import { mobileNativeChatPromptDismissals } from './mobile-native-chat-prompt-dismissals'
 
 const sendWithOutcome = vi.mocked(sendMobileNativeChatMessageWithOutcome)
+const CHAT_CAPABILITIES = { nativeChatTranscriptIsLocalReadable: true, traexChatSupported: true }
 
 const ORIGIN = {
   draftKey: 'h\0w\0tab-1',
@@ -217,7 +218,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       activeSessionTabId: (tab as { id?: string } | null)?.id ?? 'tab-1',
       activeHandleRef: { current: activeHandle },
       deviceTokenRef: { current: null },
-      nativeChatTranscriptIsLocalReadable: true,
+      ...CHAT_CAPABILITIES,
       nativeChatInputLeaseReady: inputLeaseReady,
       onSendError,
       onSendResolved
@@ -544,7 +545,7 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
       activeSessionTabId: 'tab-1',
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
-      nativeChatTranscriptIsLocalReadable: true,
+      ...CHAT_CAPABILITIES,
       nativeChatInputLeaseReady: true,
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
@@ -636,7 +637,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
       activeSessionTabId: activeTab.id,
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
-      nativeChatTranscriptIsLocalReadable: true,
+      ...CHAT_CAPABILITIES,
       nativeChatInputLeaseReady: true,
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
@@ -914,7 +915,7 @@ describe('useMobileNativeChatController streaming scope', () => {
       activeSessionTabId: 'tab-1',
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
-      nativeChatTranscriptIsLocalReadable: true,
+      ...CHAT_CAPABILITIES,
       nativeChatInputLeaseReady: true,
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
