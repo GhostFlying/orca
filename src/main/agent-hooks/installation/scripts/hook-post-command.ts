@@ -77,6 +77,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}-H "X-Orca-Agent-Process: \${orca_agent_process:-}" \\`,
     ...(tmux ? [`  ${indent}-H "X-Orca-Tmux-Pane: \${orca_tmux_pane:-}" \\`] : []),
     ...decision,
+    `  ${indent}-H "X-Orca-Agent-Hook-Observed-Agent: \${ORCA_AGENT_HOOK_OBSERVED_AGENT:-}" \\`,
     `  ${indent}--data-binary @-`,
     'else',
     `  printf '%s' "$payload" | ${curlCommand} -sS -X POST ${url} \\`,
@@ -93,6 +94,7 @@ export function buildPosixAgentHookPostCommand(
     `  ${indent}--data-urlencode "version=\${ORCA_AGENT_HOOK_VERSION}" \\`,
     `  ${indent}--data-urlencode "agentProcess=\${orca_agent_process:-}" \\`,
     ...(tmux ? [`  ${indent}--data-urlencode "tmuxPane=\${orca_tmux_pane:-}" \\`] : []),
+    `  ${indent}--data-urlencode "observedAgent=\${ORCA_AGENT_HOOK_OBSERVED_AGENT:-}" \\`,
     `  ${indent}--data-urlencode "payload@-"`,
     'fi'
   ]

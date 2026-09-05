@@ -19,6 +19,7 @@ import {
 } from '../../../shared/tab-agent-from-signals'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 
 type TabHookAgents = {
   focused: TerminalAgent | null
@@ -84,9 +85,12 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
     const activeLeafId = s.terminalLayoutsByTabId[tab.id]?.activeLeafId
     return activeLeafId && isTerminalLeafId(activeLeafId) ? makePaneKey(tab.id, activeLeafId) : null
   })
-  const processAgent = useAppStore((s) =>
-    focusedPaneKey ? (s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agent ?? null) : null
-  )
+  const processAgent = useAppStore((s) => {
+    const agent = focusedPaneKey
+      ? (s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agent ?? null)
+      : null
+    return isTuiAgent(agent) ? agent : null
+  })
   const processShellForeground = useAppStore((s) =>
     focusedPaneKey
       ? Boolean(s.paneForegroundAgentByPaneKey[focusedPaneKey]?.shellForeground)

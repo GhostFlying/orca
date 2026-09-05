@@ -34,7 +34,7 @@ import {
   SYNTHETIC_AGENT_TITLE_AGENTS,
   SYNTHETIC_AGENT_TITLE_PROFILES
 } from './synthetic-agent-title'
-import type { TerminalAgent } from '../identity/terminal-agent'
+import type { ObservedAgent } from '../../observed-agent'
 import {
   agentForNativeFrame,
   agentForNamedTitlePrefix,
@@ -56,11 +56,11 @@ export type AgentTitleEvidenceReason =
   | 'no-evidence'
 
 export type AgentTitleEvidence = {
-  readonly vendorMarkers: readonly TerminalAgent[]
-  readonly anchoredNames: readonly TerminalAgent[]
-  readonly freeTextNames: readonly TerminalAgent[]
+  readonly vendorMarkers: readonly ObservedAgent[]
+  readonly anchoredNames: readonly ObservedAgent[]
+  readonly freeTextNames: readonly ObservedAgent[]
   /** Null whenever the title cannot answer on its own. Callers fall back to stronger signals. */
-  readonly agent: TerminalAgent | null
+  readonly agent: ObservedAgent | null
   readonly reason: AgentTitleEvidenceReason
 }
 
@@ -89,7 +89,7 @@ function getEvidenceTitleSegments(title: string): string[] {
   return segments
 }
 
-function agentForSyntheticTitle(text: string): TerminalAgent | null {
+function agentForSyntheticTitle(text: string): ObservedAgent | null {
   const trimmed = text.trim()
   if (/[\\/]/.test(trimmed)) {
     return null
@@ -118,8 +118,8 @@ function agentForSyntheticTitle(text: string): TerminalAgent | null {
   return null
 }
 
-function collectVendorMarkers(segments: readonly string[]): TerminalAgent[] {
-  const markers = new Set<TerminalAgent>()
+function collectVendorMarkers(segments: readonly string[]): ObservedAgent[] {
+  const markers = new Set<ObservedAgent>()
   for (const segment of segments) {
     // Only a leading identity-position sigil counts; the same glyph inside task text is decoration.
     if (GEMINI_GLYPHS.some((glyph) => segment.startsWith(glyph))) {
@@ -142,9 +142,9 @@ function collectVendorMarkers(segments: readonly string[]): TerminalAgent[] {
 
 function collectAnchoredNames(
   segments: readonly string[],
-  vendorMarkers: readonly TerminalAgent[]
-): TerminalAgent[] {
-  const anchored = new Set<TerminalAgent>()
+  vendorMarkers: readonly ObservedAgent[]
+): ObservedAgent[] {
+  const anchored = new Set<ObservedAgent>()
   // Why: a native owner's task text can end with DSB's product-name suffix, including inside wrappers.
   const nativeOpenCode = segments.some(isOpenCodeNativeTitle)
   const allowDsbTitle = vendorMarkers.length === 0 && !nativeOpenCode
@@ -228,8 +228,8 @@ function observerFrameStart(title: string): number {
 }
 
 /** Evaluate the sole unconsumed remainder, keeping the independent final owner suffix. */
-function collectObserverAnchors(title: string): TerminalAgent[] {
-  const anchored = new Set<TerminalAgent>()
+function collectObserverAnchors(title: string): ObservedAgent[] {
+  const anchored = new Set<ObservedAgent>()
   const suffix = OWNER_SUFFIX_RE.exec(title)
   const suffixAgent = suffix ? agentForOwnerSuffix(suffix[1]) : null
   if (suffixAgent) {
@@ -244,7 +244,7 @@ function collectObserverAnchors(title: string): TerminalAgent[] {
     segment.startsWith(`${CLAUDE_IDLE} `) ||
     segment.startsWith('. ') ||
     segment.startsWith('* ')
-  let agent: TerminalAgent | null
+  let agent: ObservedAgent | null
   if (!genericClaude && nativeOpenCode && isDirectOpenCodeNativeTitle(segment)) {
     agent = 'opencode'
   } else if (isDshTerminalTitle(segment) && undecorated.startsWith('🐋')) {
