@@ -6,6 +6,7 @@ import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import {
   resolveFocusedCompletedTabAgent,
   resolveFocusedRetainedTabAgent,
@@ -58,7 +59,7 @@ export function resolveOpenTabOccupantAgent({
     resolveSiblingRetainedTabAgent(retainedAgentsByPaneKey, layout, tabId)
   const focusedPaneKey = focusedPaneKeyFor(tabId, layout)
   const process = focusedPaneKey ? paneForegroundAgentByPaneKey?.[focusedPaneKey] : undefined
-  const processAgent = process?.agent ?? null
+  const processAgent = isTuiAgent(process?.agent) ? process.agent : null
   const sleepingSessionAgent = focusedPaneKey
     ? (sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null)
     : null

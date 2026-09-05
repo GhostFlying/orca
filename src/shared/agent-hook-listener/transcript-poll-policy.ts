@@ -10,7 +10,7 @@ export function shouldPollHookTranscript(
   source: AgentHookSource,
   event: AgentHookEventPayload
 ): boolean {
-  if (source === 'codex' || source === 'trae') {
+  if (source === 'codex' || source === 'trae' || source === 'traex') {
     return hasCodexTranscriptSubagents(state, event.paneKey, source)
   }
   if (source === 'muse') {

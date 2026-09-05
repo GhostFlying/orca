@@ -173,6 +173,7 @@ export function buildWindowsAgentHookPostCommand(
     '  --data-urlencode "worktreeId=%ORCA_WORKTREE_ID%" ^',
     '  --data-urlencode "env=%ORCA_AGENT_HOOK_ENV%" ^',
     '  --data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%" ^',
+    '  --data-urlencode "observedAgent=%ORCA_AGENT_HOOK_OBSERVED_AGENT%" ^',
     ...extraFormLines,
     '  --data-urlencode "payload@-" >nul 2>nul'
   ].join('\r\n')
@@ -192,6 +193,7 @@ export function buildWindowsAgentHookCurlPostCommand(source: AgentHookSource): s
     '--data-urlencode "worktreeId=%ORCA_WORKTREE_ID%"',
     '--data-urlencode "env=%ORCA_AGENT_HOOK_ENV%"',
     '--data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%"',
+    '--data-urlencode "observedAgent=%ORCA_AGENT_HOOK_OBSERVED_AGENT%"',
     '--data-urlencode "payload@-"',
     '>nul 2>&1'
   ].join(' ')

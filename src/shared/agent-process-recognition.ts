@@ -2,6 +2,7 @@ import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
+import type { ObservedAgent } from './observed-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from './command-token-scanner'
 import {
@@ -12,8 +13,14 @@ import {
 } from './agent-command-line-entrypoint'
 import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 
-export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
+export type RecognizedAgentProcess = { agent: ObservedAgent; processName: string }
 type ProcessName = string | null | undefined
+
+export function requiresAgentCommandLineVerification(
+  recognition: RecognizedAgentProcess | null
+): boolean {
+  return recognition?.agent === 'traex'
+}
 
 const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const INTERPRETER_SCRIPT_EXTENSION_RE = /\.(?:js|mjs|cjs)$/i
@@ -45,8 +52,8 @@ const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
 }
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
-const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
-const AGENT_TYPE_IDS = new Set<TuiAgent>()
+const PROCESS_TO_AGENT = new Map<string, ObservedAgent>()
+const AGENT_TYPE_IDS = new Set<string>()
 
 for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   TuiAgent,
@@ -70,7 +77,12 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   }
 }
 
-function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
+// TraeX shares Trae's implementation and config, but the invocation name is a
+// distinct product identity and is intentionally not launchable by Orca.
+PROCESS_TO_AGENT.set('traex', 'traex')
+AGENT_TYPE_IDS.add('traex')
+
+function agentForNormalizedProcess(normalized: string): ObservedAgent | undefined {
   const exact = PROCESS_TO_AGENT.get(normalized)
   if (exact) {
     return exact
@@ -225,7 +237,7 @@ export function isRecognizedAgentType(agentType: AgentType | null | undefined): 
     return false
   }
   return (
-    AGENT_TYPE_IDS.has(agentType as TuiAgent) ||
+    AGENT_TYPE_IDS.has(agentType) ||
     agentForNormalizedProcess(normalizeProcessName(agentType)) !== undefined
   )
 }
