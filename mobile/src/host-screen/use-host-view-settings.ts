@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, RpcSuccess } from '../transport/types'
+import type { ConnectionState } from '../transport/types'
 import { getMobileWorkspaceLineageGroupKey } from '../worktree/mobile-workspace-lineage'
 import { WORKSPACE_SORT_OPTIONS as SORT_OPTIONS } from '../worktree/workspace-list-picker-options'
 import {
   applyDesktopViewSettings,
   buildWorkspaceViewSettingsUpdate,
+  loadDesktopWorkspaceSettings,
+  saveDesktopWorkspaceSettings,
   type MobileGroupMode,
   type MobileSortMode,
   type MobileViewState,
@@ -29,6 +31,7 @@ export function useHostViewSettings(args: {
     setCollapsedGroups,
     setFilters,
     setGroupMode,
+    setShowPinnedWorktreesInGroups,
     setSortMode,
     setWorkspaceStatuses,
     sortMode,
@@ -79,7 +82,7 @@ export function useHostViewSettings(args: {
       if (Object.keys(payload).length === 0) {
         return
       }
-      void client.sendRequest('ui.set', payload).catch(() => {
+      void saveDesktopWorkspaceSettings(client, payload).catch(() => {
         // Best-effort: view settings are a convenience preference.
       })
     },
@@ -93,18 +96,15 @@ export function useHostViewSettings(args: {
     }
     const requestClient = client
     const requestHostId = hostId
-    try {
-      const response = await requestClient.sendRequest('ui.get')
-      if (clientRef.current !== requestClient || hostId !== requestHostId || !response.ok) {
-        return
-      }
-      const ui = ((response as RpcSuccess).result as { ui?: WorkspaceViewSettings }).ui
-      if (!ui) {
-        return
-      }
-      applyViewState(applyDesktopViewSettings(viewStateRef.current, ui))
-    } catch {
-      // Transient transport failure; retry on the next focus/connect.
+    const settings = await loadDesktopWorkspaceSettings(requestClient)
+    if (clientRef.current !== requestClient || hostId !== requestHostId) {
+      return
+    }
+    if (settings.ui) {
+      applyViewState(applyDesktopViewSettings(viewStateRef.current, settings.ui))
+    }
+    if (settings.showPinnedWorktreesInGroups !== undefined) {
+      setShowPinnedWorktreesInGroups(settings.showPinnedWorktreesInGroups)
     }
   }, [client, connState, hostId, applyViewState])
 

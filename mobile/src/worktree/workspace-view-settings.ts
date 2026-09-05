@@ -3,7 +3,11 @@
 // RPCs). Keeping these settings in the same global store is what lets a grouping
 // or filter change on the phone show up on desktop and vice-versa.
 
+import { z } from 'zod'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
+import type { RpcClient } from '../transport/rpc-client'
+import { defineRpcOperation, runRpcOperation } from '../transport/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { coerceMobileWorkspaceStatuses } from './mobile-workspace-statuses'
 
 export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
@@ -20,6 +24,95 @@ export type WorkspaceViewSettings = {
   filterRepoIds?: string[]
   collapsedGroups?: string[]
   workspaceStatuses?: WorkspaceStatusDefinition[]
+}
+
+export type WorkspaceDisplaySettings = {
+  showPinnedWorktreesInGroups?: boolean
+}
+
+/** Normalizes the optional desktop preference, defaulting missing or invalid values to false. */
+export function getShowPinnedWorktreesInGroups(
+  settings: WorkspaceDisplaySettings | null | undefined
+): boolean {
+  return settings?.showPinnedWorktreesInGroups === true
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+const WorkspaceViewSettingsSchema = z.object({
+  groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
+  sortBy: z.enum(['name', 'smart', 'recent', 'repo', 'manual']).optional(),
+  hideSleepingWorkspaces: z.boolean().optional(),
+  hideDefaultBranchWorkspace: z.boolean().optional(),
+  alwaysShowDefaultBranchWorkspace: z.boolean().optional(),
+  filterRepoIds: z.array(z.string()).optional(),
+  collapsedGroups: z.array(z.string()).optional(),
+  workspaceStatuses: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        color: z.string().optional(),
+        icon: z.string().optional()
+      })
+    )
+    .optional()
+})
+
+const GET_WORKSPACE_UI = defineRpcOperation({
+  name: 'workspaceViewSettings.getUi',
+  method: 'ui.get',
+  acceptance: 'object-result-or-null',
+  barrier: 'on-settle',
+  read: rpcResultVariant('ui', z.object({ ui: WorkspaceViewSettingsSchema.optional() }))
+})
+
+const GET_WORKSPACE_DISPLAY_SETTINGS = defineRpcOperation({
+  name: 'workspaceViewSettings.getDisplaySettings',
+  method: 'settings.get',
+  acceptance: 'object-result-or-null',
+  barrier: 'on-settle',
+  read: rpcResultVariant('settings', z.object({ settings: z.unknown().optional() }))
+})
+
+const SET_WORKSPACE_UI = defineRpcOperation({
+  name: 'workspaceViewSettings.setUi',
+  method: 'ui.set',
+  acceptance: 'object-result-or-null',
+  barrier: 'on-settle',
+  read: rpcResultVariant('ui', z.object({ ui: z.unknown() }))
+})
+
+/** Loads view and display settings independently so older hosts can return either payload. */
+export async function loadDesktopWorkspaceSettings(
+  client: RpcClient
+): Promise<{
+  ui?: WorkspaceViewSettings
+  showPinnedWorktreesInGroups?: boolean
+}> {
+  const [uiResult, settingsResult] = await Promise.all([
+    runRpcOperation(client, GET_WORKSPACE_UI, undefined).catch(() => null),
+    runRpcOperation(client, GET_WORKSPACE_DISPLAY_SETTINGS, undefined).catch(() => null)
+  ])
+  const settings =
+    isRecord(settingsResult?.settings)
+      ? settingsResult.settings
+      : undefined
+  const showPinnedWorktreesInGroups = settingsResult
+    ? getShowPinnedWorktreesInGroups({
+        showPinnedWorktreesInGroups: settings?.showPinnedWorktreesInGroups === true
+      })
+    : undefined
+  return { ui: uiResult?.ui, showPinnedWorktreesInGroups }
+}
+
+export async function saveDesktopWorkspaceSettings(
+  client: RpcClient,
+  settings: WorkspaceViewSettings
+): Promise<void> {
+  await runRpcOperation(client, SET_WORKSPACE_UI, settings)
 }
 
 const GROUP_TO_DESKTOP: Record<MobileGroupMode, NonNullable<WorkspaceViewSettings['groupBy']>> = {

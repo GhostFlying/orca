@@ -86,7 +86,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // src/host-screen/ — host screen catalog and actions
   { file: 'src/host-screen/host-screen-overlays.tsx', references: 1 },
   { file: 'src/host-screen/use-host-repo-metadata.ts', references: 2 },
-  { file: 'src/host-screen/use-host-view-settings.ts', references: 2 },
   { file: 'src/host-screen/use-host-worktree-actions.ts', references: 3 },
 
   // src/notifications/ — push registration and delivery

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
+import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import {
   applyDesktopViewSettings,
   buildWorkspaceViewSettingsUpdate,
+  getShowPinnedWorktreesInGroups,
   groupModeFromDesktop,
   groupModeToDesktop,
+  loadDesktopWorkspaceSettings,
   sortModeFromDesktop,
   type MobileViewState,
   type WorkspaceViewSettings
@@ -40,6 +43,38 @@ describe('sort mode mapping', () => {
     expect(sortModeFromDesktop('smart')).toBe('smart')
     expect(sortModeFromDesktop(undefined)).toBeNull()
     expect(sortModeFromDesktop('bogus' as never)).toBeNull()
+  })
+})
+
+describe('pinned workspace display preference', () => {
+  it('defaults missing and older-host settings to one location', () => {
+    expect(getShowPinnedWorktreesInGroups(undefined)).toBe(false)
+    expect(getShowPinnedWorktreesInGroups({})).toBe(false)
+  })
+
+  it('duplicates pinned workspaces only when explicitly enabled', () => {
+    expect(getShowPinnedWorktreesInGroups({ showPinnedWorktreesInGroups: false })).toBe(false)
+    expect(getShowPinnedWorktreesInGroups({ showPinnedWorktreesInGroups: true })).toBe(true)
+  })
+
+  it('loads the preference when the view settings request fails', async () => {
+    const client = new FakeSession('connected')
+    client.sendRequest.mockImplementation(async (method: string) => {
+      if (method === 'ui.get') {
+        throw new Error('unavailable')
+      }
+      return {
+        id: 'request-1',
+        ok: true,
+        result: { settings: { showPinnedWorktreesInGroups: true } },
+        _meta: { runtimeId: 'runtime-1' }
+      }
+    })
+
+    await expect(loadDesktopWorkspaceSettings(client)).resolves.toEqual({
+      ui: undefined,
+      showPinnedWorktreesInGroups: true
+    })
   })
 })
 
