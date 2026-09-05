@@ -213,6 +213,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         routeVisible={showNewWorktree}
         client={client}
         hostId={hostId}
+        hostLabelById={state.hostLabelById}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={state.worktrees}
         onVisibleChange={(visible) => {
