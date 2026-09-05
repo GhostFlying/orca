@@ -33,6 +33,7 @@ export type RuntimeClientSettings = Pick<
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
   | 'compactWorktreeCards'
+  | 'showPinnedWorktreesInGroups'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
   | 'prBotAuthorOverrides'
@@ -98,6 +99,7 @@ export class RuntimeClientSettingsController {
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
+      showPinnedWorktreesInGroups: settings.showPinnedWorktreesInGroups === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
