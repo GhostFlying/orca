@@ -7,13 +7,8 @@ import {
   detectTerminalWaitBlockedReason
 } from '../../terminal-wait-detection'
 import { isOpenCodeNativeTitle } from '../../../../shared/agent-status/title/providers/opencode-terminal-title'
-import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type {
-  RuntimePtyWorktreeRecord,
-  RuntimeVisibleTerminalState
-} from '../../runtime-terminal-state-records'
-import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../runtime-mobile-agent-status-projection'
+import type { RuntimeVisibleTerminalState } from '../../runtime-terminal-state-records'
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
 import { createTerminalInputReservation } from '../../terminal-input-admission'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
@@ -21,6 +16,7 @@ import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/
 import { resolvePtyWriteHostPlatform } from '../input/pty-write-host-platform'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import { toTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import { hasExplicitIdleTitle } from '../../tui-idle-evidence'
 import {
@@ -184,7 +180,6 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     }
   }
 
-  /** The pane's main-agent turn from the hook server's store, for tui-idle's hook lane. */
   protected readTuiIdleHookTurnForPty(ptyId: string, agent: TuiAgent): TuiIdleHookTurn | null {
     const pty = this.ptysById.get(ptyId)
     const join = this.readHookRowJoinForPty(ptyId)
@@ -264,14 +259,6 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     }
   }
 
-  renewMobileAgentStatusFromPtyTitle(
-    status: AgentStatusEntry | null,
-    pty: RuntimePtyWorktreeRecord | null,
-    options: { preserveQuestionUnderShellTitle?: boolean } = {}
-  ): AgentStatusEntry | null {
-    return renewRuntimeMobileAgentStatusFromPtyTitle(status, pty, options)
-  }
-
   protected writeTerminalAction(
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
@@ -301,7 +288,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
 
   protected getPtyAgent(ptyId: string): TerminalAgent | null {
     const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    return toTuiAgent(pty?.launchAgent ?? pty?.foregroundAgent)
   }
 
   protected isAgentPromptPermissionBlocked(

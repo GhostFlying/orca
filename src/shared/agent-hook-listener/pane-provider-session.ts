@@ -53,7 +53,7 @@ function readPaneProviderSession(
   ) {
     return null
   }
-  if (source === 'codex' && readString(hookPayload, 'agent_id')) {
+  if ((source === 'codex' || source === 'traex') && readString(hookPayload, 'agent_id')) {
     return null
   }
   if (source === 'grok' && isGrokSubagentEvent(hookPayload)) {

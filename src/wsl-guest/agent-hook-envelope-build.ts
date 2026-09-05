@@ -17,8 +17,11 @@ export function buildRelayHookEnvelope(
   version?: string,
   options: { isReplay?: boolean } = {}
 ): AgentHookRelayEnvelope {
+  const compatibilitySource = source === 'traex' ? 'trae' : source
+  const compatibilityPayload =
+    source === 'traex' ? { ...event.payload, agentType: 'trae' as const } : event.payload
   return {
-    source,
+    source: compatibilitySource,
     ...(event.hostEvidenceObservedAt !== undefined
       ? { evidenceAgeMs: Math.max(0, Date.now() - event.hostEvidenceObservedAt) }
       : {}),
@@ -29,6 +32,7 @@ export function buildRelayHookEnvelope(
           session: event.statusAdmissionSession
         }
       : event.agentPresence,
+    ...(source === 'traex' ? { observedAgent: 'traex' as const } : {}),
     paneKey: event.paneKey,
     ...(event.hostTurnRevision ? { hostTurnRevision: event.hostTurnRevision } : {}),
     ...(event.launchToken ? { launchToken: event.launchToken } : {}),
@@ -52,7 +56,7 @@ export function buildRelayHookEnvelope(
     ...pickHostTurnEnd(event),
     env,
     version,
-    payload: event.payload
+    payload: compatibilityPayload
   }
 }
 
