@@ -211,7 +211,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
           target: actionTarget,
           tabs: sessionTabs.filter((tab) => tab.type === 'terminal'),
           isTabChatView: nativeChatController.isTabChatView,
-          nativeChatTranscriptIsLocalReadable: controller.nativeChatTranscriptIsLocalReadable,
+          nativeChatCapabilities: controller,
           onDismiss: () => setActionTarget(null),
           onToggleChat: toggleTabChatView,
           isPhoneMode: (handle) => isTerminalPhoneDisplayMode(handle, terminalModes),

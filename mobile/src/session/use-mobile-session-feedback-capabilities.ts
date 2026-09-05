@@ -41,6 +41,7 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
   // Reuse the shared capability probe so session features cannot diverge across status caches.
   const [agentSessionHostSupport, setAgentSessionHostSupport] =
     useState<StructuredAgentSessionHostSupport | null>(null)
+  const [traexChatSupported, setTraexChatSupported] = useState<boolean | null>(null)
   // Stable handlers read live capabilities after the asynchronous probe resolves.
   const browserScreencastSupportedRef = useRef(browserScreencastSupported)
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
@@ -157,6 +158,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     setQuickCommandAgentPromptMaxLength,
     agentSessionHostSupport,
     setAgentSessionHostSupport,
+    traexChatSupported,
+    setTraexChatSupported,
     browserScreencastSupportedRef,
     reconciledCreateWarningState,
     createWarning,
