@@ -26,6 +26,7 @@ import {
   mobileNativeChatResumePoint,
   mobileNativeChatTranscriptCache
 } from './mobile-native-chat-transcript-cache'
+import { MAX_MESSAGES, nativeChatTarget, nextPageWindow } from './mobile-native-chat-read-request'
 
 export type MobileNativeChatStatus =
   | 'idle'
@@ -55,18 +56,6 @@ export type MobileNativeChatSession = {
 }
 
 const INITIAL_LIMIT = 40
-const PAGE = 60
-const MAX_MESSAGES = 2000
-
-function nextPageWindow(
-  limit: number,
-  listLength: number
-): { nextLimit: number; pageLimit: number } | null {
-  // Live output grows the list past the last read, so the next page counts from what is held.
-  const held = Math.max(limit, listLength)
-  const nextLimit = Math.min(held + PAGE, MAX_MESSAGES)
-  return nextLimit > held ? { nextLimit, pageLimit: nextLimit - held } : null
-}
 
 type ReadSessionResult =
   | (Pick<NativeChatTranscriptPage, 'messages'> &
@@ -80,14 +69,26 @@ export function useMobileNativeChatSession(args: {
   agent: string | null
   sessionId: string | null
   transcriptPath: string | null
+  terminal?: string | null
+  worktree?: string | null
 }): MobileNativeChatSession {
-  const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
+  const {
+    client,
+    sourceIdentity,
+    agent,
+    sessionId,
+    transcriptPath,
+    terminal = null,
+    worktree = null
+  } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
   const identity = encodeNativeChatTranscriptIdentity([
     sourceIdentity,
     agent,
     sessionId,
-    transcriptPath
+    transcriptPath,
+    terminal,
+    worktree
   ])
   // Derive pre-read status from props now; a passive effect would lag one commit.
   const initialStatus: MobileNativeChatStatus =
@@ -163,8 +164,7 @@ export function useMobileNativeChatSession(args: {
     const unsubscribe = client.subscribe(
       'nativeChat.subscribe',
       {
-        agent,
-        sessionId,
+        ...nativeChatTarget({ agent, sessionId, terminal, worktree }),
         limit: limitRef.current,
         // Use a distinct token per screen so another viewer cannot evict this host feed.
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid()),
@@ -244,7 +244,7 @@ export function useMobileNativeChatSession(args: {
       supersede()
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList, supersede])
+  }, [client, agent, sessionId, transcriptPath, terminal, worktree, identity, setList, supersede])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || !hasMore) {
@@ -263,8 +263,7 @@ export function useMobileNativeChatSession(args: {
       const response = await nativeChatSessionPageRead.request(
         client,
         {
-          agent,
-          sessionId,
+          ...nativeChatTarget({ agent, sessionId, terminal, worktree }),
           limit: beforeOffset === null ? nextLimit : pageLimit,
           capabilities: { transcriptSourceOrder: 1 },
           ...(beforeOffset === null ? {} : { beforeOffset }),
@@ -310,7 +309,17 @@ export function useMobileNativeChatSession(args: {
       setHasMore(more)
       return more ? 'drew' : 'end'
     })
-  }, [client, agent, sessionId, transcriptPath, hasMore, setList, loadOlderPages])
+  }, [
+    client,
+    agent,
+    sessionId,
+    transcriptPath,
+    terminal,
+    worktree,
+    hasMore,
+    setList,
+    loadOlderPages
+  ])
 
   // Show the cached rows through any unsettled read: a reopen paints at once, and a disconnect or error can't blank the conversation.
   const visibleMessages = settledReady
