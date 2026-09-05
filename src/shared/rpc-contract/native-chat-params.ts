@@ -24,6 +24,8 @@ export const NativeChatSession = z.object({
   subscriptionId: z.string().min(1).optional(),
   // Hook transcript paths locate files when provider session IDs no longer name them; optional for old clients.
   transcriptPath: z.string().min(1).optional(),
+  terminal: z.string().min(1).optional(),
+  worktree: z.string().min(1).optional(),
   // Gate pending snapshots: legacy clients mistake them for settled empty history and overwrite retention/unblock drafts.
   capabilities: z.object({ transcriptPending: z.literal(1).optional() }).optional(),
   beforeOffset: z.number().int().nonnegative().optional()

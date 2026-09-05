@@ -1,6 +1,6 @@
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
-import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from '../../orchestration/terminal-authority/verify-orchestration-compatibility-caller'
+import { OrcaRuntimeWithNativeChatTraexSession } from './terminal-native-chat-traex-session'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
 import { createHash } from 'node:crypto'
 import {
@@ -28,7 +28,7 @@ import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-h
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { matchesProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
 
-export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
+export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithNativeChatTraexSession {
   protected abstract getExistingTerminalHandlesForPtyId(ptyId: string): string[]
   protected abstract getOrchestrationDbIfAvailable(): OrchestrationDb | null
   abstract getTerminalProcessIncarnation(handle: string): string | null

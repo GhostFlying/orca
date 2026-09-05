@@ -55,6 +55,9 @@ export function resolveNativeChatTranscriptAgent(
   if (agent === 'codex' || agent === 'grok' || agent === 'omp') {
     return agent
   }
+  if (agent === 'traex') {
+    return 'codex'
+  }
   return null
 }
 
