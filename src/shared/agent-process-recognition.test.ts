@@ -125,7 +125,30 @@ describe('agent process recognition', () => {
       processName: 'traecli'
     })
     expect(recognizeAgentProcessFromCommandLine('traex --resume AUTO')).toEqual({
-      agent: 'trae',
+      agent: 'traex',
+      processName: 'traex'
+    })
+    expect(recognizeAgentProcessFromCommandLine('traex -p ultra --yolo')).toEqual({
+      agent: 'traex',
+      processName: 'traex'
+    })
+    expect(recognizeAgentProcessFromCommandLine('traex exec review this')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traex -p ultra review --uncommitted')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traex app-server')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traex --enable apps app-server')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traex -w exec review this')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traex remote-control')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traex mcp-server')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traex models')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traex --version')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traex --help')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traex --acp')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('traex resume session-123')).toEqual({
+      agent: 'traex',
+      processName: 'traex'
+    })
+    expect(recognizeAgentProcessFromCommandLine('traex fork session-123')).toEqual({
+      agent: 'traex',
       processName: 'traex'
     })
     // Why: past `--` nothing is a flag, so this is the interactive pane Orca itself launches.

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { collectAgentTitleEvidence } from './agent-title-evidence'
 import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
 import type { TerminalAgent } from './terminal-agent'
-
 describe('controlled title fixtures (always run)', () => {
   const FIXTURES: readonly { name: string; title: string; expected: TerminalAgent | null }[] = [
     {

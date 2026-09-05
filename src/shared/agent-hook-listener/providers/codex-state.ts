@@ -20,10 +20,10 @@ import {
 import type { CodexLeadTurnState, HookListenerState } from '../listener-state'
 import { codexLeadStateForHookEvent } from './codex-event-state'
 
-export type CodexCompatibleAgentType = 'codex' | 'trae'
+export type CodexCompatibleAgentType = 'codex' | 'trae' | 'traex'
 
 export function isCodexCompatibleAgentType(value: unknown): value is CodexCompatibleAgentType {
-  return value === 'codex' || value === 'trae'
+  return value === 'codex' || value === 'trae' || value === 'traex'
 }
 
 export function codexCompatibleStateKey(
@@ -309,4 +309,3 @@ export function reconcileRemoteCodexState(
     mainAgent: codexMainAgentStatusForPayload(lead)
   }
 }
-

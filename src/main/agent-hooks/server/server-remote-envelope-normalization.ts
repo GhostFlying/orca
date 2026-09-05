@@ -22,6 +22,7 @@ export type RemoteAgentStatusEnvelope = {
   agentPresence?: unknown
   hookEventName?: string
   source?: unknown
+  observedAgent?: unknown
   providerPromptId?: unknown
   grokPromptBoundary?: unknown
   compactTrigger?: unknown
