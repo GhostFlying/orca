@@ -20,6 +20,39 @@ export type RemoteEnvelopeFields = {
   providerSession?: NonNullable<ReturnType<typeof normalizeAgentProviderSession>>
 }
 
+export type RemoteAgentHookEnvelope = {
+  paneKey: string
+  tabId?: string
+  worktreeId?: string
+  env?: string
+  version?: string
+  launchToken?: string
+  hasExplicitPrompt?: boolean
+  promptInteractionKey?: string
+  agentPresence?: unknown
+  hookEventName?: string
+  source?: unknown
+  observedAgent?: unknown
+  providerPromptId?: unknown
+  grokPromptBoundary?: unknown
+  compactTrigger?: unknown
+  toolUseId?: string
+  toolAgentId?: string
+  teammateName?: string
+  toolAgentType?: string
+  providerSession?: unknown
+  providerSessionOnly?: unknown
+  isReplay?: boolean
+  /** Payload fields the relay dropped to fit an oversized frame; validated by the ingest boundary. */
+  shedFields?: unknown
+  claudeRunningNonAgentTask?: unknown
+  /** The producing peer's advertised run-capability set. */
+  advertisedAgentStatusCapabilities?: readonly string[]
+  statusUnavailable?: unknown
+  evidenceAgeMs?: unknown
+  payload: unknown
+}
+
 export function normalizeRemoteEnvelopeFields(envelope: {
   hookEventName?: string
   source?: unknown

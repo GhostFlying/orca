@@ -14,12 +14,16 @@ export function buildRelayHookEnvelope(
   version?: string,
   options: { isReplay?: boolean } = {}
 ): AgentHookRelayEnvelope {
+  const compatibilitySource = source === 'traex' ? 'trae' : source
+  const compatibilityPayload =
+    source === 'traex' ? { ...event.payload, agentType: 'trae' as const } : event.payload
   return {
-    source,
+    source: compatibilitySource,
     ...(event.hostEvidenceObservedAt !== undefined
       ? { evidenceAgeMs: Math.max(0, Date.now() - event.hostEvidenceObservedAt) }
       : {}),
     agentPresence: event.agentPresence,
+    ...(source === 'traex' ? { observedAgent: 'traex' as const } : {}),
     paneKey: event.paneKey,
     ...(event.launchToken ? { launchToken: event.launchToken } : {}),
     tabId: event.tabId,
@@ -41,7 +45,7 @@ export function buildRelayHookEnvelope(
     isReplay: options.isReplay === true ? true : undefined,
     env,
     version,
-    payload: event.payload
+    payload: compatibilityPayload
   }
 }
 

@@ -88,6 +88,14 @@ describe('process rung requires a host-stamped proof', () => {
 })
 
 describe('uncovered compatibility lane', () => {
+  it('keeps observed-only TraeX distinct without making it launchable', () => {
+    expect(resolveCanonicalPaneAgentIdentity({ title: 'Session ready - traex' })).toMatchObject({
+      agent: 'traex',
+      source: 'title',
+      coverage: 'uncovered'
+    })
+  })
+
   it('preserves the caller-provided legacy result verbatim', () => {
     const identity = resolveCanonicalPaneAgentIdentity({
       title: 'Fix the parser - grok',

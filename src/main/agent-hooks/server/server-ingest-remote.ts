@@ -2,6 +2,7 @@ import { readAgentProcessPresence } from '../../../shared/agent-process-presence
 import { track } from '../../telemetry/client'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { restoreShedStatusFields } from '../../../shared/agent-hook-relay'
+import { resolveObservedHookSource } from '../../../shared/agent-hook-observed-agent'
 import {
   MAX_PANE_KEY_LEN,
   warnOnHookEnvOrVersionMismatch
@@ -21,45 +22,15 @@ import {
   olderPeerAgentStatusLegacyMode
 } from '../../../shared/agent-status-legacy-adapter'
 import { isValidPiProviderSessionOnly } from './server-status-identity'
-import { normalizeRemoteEnvelopeFields } from './server-remote-envelope-normalization'
+import {
+  normalizeRemoteEnvelopeFields,
+  type RemoteAgentHookEnvelope
+} from './server-remote-envelope-normalization'
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
   /** Ingest a payload from the relay JSON-RPC channel (not the local HTTP server); connectionId is stamped here. Main is still the SSH trust boundary, so re-run the canonical normalizer before caching. */
-  ingestRemote(
-    envelope: {
-      paneKey: string
-      tabId?: string
-      worktreeId?: string
-      env?: string
-      version?: string
-      launchToken?: string
-      hasExplicitPrompt?: boolean
-      promptInteractionKey?: string
-      agentPresence?: unknown
-      hookEventName?: string
-      source?: unknown
-      providerPromptId?: unknown
-      grokPromptBoundary?: unknown
-      compactTrigger?: unknown
-      toolUseId?: string
-      toolAgentId?: string
-      teammateName?: string
-      toolAgentType?: string
-      providerSession?: unknown
-      providerSessionOnly?: unknown
-      isReplay?: boolean
-      /** Payload fields the relay dropped to fit an oversized frame; validated below. */
-      shedFields?: unknown
-      claudeRunningNonAgentTask?: unknown
-      /** The producing peer's advertised run-capability set — a property of the peer/connection that built this envelope, not an orthogonal call parameter. Absent (older relay/HTTP paths) defaults to the unadvertised-legacy-peer set. */
-      advertisedAgentStatusCapabilities?: readonly string[]
-      statusUnavailable?: unknown
-      evidenceAgeMs?: unknown
-      payload: unknown
-    },
-    connectionId: string | null
-  ): void {
+  ingestRemote(envelope: RemoteAgentHookEnvelope, connectionId: string | null): void {
     if (
       !canAdmitLegacyAgentStatus(
         'main-status-update',
@@ -128,7 +99,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     let tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
     const {
       hookEventName,
-      source,
+      source: wireSource,
       providerPromptId,
       grokPromptBoundary,
       compactTrigger,
@@ -140,6 +111,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       toolAgentType,
       providerSession
     } = normalizeRemoteEnvelopeFields(envelope)
+    const source = wireSource ? resolveObservedHookSource(wireSource, envelope) : undefined
     if (envelope.statusUnavailable === true && envelope.payload === null) {
       const previous = this.state.lastStatusByPaneKey.get(paneKey)
       if (
@@ -177,6 +149,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       envelope.shedFields,
       this.state.lastStatusByPaneKey.get(paneKey)?.payload
     )
+    if (source === 'traex' && normalizedPayload.agentType === 'trae') {
+      normalizedPayload = { ...normalizedPayload, agentType: 'traex' }
+    }
     if (
       envelope.providerSessionOnly === true &&
       !readAgentProcessPresence(envelope.agentPresence)?.ended &&
