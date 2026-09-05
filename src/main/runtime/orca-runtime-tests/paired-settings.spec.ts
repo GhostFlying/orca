@@ -7,6 +7,7 @@ import {
 } from '../orca-runtime-test-mocks.spec'
 import { deferred, store } from '../orca-runtime-test-fixtures.spec'
 import { RuntimeClientSettingsController } from '../runtime-client-settings'
+import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
 
 describe('OrcaRuntimeService', () => {
   it.each([true, false])('projects the single Chat UI switch to older clients (%s)', (enabled) => {
@@ -22,14 +23,18 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('projects runtime-backed settings to paired clients', () => {
-    const terminalQuickCommands = [
+    expect(new OrcaRuntimeService(store).getClientSettings()).toMatchObject({
+      showPinnedWorktreesInGroups: false
+    })
+
+    const terminalQuickCommands: TerminalQuickCommand[] = [
       {
         id: 'review',
         label: 'Review',
-        action: 'agent-prompt' as const,
-        agent: 'codex' as const,
+        action: 'agent-prompt',
+        agent: 'codex',
         prompt: 'Review this diff',
-        scope: { type: 'global' as const }
+        scope: { type: 'global' }
       }
     ]
     const runtime = new OrcaRuntimeService({
@@ -41,17 +46,19 @@ describe('OrcaRuntimeService', () => {
         },
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        showPinnedWorktreesInGroups: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
         minimaxEndpoint: 'cn',
         terminalQuickCommands
       })
-    } as never)
+    })
 
     expect(runtime.getClientSettings()).toMatchObject({
       worktreeVisibilityDefaults: { external: 'hide' },
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      showPinnedWorktreesInGroups: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
       // Why: without this the paired client silently falls back to 'overseas' and shows the wrong region.
