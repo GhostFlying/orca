@@ -35,6 +35,10 @@ describe('OrcaRuntimeService', () => {
   )
 
   it('projects runtime-backed settings to paired clients', () => {
+    expect(new OrcaRuntimeService(store).getClientSettings()).toMatchObject({
+      showPinnedWorktreesInGroups: false
+    })
+
     const terminalQuickCommands = [
       {
         id: 'review',
@@ -54,17 +58,19 @@ describe('OrcaRuntimeService', () => {
         },
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        showPinnedWorktreesInGroups: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
         minimaxEndpoint: 'cn',
         terminalQuickCommands
       })
-    } as never)
+    })
 
     expect(runtime.getClientSettings()).toMatchObject({
       worktreeVisibilityDefaults: { external: 'hide' },
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      showPinnedWorktreesInGroups: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
       // Omission silently selects overseas and reports the wrong region.
