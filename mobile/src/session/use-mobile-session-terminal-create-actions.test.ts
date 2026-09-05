@@ -379,7 +379,8 @@ describe('phone chat CLI fork creation owner', () => {
       resolution = useMobileNativeChatActiveResolution({
         ...scope,
         activeSessionTab: { type: 'terminal', launchAgent: 'claude' },
-        nativeChatTranscriptIsLocalReadable: true
+        nativeChatTranscriptIsLocalReadable: true,
+        traexChatSupported: false
       })
       scope.nativeChatController.setTabView.mockImplementation(resolution.setTabView)
       actions = useMobileSessionTerminalCreateActions(scope as never)
