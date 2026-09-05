@@ -83,9 +83,9 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     // OMP treats a large bracketed paste as a menu unless submit arrives in the same PTY write.
     // Once a foreground agent is known, it is the process that will consume the bytes;
     // launchAgent is only the fallback during startup before process detection settles.
-    const submitWithPaste = agentPromptSubmitJoinsPasteFrame(
-      pty?.foregroundAgent ?? pty?.launchAgent
-    )
+    const observedAgent = pty?.foregroundAgent ?? pty?.launchAgent
+    const promptAgent = observedAgent === 'traex' ? undefined : observedAgent
+    const submitWithPaste = agentPromptSubmitJoinsPasteFrame(promptAgent)
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
     // Why no gate for a ready composer: a live Claude never settles it, so Enter always waited out
@@ -188,9 +188,10 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     }
     const binding = this.getTerminalPromptRequestBinding(handle)
     const foregroundAgent = this.ptysById.get(ptyId)?.foregroundAgent
+    const foregroundTerminalAgent = foregroundAgent === 'traex' ? undefined : foregroundAgent
     const launchAgent = this.ptysById.get(ptyId)?.launchAgent
-    const settlementAgent = isTerminalSendSettlementAgent(foregroundAgent)
-      ? foregroundAgent
+    const settlementAgent = isTerminalSendSettlementAgent(foregroundTerminalAgent)
+      ? foregroundTerminalAgent
       : isTerminalSendSettlementAgent(launchAgent)
         ? launchAgent
         : null
