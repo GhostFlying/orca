@@ -1,13 +1,17 @@
 // #11761: headless session.tabs must project live hook status while rejecting identity-only historical rows.
 import { describe, expect, it, vi } from 'vitest'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
-import { OrcaRuntimeService } from './orca-runtime'
+import type { OrcaRuntimeService } from './orca-runtime'
+import {
+  createRuntimeWithHookRows,
+  TAB_ID,
+  WORKTREE_ID,
+  PANE_KEY,
+  PTY_ID
+} from './hook-agent-status-runtime.test-fixture'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { committingSpawn } from './bind-first-pane.test-fixture'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -16,13 +20,8 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
-const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 // Pane lookup can remint tab ids by leaf; only an unknown leaf is unresolvable.
 const UNKNOWN_LEAF_ID = '22222222-2222-4222-8222-222222222222'
-const TAB_ID = 'ask-tab'
-const WORKTREE_ID = 'wt-1'
-const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
-const PTY_ID = 'pty-ask'
 const ASK_PROMPT = JSON.stringify({
   questions: [
     {
@@ -56,62 +55,6 @@ function hookRow(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpc
     providerSession: PROVIDER_SESSION,
     ...overrides
   }
-}
-
-async function createRuntimeWithHookRows(
-  rows: AgentStatusIpcPayload[],
-  statusWiring?: ReturnType<typeof makeAgentStatusStoreWiring>
-): Promise<OrcaRuntimeService> {
-  const readRows = statusWiring
-    ? (): AgentStatusIpcPayload[] => [...rows, ...statusWiring.deps.getAgentStatusSnapshot()]
-    : (): AgentStatusIpcPayload[] => rows
-  // Main-owned layout requires a store to resolve PTY pane bindings.
-  const store = ORCA_LAYOUT_OWNER_IS_MAIN
-    ? partialRuntimeStore({
-        getRepos: () => [],
-        getRepo: () => undefined,
-        getAllWorktreeMeta: () => ({}),
-        getWorktreeMeta: () => undefined,
-        getProjects: () => [],
-        getSettings: () => ({})
-      })
-    : null
-  const runtime = new OrcaRuntimeService(store, undefined, {
-    ...(statusWiring
-      ? {
-          onTerminalAgentStatus: statusWiring.deps.onTerminalAgentStatus,
-          reconcileAgentStatusForEndedProcess:
-            statusWiring.deps.reconcileAgentStatusForEndedProcess,
-          getAgentProviderSessionSnapshot: statusWiring.deps.getAgentProviderSessionSnapshot,
-          getAgentProviderSessionRowsForPane: statusWiring.deps.getAgentProviderSessionRowsForPane
-        }
-      : {}),
-    getAgentStatusSnapshot: readRows,
-    ...(statusWiring ? {} : { getAgentProviderSessionRowsForPane: readRows })
-  })
-  const internals = runtime as unknown as {
-    resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
-  }
-  vi.spyOn(internals, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
-    id: WORKTREE_ID,
-    path: '/repo/app',
-    connectionId: null,
-    repo: null,
-    folderWorkspace: null
-  })
-  runtime.setPtyController({
-    spawn: vi.fn(committingSpawn(runtime, async () => ({ id: PTY_ID }))),
-    write: () => true,
-    kill: () => true,
-    getForegroundProcess: async () => null
-  })
-  await runtime.createTerminal(`id:${WORKTREE_ID}`, {
-    tabId: TAB_ID,
-    leafId: LEAF_ID,
-    launchAgent: 'claude',
-    title: 'Terminal'
-  })
-  return runtime
 }
 
 async function projectAgentStatus(
@@ -894,4 +837,43 @@ it('keeps a real idle transition and later done hook authoritative after a worki
     wiring.statusStore.stop()
     vi.useRealTimers()
   }
+})
+
+describe('TraeX native chat authority', () => {
+  it('binds access to the terminal pane, worktree, provider session, and connection', async () => {
+    const row = hookRow({
+      agentType: 'traex',
+      providerSession: {
+        key: 'session_id',
+        id: 'traex-session',
+        transcriptPath: '/trae/rollout.jsonl'
+      }
+    })
+    const runtime = await createRuntimeWithHookRows([row])
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    if (tab?.type !== 'terminal' || !tab.terminal) {
+      throw new Error('expected terminal handle')
+    }
+
+    expect(
+      runtime.resolveNativeChatTraexSession(tab.terminal, WORKTREE_ID, 'traex-session')
+    ).toEqual({ connectionId: null, transcriptPath: '/trae/rollout.jsonl' })
+    expect(
+      runtime.resolveNativeChatTraexSession(tab.terminal, 'other-wt', 'traex-session')
+    ).toBeNull()
+    expect(
+      runtime.resolveNativeChatTraexSession(tab.terminal, WORKTREE_ID, 'other-session')
+    ).toBeNull()
+
+    row.connectionId = 'other-ssh-connection'
+    expect(
+      runtime.resolveNativeChatTraexSession(tab.terminal, WORKTREE_ID, 'traex-session')
+    ).toBeNull()
+    row.connectionId = null
+    row.agentType = 'trae'
+    expect(
+      runtime.resolveNativeChatTraexSession(tab.terminal, WORKTREE_ID, 'traex-session')
+    ).toBeNull()
+  })
 })

@@ -1,6 +1,6 @@
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
-import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from '../../orchestration/terminal-authority/verify-orchestration-compatibility-caller'
+import { OrcaRuntimeWithNativeChatTraexSession } from './terminal-native-chat-traex-session'
 import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
 import { createHash } from 'node:crypto'
 import {
@@ -26,7 +26,7 @@ import { resolveStructuredWorkerAuthority } from '../../structured-worker-author
 import { matchesProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
 import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
 
-export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
+export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithNativeChatTraexSession {
   protected abstract issueHandle(
     leaf: RuntimeLeafRecord,
     context?: TerminalIdentityReadContext
