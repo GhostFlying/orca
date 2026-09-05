@@ -30,6 +30,7 @@ import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/h
 import { getKiroManagedCommand, getKiroRemoteManagedCommand } from '../kiro/hook-settings'
 import { wrapPosixHookCommand } from './installer-utils'
 import { getManagedCommand as getKimiManagedCommand } from '../kimi/hook-service'
+import { getTraeManagedCommand } from '../trae/trae-hook-definition'
 import { wrapWindowsBatchHookCommand } from './windows-direct-cmd-hook-command'
 import {
   findBareHookCommandVariables,
@@ -139,6 +140,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getCodexCommand(path), wrapReadablePosixHookCommand(path)],
       remote: (path) => [wrapPosixHookCommand(path), wrapReadablePosixHookCommand(path)]
+    }
+  ],
+  [
+    'trae',
+    {
+      local: (path) => [getTraeManagedCommand(path)],
+      remote: (path) => [wrapPosixHookCommand(path)]
     }
   ],
   ['gemini', standardCommands],

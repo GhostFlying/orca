@@ -82,6 +82,9 @@ describe('collectAgentTitleEvidence', () => {
     ['claude', 'claude'],
     ['openclaude', 'openclaude'],
     ['codex', 'codex'],
+    ['trae', 'trae'],
+    ['traecli', 'trae'],
+    ['traex', 'trae'],
     ['copilot', 'copilot'],
     ['cursor', 'cursor'],
     ['gemini', 'gemini'],
@@ -204,6 +207,8 @@ describe('collectAgentTitleEvidence', () => {
 
   it.each([
     ['Codex ready', 'codex'],
+    ['Trae ready', 'trae'],
+    ['Trae - action required', 'trae'],
     ['Codex - action required', 'codex'],
     ['Cursor ready', 'cursor'],
     ['Droid - action required', 'droid'],

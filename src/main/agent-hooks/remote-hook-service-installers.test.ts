@@ -27,6 +27,7 @@ import { DevinHookService } from '../devin/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { JcodeHookService } from '../jcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { TraeHookService } from '../trae/hook-service'
 import {
   installRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
@@ -74,6 +75,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/codex-hook.sh',
           install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/trae-hook.sh',
+          install: (sftp: SFTPWrapper) => new TraeHookService().installRemote(sftp, '/home/dev')
         },
         {
           path: '/home/dev/.orca/agent-hooks/gemini-hook.sh',
@@ -178,6 +183,26 @@ describe('remote hook service installers', () => {
     const toml = fs.files.get('/home/dev/.codex/config.toml')
     expect(toml).toContain('/home/dev/.codex/hooks.json:permission_request:0:0')
     expect(toml).toContain('trusted_hash = "sha256:')
+  })
+
+  it('installs remote Trae hooks into resolved homes and enables hooks', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const status = await new TraeHookService().installRemote(sftp, '/home/dev', {
+      traeHomeDir: '/home/dev/.config/trae',
+      traeCliHomeDir: '/home/dev/.cache/traecli'
+    })
+
+    expect(status).toMatchObject({
+      agent: 'trae',
+      state: 'installed',
+      configPath: '/home/dev/.cache/traecli/hooks.json'
+    })
+    const hooks = JSON.parse(fs.files.get('/home/dev/.cache/traecli/hooks.json')!)
+    expect(hooks.hooks.PermissionRequest[0].hooks[0].command).toContain('trae-hook.sh')
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/trae-hook.sh')).toContain('/hook/trae')
+    expect(fs.files.get('/home/dev/.config/trae/traecli.toml')).toContain(
+      '[features]\nhooks = true'
+    )
   })
 
   it('reports Codex trust-write failures without rolling back installed hooks', async () => {

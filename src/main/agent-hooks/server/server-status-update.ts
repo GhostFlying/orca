@@ -1,7 +1,7 @@
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
 import {
-  reconcileRemoteCodexState,
+  isCodexCompatibleAgentType,
   markCodexLeadTurnInterrupted
 } from '../../../shared/agent-hook-listener/providers/codex-state'
 import {
@@ -23,6 +23,7 @@ import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
+import { reconcileCodexCompatibleStatus } from './server-codex-status-rules'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
@@ -165,45 +166,11 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.emitEnrichedStatus(enriched)
       return enriched
     }
-    const stateReconciledPayload =
-      (terminalOwnedPayload.connectionId || !terminalOwnedPayload.hookEventName) &&
-      terminalOwnedPayload.payload.agentType === 'codex' &&
-      (terminalOwnedPayload.hookEventName || terminalOwnedPayload.payload.mainAgent)
-        ? {
-            ...terminalOwnedPayload,
-            payload: reconcileRemoteCodexState(
-              this.state,
-              terminalOwnedPayload.paneKey,
-              terminalOwnedPayload.hookEventName,
-              terminalOwnedPayload.toolAgentId,
-              terminalOwnedPayload.payload,
-              previous?.payload
-            )
-          }
-        : terminalOwnedPayload
-    const previousCodexRoot =
-      stateReconciledPayload.payload.agentType === 'codex' &&
-      stateReconciledPayload.toolAgentId &&
-      previous?.payload.agentType === 'codex'
-        ? previous
-        : undefined
-    const preservedProviderSession = !stateReconciledPayload.providerSession
-      ? previousCodexRoot?.providerSession
-      : undefined
-    const preservedRootModel = !stateReconciledPayload.payload.model
-      ? previousCodexRoot?.payload.model
-      : undefined
-    // Relay restart loses root context; child hooks must not erase persisted resume/model identity.
-    const rootContextPreservingPayload =
-      preservedProviderSession || preservedRootModel
-        ? {
-            ...stateReconciledPayload,
-            ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
-            payload: preservedRootModel
-              ? { ...stateReconciledPayload.payload, model: preservedRootModel }
-              : stateReconciledPayload.payload
-          }
-        : stateReconciledPayload
+    const rootContextPreservingPayload = reconcileCodexCompatibleStatus(
+      this.state,
+      terminalOwnedPayload,
+      previous
+    )
     const identityResolvedPayload =
       identity.agentType === rootContextPreservingPayload.payload.agentType
         ? rootContextPreservingPayload
@@ -226,10 +193,14 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         setClaudeMainAgentTurnState(this.state, attachedPayload.paneKey, previous.payload.mainAgent)
       }
       if (
-        attachedPayload.payload.agentType === 'codex' &&
+        isCodexCompatibleAgentType(attachedPayload.payload.agentType) &&
         attachedPayload.payload.state === 'working'
       ) {
-        markCodexLeadTurnInterrupted(this.state, attachedPayload.paneKey)
+        markCodexLeadTurnInterrupted(
+          this.state,
+          attachedPayload.paneKey,
+          attachedPayload.payload.agentType
+        )
       }
       this.commitStatusRowMutation(rowBefore, previous)
       return previous

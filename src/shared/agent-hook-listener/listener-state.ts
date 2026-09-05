@@ -229,10 +229,10 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
   state.claudeSessionOwnerByPaneKey.delete(paneKey)
-  state.codexSubagentRosterByPaneKey.delete(paneKey)
-  state.codexSubagentTranscriptByPaneKey.delete(paneKey)
-  state.codexLeadStateByPaneKey.delete(paneKey)
-  state.codexEphemeralForkSessionsByPaneKey.delete(paneKey)
+  deletePaneScopedCacheEntry(state.codexSubagentRosterByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.codexSubagentTranscriptByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.codexLeadStateByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.codexEphemeralForkSessionsByPaneKey, paneKey)
   state.grokActiveTurnByPaneKey.delete(paneKey)
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
   state.musePaneStateByPaneKey.delete(paneKey)
@@ -243,6 +243,8 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
 
 /** Keep claim-bearing caches aligned with clearPaneCacheState: stored rows and latches can assert state; prompt/tool/transcript caches only render it. */
 export function paneHasStateClaims(state: HookListenerState, paneKey: string): boolean {
+  const hasCodexCompatibleClaim = (map: Map<string, unknown>): boolean =>
+    map.has(paneKey) || Array.from(map.keys()).some((key) => key.startsWith(`${paneKey}\0`))
   return (
     state.lastStatusByPaneKey.has(paneKey) ||
     state.claudeSubagentRosterByPaneKey.has(paneKey) ||
@@ -251,8 +253,8 @@ export function paneHasStateClaims(state: HookListenerState, paneKey: string): b
     state.claudeActiveSessionCronPaneKeys.has(paneKey) ||
     state.claudeLaunchedBackgroundTasksByPaneKey.has(paneKey) ||
     state.claudeSessionOwnerByPaneKey.has(paneKey) ||
-    state.codexSubagentRosterByPaneKey.has(paneKey) ||
-    state.codexLeadStateByPaneKey.has(paneKey)
+    hasCodexCompatibleClaim(state.codexSubagentRosterByPaneKey) ||
+    hasCodexCompatibleClaim(state.codexLeadStateByPaneKey)
   )
 }
 

@@ -12,6 +12,7 @@ export type SyntheticAgentTitleProfile = {
 
 export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'codex',
+  'trae',
   'cursor',
   'opencode',
   'pi',
@@ -28,6 +29,12 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     permissionLabel: 'Codex - action required',
     idleLabel: 'Codex ready',
     // Keep native Codex working/spinner titles; synthesize terminal states when its final OSC frame is missing.
+    synthesizeWorkingTitle: false
+  },
+  trae: {
+    workingLabel: 'Trae',
+    permissionLabel: 'Trae - action required',
+    idleLabel: 'Trae ready',
     synthesizeWorkingTitle: false
   },
   cursor: {
