@@ -36,6 +36,7 @@ export function useMobileNativeChatController(args: {
   activeHandleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
+  traexChatSupported: boolean
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
@@ -53,6 +54,7 @@ export function useMobileNativeChatController(args: {
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
+    traexChatSupported,
     nativeChatInputLeaseReady,
     connState,
     onSendError,
@@ -62,7 +64,11 @@ export function useMobileNativeChatController(args: {
 
   const activeChatResolution =
     activeSessionTab && activeSessionTabId && isTabChatView(activeSessionTabId)
-      ? resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable)
+      ? resolveMobileNativeChat(
+          activeSessionTab,
+          nativeChatTranscriptIsLocalReadable,
+          traexChatSupported
+        )
       : null
   const showNativeChat = activeChatResolution != null
   const showNativeChatRef = useRef(showNativeChat)
@@ -86,7 +92,9 @@ export function useMobileNativeChatController(args: {
     sourceIdentity: encodeNativeChatTranscriptIdentity([hostId, worktreeId]),
     agent: activeChatResolution?.agent ?? null,
     sessionId: activeChatSessionId,
-    transcriptPath: activeChatResolution?.transcriptPath ?? null
+    transcriptPath: activeChatResolution?.transcriptPath ?? null,
+    terminal: activeChatResolution?.agent === 'traex' ? activeHandleRef.current : null,
+    worktree: activeChatResolution?.agent === 'traex' ? worktreeId : null
   })
   const {
     composerText: chatComposerText,
