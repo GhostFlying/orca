@@ -4,11 +4,10 @@ import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { AskPrompt } from '../../../src/shared/native-chat-ask'
+import { baseTab, permissionTab } from './mobile-native-chat-controller-test-fixtures'
 import {
   visible,
   handleRef,
-  baseTab,
-  permissionTab,
   response,
   render,
   reset,

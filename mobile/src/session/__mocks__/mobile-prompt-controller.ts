@@ -4,6 +4,7 @@ import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse, ConnectionState } from '../../transport/types'
 import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
 import type { MobileNativeChatController } from '../mobile-native-chat-controller-contract'
+import { baseTab, CHAT_CAPABILITIES } from '../mobile-native-chat-controller-test-fixtures'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { vi } from 'vitest'
 import { useMobileNativeChatController } from '../use-mobile-native-chat-controller'
@@ -168,29 +169,6 @@ export function response(
     _meta: { runtimeId: 'r' }
   }
 }
-export const baseTab = {
-  type: 'terminal',
-  launchAgent: 'claude',
-  agentStatus: {
-    agentType: 'claude',
-    state: 'waiting',
-    prompt: '',
-    updatedAt: 10,
-    paneKey: 'tab-1:leaf-1',
-    stateHistory: [],
-    stateStartedAt: 10,
-    providerSession: { id: 'session-1', key: 'session_id' },
-    lastAssistantMessage: 'Pick destination?\n1. East\n2. West'
-  }
-} satisfies MobileNativeChatTab
-export const permissionTab = {
-  ...baseTab,
-  agentStatus: {
-    ...baseTab.agentStatus,
-    lastAssistantMessage: '',
-    interactivePrompt: JSON.stringify({ approval: { tool: 'Bash', summary: 'echo yes' } })
-  }
-} satisfies MobileNativeChatTab
 type HarnessProps = {
   tab?: MobileNativeChatTab
   tabId?: string
@@ -206,7 +184,7 @@ function Harness(props: HarnessProps) {
     activeSessionTabId: tabId,
     activeHandleRef: handleRef,
     deviceTokenRef: { current: null },
-    nativeChatTranscriptIsLocalReadable: true,
+    ...CHAT_CAPABILITIES,
     nativeChatInputLeaseReady: true,
     connState,
     onSendError: sendError,

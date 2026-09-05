@@ -1,9 +1,12 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import {
+  CHAT_CAPABILITIES,
+  structuredOptionSnapshot
+} from './mobile-native-chat-controller-test-fixtures'
 
 const acceptSend = vi.fn()
 const captureSendOrigin = vi.fn()
@@ -20,21 +23,6 @@ const structuredRespondPermission = vi.fn(async () => true)
 const structuredRespondQuestion = vi.fn(async () => true)
 const structuredSetOption = vi.fn(async () => true)
 const structuredInvokeOption = vi.fn(async () => true)
-const structuredOptionSnapshot: SessionOptionDescriptor[] = [
-  {
-    id: 'model',
-    label: 'Model',
-    category: 'model',
-    kind: {
-      type: 'select',
-      currentValue: 'gpt-fast',
-      choices: [{ value: 'gpt-fast', label: 'GPT Fast' }]
-    },
-    valueSource: 'reported',
-    transport: 'agent-session',
-    settable: true
-  }
-]
 const structuredOptionSurface = {
   getSnapshot: () => structuredOptionSnapshot,
   setOption: async () => ({ snapshot: structuredOptionSnapshot }),
@@ -212,7 +200,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       activeSessionTabId: (tab as { id?: string } | null)?.id ?? 'tab-1',
       activeHandleRef: { current: activeHandle },
       deviceTokenRef: { current: null },
-      nativeChatTranscriptIsLocalReadable: true,
+      ...CHAT_CAPABILITIES,
       nativeChatInputLeaseReady: inputLeaseReady,
       agentSessionHostSupport: harnessHostSupport,
       onSendError,
@@ -515,7 +503,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
       activeSessionTabId: activeTab.id,
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
-      nativeChatTranscriptIsLocalReadable: true,
+      ...CHAT_CAPABILITIES,
       nativeChatInputLeaseReady: true,
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
@@ -756,7 +744,7 @@ describe('useMobileNativeChatController streaming scope', () => {
       activeSessionTabId: 'tab-1',
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
-      nativeChatTranscriptIsLocalReadable: true,
+      ...CHAT_CAPABILITIES,
       nativeChatInputLeaseReady: true,
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
