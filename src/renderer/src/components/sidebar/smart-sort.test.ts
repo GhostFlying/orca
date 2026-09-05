@@ -137,6 +137,35 @@ function sortSmart(
 }
 
 describe('smart sort — class invariants', () => {
+  it('promotes a waiting Trae worktree above a completed worktree', () => {
+    const trae = makeWorktree({ id: 'trae', displayName: 'Trae' })
+    const done = makeWorktree({ id: 'done', displayName: 'Done' })
+    const tabs = {
+      [trae.id]: [makeTab({ id: 'tab-trae', worktreeId: trae.id, launchAgent: 'trae' })],
+      [done.id]: [makeTab({ id: 'tab-done', worktreeId: done.id })]
+    }
+    const entries = {
+      [paneKey('tab-trae', '1')]: makeEntry({
+        paneKey: paneKey('tab-trae', '1'),
+        agentType: 'trae',
+        state: 'waiting',
+        stateStartedAt: NOW - 60_000,
+        updatedAt: NOW - 1_000
+      }),
+      [paneKey('tab-done', '1')]: makeEntry({
+        paneKey: paneKey('tab-done', '1'),
+        state: 'done',
+        stateStartedAt: NOW - 10_000,
+        updatedAt: NOW - 500
+      })
+    }
+
+    expect(sortSmart([done, trae], tabs, entries).map((worktree) => worktree.id)).toEqual([
+      'trae',
+      'done'
+    ])
+  })
+
   it('ranks blocked above done regardless of which stateStartedAt is newer', () => {
     const blocked = makeWorktree({ id: 'blocked', displayName: 'Blocked' })
     const done = makeWorktree({ id: 'done', displayName: 'Done' })

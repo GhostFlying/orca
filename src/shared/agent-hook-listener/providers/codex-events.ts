@@ -18,6 +18,9 @@ import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 import {
+  clearCodexCompatibleState,
+  codexCompatibleStateKey,
+  type CodexCompatibleAgentType,
   getOrCreateCodexSubagentRoster,
   getOrCreateCodexSubagentTranscriptState,
   hasCodexTranscriptSubagents
@@ -29,28 +32,30 @@ export function buildCodexStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: { stateName: 'working' | 'waiting' | 'done'; updateLead: boolean }
+  options: { stateName: 'working' | 'waiting' | 'done'; updateLead: boolean },
+  agentType: CodexCompatibleAgentType = 'codex'
 ): ParsedAgentStatusPayload | null {
+  const stateKey = codexCompatibleStateKey(paneKey, agentType)
   const snapshot = options.updateLead
-    ? resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
-        resetOnNewTurn: isNewTurnEvent('codex', eventName)
+    ? resolveToolState(state, stateKey, extractToolFields(agentType, eventName, hookPayload), {
+        resetOnNewTurn: isNewTurnEvent(agentType, eventName)
       })
-    : (state.lastToolByPaneKey.get(paneKey) ?? {})
-  const lead = state.codexLeadStateByPaneKey.get(paneKey)
+    : (state.lastToolByPaneKey.get(stateKey) ?? {})
+  const lead = state.codexLeadStateByPaneKey.get(stateKey)
 
   return normalizeAgentStatusPayload({
     state: options.stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: options.updateLead && isNewTurnEvent('codex', eventName)
+    prompt: resolvePrompt(state, stateKey, promptText, {
+      resetOnNewTurn: options.updateLead && isNewTurnEvent(agentType, eventName)
     }),
-    agentType: 'codex',
+    agentType,
     model: lead?.model,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
-    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey))
+    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(stateKey))
   })
 }
 
@@ -58,30 +63,38 @@ export function buildCodexChildDrivenStatusPayload(
   state: HookListenerState,
   eventName: unknown,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  agentType: CodexCompatibleAgentType = 'codex'
 ): ParsedAgentStatusPayload | null {
-  const leadState = state.codexLeadStateByPaneKey.get(paneKey)?.state ?? 'working'
+  const stateKey = codexCompatibleStateKey(paneKey, agentType)
+  const leadState = state.codexLeadStateByPaneKey.get(stateKey)?.state ?? 'working'
   const stateName = codexRosterEffectiveState(
-    state.codexSubagentRosterByPaneKey.get(paneKey),
+    state.codexSubagentRosterByPaneKey.get(stateKey),
     leadState
   )
-  return buildCodexStatusPayload(state, eventName, '', paneKey, hookPayload, {
-    stateName,
-    updateLead: false
-  })
+  return buildCodexStatusPayload(
+    state,
+    eventName,
+    '',
+    paneKey,
+    hookPayload,
+    { stateName, updateLead: false },
+    agentType
+  )
 }
 
 export function normalizeCodexSubagentLifecycleEvent(
   state: HookListenerState,
   eventName: 'SubagentStart' | 'SubagentStop',
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  agentType: CodexCompatibleAgentType = 'codex'
 ): ParsedAgentStatusPayload | null {
   const agentId = readString(hookPayload, 'agent_id')
   if (!agentId) {
     return null
   }
-  const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+  const roster = getOrCreateCodexSubagentRoster(state, paneKey, agentType)
   if (eventName === 'SubagentStart') {
     upsertCodexSubagent(
       roster,
@@ -96,7 +109,7 @@ export function normalizeCodexSubagentLifecycleEvent(
   } else {
     finishCodexSubagent(roster, agentId)
   }
-  return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+  return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload, agentType)
 }
 
 export function normalizeCodexEvent(
@@ -104,10 +117,11 @@ export function normalizeCodexEvent(
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  agentType: CodexCompatibleAgentType = 'codex'
 ): ParsedAgentStatusPayload | null {
   if (eventName === 'SubagentStart' || eventName === 'SubagentStop') {
-    return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
+    return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload, agentType)
   }
 
   // Why: Codex's request_user_input (0.145+) is auto-allowed, so it fires PreToolUse while blocked on a human answer; map to waiting like grok's ask_user_question.
@@ -132,7 +146,7 @@ export function normalizeCodexEvent(
   const agentId = readString(hookPayload, 'agent_id')
   if (agentId) {
     upsertCodexSubagent(
-      getOrCreateCodexSubagentRoster(state, paneKey),
+      getOrCreateCodexSubagentRoster(state, paneKey, agentType),
       agentId,
       {
         agentType: readString(hookPayload, 'agent_type'),
@@ -141,39 +155,45 @@ export function normalizeCodexEvent(
       },
       Date.now()
     )
-    return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+    return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload, agentType)
   }
 
   if (eventName === 'SessionStart') {
     // Why: a pane can host a new Codex process after the old one exited without child Stop hooks.
-    state.codexSubagentRosterByPaneKey.delete(paneKey)
-    state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+    clearCodexCompatibleState(state, paneKey, agentType)
   }
   const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
   if (transcriptPath) {
     reconcileCodexSubagentTranscript(
-      getOrCreateCodexSubagentTranscriptState(state, paneKey),
-      getOrCreateCodexSubagentRoster(state, paneKey),
+      getOrCreateCodexSubagentTranscriptState(state, paneKey, agentType),
+      getOrCreateCodexSubagentRoster(state, paneKey, agentType),
       transcriptPath
     )
   }
-  if (eventName === 'Stop' && !hasCodexTranscriptSubagents(state, paneKey)) {
+  if (eventName === 'Stop' && !hasCodexTranscriptSubagents(state, paneKey, agentType)) {
     // Why: Codex CLI 0.144 can omit child Stop hooks; later child activity safely recreates any agent still running.
-    state.codexSubagentRosterByPaneKey.delete(paneKey)
+    const stateKey = codexCompatibleStateKey(paneKey, agentType)
+    state.codexSubagentRosterByPaneKey.delete(stateKey)
   }
-  const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
-  state.codexLeadStateByPaneKey.set(paneKey, {
+  const stateKey = codexCompatibleStateKey(paneKey, agentType)
+  const previousLead = state.codexLeadStateByPaneKey.get(stateKey)
+  state.codexLeadStateByPaneKey.set(stateKey, {
     state: stateName,
     model:
       normalizeOptionalField(hookPayload['model'], AGENT_MODEL_MAX_LENGTH) ??
       (eventName === 'SessionStart' ? undefined : previousLead?.model)
   })
   const effectiveState = codexRosterEffectiveState(
-    state.codexSubagentRosterByPaneKey.get(paneKey),
+    state.codexSubagentRosterByPaneKey.get(stateKey),
     stateName
   )
-  return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
-    stateName: effectiveState,
-    updateLead: true
-  })
+  return buildCodexStatusPayload(
+    state,
+    eventName,
+    promptText,
+    paneKey,
+    hookPayload,
+    { stateName: effectiveState, updateLead: true },
+    agentType
+  )
 }

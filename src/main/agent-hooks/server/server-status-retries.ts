@@ -15,9 +15,13 @@ import {
 import { AgentHookServerStatusUpdate } from './server-status-update'
 
 type CodexSubagentPoll = {
-  source: AgentHookSource
+  source: Extract<AgentHookSource, 'codex' | 'trae'>
   body: unknown
   original: EnrichedAgentHookEventPayload
+}
+
+function codexSubagentPollKey(paneKey: string, source: 'codex' | 'trae'): string {
+  return source === 'codex' ? paneKey : `${paneKey}\0${source}`
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
@@ -41,6 +45,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearCodexSubagentPoll(paneKey: string): void {
     this.codexSubagentPollScheduler.clear(paneKey)
+    this.codexSubagentPollScheduler.clear(`${paneKey}\0trae`)
   }
 
   protected scheduleCodexSubagentPoll(
@@ -48,23 +53,29 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     body: unknown,
     original: EnrichedAgentHookEventPayload
   ): void {
-    // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
-    if (source !== 'codex') {
+    // Why: an unrelated nested CLI inherits ORCA_PANE_KEY, so it must not end a live Codex-compatible poll.
+    const compatibleSource = source === 'codex' || source === 'trae' ? source : null
+    if (!compatibleSource) {
       return
     }
-    this.codexSubagentPollScheduler.clear(original.paneKey)
-    if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
+    const pollKey = codexSubagentPollKey(original.paneKey, compatibleSource)
+    this.codexSubagentPollScheduler.clear(pollKey)
+    if (!hasCodexTranscriptSubagents(this.state, original.paneKey, compatibleSource)) {
       return
     }
-    this.codexSubagentPollScheduler.schedule(original.paneKey, { source, body, original })
+    this.codexSubagentPollScheduler.schedule(pollKey, {
+      source: compatibleSource,
+      body,
+      original
+    })
   }
 
-  private runCodexSubagentPoll(paneKey: string, poll: CodexSubagentPoll): void {
+  private runCodexSubagentPoll(pollKey: string, poll: CodexSubagentPoll): void {
     const { source, body, original } = poll
     // Keep the identity check at callback time: a newer event supersedes this
     // payload even when its pane still has transcript children.
     if (
-      paneKey !== original.paneKey ||
+      pollKey !== codexSubagentPollKey(original.paneKey, source) ||
       !this.server ||
       this.state.lastStatusByPaneKey.get(original.paneKey) !== original
     ) {

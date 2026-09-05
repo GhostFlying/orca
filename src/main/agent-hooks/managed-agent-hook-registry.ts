@@ -14,6 +14,7 @@ import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { traeHookService } from '../trae/hook-service'
 
 // Why (#16441): Codex's installer awaits a codex app-server trust-grant session
 // instead of blocking the main thread on spawnSync. Widening the tuple keeps the
@@ -40,6 +41,7 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['claude', () => claudeHookService.install()],
   ['openclaude', () => openClaudeHookService.install()],
   ['codex', () => codexHookService.install()],
+  ['trae', () => traeHookService.install()],
   ['gemini', () => geminiHookService.install()],
   ['antigravity', () => antigravityHookService.install()],
   ['amp', () => ampHookService.install()],
@@ -63,6 +65,7 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['claude', () => claudeHookService.refreshManagedScripts()],
   ['openclaude', () => openClaudeHookService.refreshManagedScripts()],
   ['codex', () => codexHookService.refreshManagedScripts()],
+  ['trae', () => traeHookService.refreshManagedScripts()],
   ['gemini', () => geminiHookService.refreshManagedScripts()],
   ['antigravity', () => antigravityHookService.refreshManagedScripts()],
   ['cursor', () => cursorHookService.refreshManagedScripts()],
@@ -78,6 +81,7 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['claude', () => claudeHookService.remove()],
   ['openclaude', () => openClaudeHookService.remove()],
   ['codex', () => codexHookService.remove()],
+  ['trae', () => traeHookService.remove()],
   ['gemini', () => geminiHookService.remove()],
   ['antigravity', () => antigravityHookService.remove()],
   ['amp', () => ampHookService.remove()],
@@ -99,6 +103,7 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['claude', () => claudeHookService.getStatus()],
   ['openclaude', () => openClaudeHookService.getStatus()],
   ['codex', () => codexHookService.getStatus()],
+  ['trae', () => traeHookService.getStatus()],
   ['gemini', () => geminiHookService.getStatus()],
   ['antigravity', () => antigravityHookService.getStatus()],
   ['amp', () => ampHookService.getStatus()],

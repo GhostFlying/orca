@@ -180,9 +180,13 @@ describe('WslHookRelayManager', () => {
   }
 
   function guestTransport(
-    options: { registerInstallPlugins?: boolean; detectedAgents?: string[] } = {}
+    options: {
+      registerInstallPlugins?: boolean
+      detectedAgents?: string[]
+      traeHomePaths?: { traeHomeDir: string; traeCliHomeDir: string }
+    } = {}
   ): MultiplexerTransport {
-    const { registerInstallPlugins = true, detectedAgents = ['codex'] } = options
+    const { registerInstallPlugins = true, detectedAgents = ['codex'], traeHomePaths } = options
     const harness = createGuestHarness()
     harnesses.push(harness)
     registerWslHookFsHandlers(harness.guestDispatcher, home)
@@ -192,6 +196,9 @@ describe('WslHookRelayManager', () => {
     harness.guestDispatcher.onRequest('preflight.detectAgents', async () => ({
       agents: detectedAgents
     }))
+    if (traeHomePaths) {
+      harness.guestDispatcher.onRequest('preflight.resolveTraeHomes', async () => traeHomePaths)
+    }
     // A guest bundle predating the plugin overlay omits this handler (-32601).
     if (registerInstallPlugins) {
       harness.guestDispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async () => ({
@@ -322,6 +329,39 @@ describe('WslHookRelayManager', () => {
     await vi.waitFor(() => expect(manager.getOpenCodeOverlayDir('Ubuntu')).toBe(opencodeOverlayDir))
 
     expect(deps.installHooks).not.toHaveBeenCalled()
+    manager.disposeAll()
+  })
+
+  it('installs Trae into homes resolved by the WSL guest login environment', async () => {
+    const traeHomePaths = {
+      traeHomeDir: `${home}/.config/trae`,
+      traeCliHomeDir: `${home}/.cache/traecli`
+    }
+    const waitForSentinel = vi.fn(async () =>
+      guestTransport({ detectedAgents: ['trae'], traeHomePaths })
+    )
+    const { manager, deps } = createManager({ waitForSentinel })
+
+    manager.ensureForDistro('Ubuntu')
+    await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
+
+    expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {
+      agents: ['trae'],
+      traeHomePaths
+    })
+    manager.disposeAll()
+  })
+
+  it('uses default Trae homes when an older WSL relay lacks the home resolver', async () => {
+    const waitForSentinel = vi.fn(async () => guestTransport({ detectedAgents: ['trae'] }))
+    const { manager, deps } = createManager({ waitForSentinel })
+
+    manager.ensureForDistro('Ubuntu')
+    await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
+
+    expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {
+      agents: ['trae']
+    })
     manager.disposeAll()
   })
 
