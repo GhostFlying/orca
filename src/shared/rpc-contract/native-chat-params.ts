@@ -36,6 +36,8 @@ export const NativeChatSession = z.object({
   // locate the file directly when the session id no longer names it (recent
   // Claude Code). Optional for back-compat with older clients.
   transcriptPath: z.string().min(1).optional(),
+  terminal: z.string().min(1).optional(),
+  worktree: z.string().min(1).optional(),
   // A pending snapshot is not authoritative transcript history. Only clients
   // that advertise this semantic may receive one; legacy clients treat it as a
   // settled empty read and can overwrite retention / unblock launch drafts.
