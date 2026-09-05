@@ -76,6 +76,8 @@ export type RepoWorktreeRowDeps = {
     repo: Repo,
     projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ) => Promise<RuntimeWorktreeScanResult>
+  /** The last authoritative rows for a timed-out scan, even after their refresh TTL expired. */
+  lastSuccessfulScan: (repo: Repo) => GitWorktreeInfo[] | null
   /** Folder workspaces are stamped from runtime-owned identity helpers, so the caller supplies them. */
   listFolderWorkspaces: (repo: Repo, repoOwnerCount: number) => Worktree[]
 }
@@ -155,7 +157,11 @@ export async function resolveRepoWorktreeRows(
       .catch(() => ({ ok: false, worktrees: [] }) satisfies RuntimeWorktreeScanResult),
     RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
     null
-  )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
+  )) ?? {
+    ok: false,
+    worktrees:
+      deps.lastSuccessfulScan(repo) ?? listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount)
+  }
   const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
   if (scan.ok) {
     pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
