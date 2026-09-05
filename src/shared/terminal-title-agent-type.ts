@@ -208,6 +208,13 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'codex')) {
     return 'Codex'
   }
+  if (
+    titleHasAgentName(title, 'trae') ||
+    titleHasAgentName(title, 'traecli') ||
+    titleHasAgentName(title, 'traex')
+  ) {
+    return 'Trae'
+  }
   if (titleHasAgentName(title, 'openclaude')) {
     return 'OpenClaude'
   }
@@ -272,6 +279,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   'Qoder CLI': 'qoder',
   'Qoder CLI CN': 'qoder-cn',
   'Qoder CLI China': 'qoder-cn',
+  Trae: 'trae',
   'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',
   Grok: 'grok',

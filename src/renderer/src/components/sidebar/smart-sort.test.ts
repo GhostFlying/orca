@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   buildWorktreeComparator,
@@ -8,136 +6,53 @@ import {
   effectiveRecentActivity,
   sortWorktreesSmart
 } from './smart-sort'
-import { buildAttentionByWorktree } from './smart-attention'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStateHistoryEntry,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-
-const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
-const LEAF_ID_1 = '11111111-1111-4111-8111-111111111111'
-const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
-
-function paneKey(tabId: string, leaf: '1' | '2' = '1'): string {
-  return makePaneKey(tabId, leaf === '1' ? LEAF_ID_1 : LEAF_ID_2)
-}
-
-const repoMap = new Map<string, Repo>([
-  [
-    'repo-1',
-    {
-      id: 'repo-1',
-      path: '/tmp/repo-1',
-      displayName: 'repo-1',
-      badgeColor: '#000000',
-      addedAt: 0
-    }
-  ]
-])
-
-function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
-  return {
-    id: overrides.id ?? 'wt-1',
-    repoId: overrides.repoId ?? 'repo-1',
-    path: overrides.path ?? `/tmp/${overrides.id ?? 'wt-1'}`,
-    branch: overrides.branch ?? `refs/heads/${overrides.id ?? 'wt-1'}`,
-    head: overrides.head ?? 'abc123',
-    isBare: overrides.isBare ?? false,
-    isMainWorktree: overrides.isMainWorktree ?? false,
-    linkedIssue: overrides.linkedIssue ?? null,
-    linkedPR: overrides.linkedPR ?? null,
-    linkedLinearIssue: null,
-    isArchived: overrides.isArchived ?? false,
-    comment: overrides.comment ?? '',
-    isUnread: overrides.isUnread ?? false,
-    isPinned: overrides.isPinned ?? false,
-    displayName: overrides.displayName ?? overrides.id ?? 'wt-1',
-    sortOrder: overrides.sortOrder ?? 0,
-    lastActivityAt: overrides.lastActivityAt ?? 0,
-    ...(overrides.createdAt !== undefined ? { createdAt: overrides.createdAt } : {})
-  }
-}
-
-function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
-  return {
-    id: overrides.id ?? 'tab-1',
-    ptyId: overrides.ptyId ?? 'pty-1',
-    worktreeId: overrides.worktreeId ?? 'wt-1',
-    title: overrides.title ?? 'bash',
-    customTitle: overrides.customTitle ?? null,
-    color: overrides.color ?? null,
-    sortOrder: overrides.sortOrder ?? 0,
-    createdAt: overrides.createdAt ?? 0
-  }
-}
-
-function makeEntry(overrides: Partial<AgentStatusEntry> & { paneKey: string }): AgentStatusEntry {
-  return {
-    state: overrides.state ?? 'working',
-    prompt: overrides.prompt ?? '',
-    updatedAt: overrides.updatedAt ?? NOW - 30_000,
-    stateStartedAt: overrides.stateStartedAt ?? overrides.updatedAt ?? NOW - 30_000,
-    agentType: overrides.agentType ?? 'codex',
-    paneKey: overrides.paneKey,
-    worktreeId: overrides.worktreeId,
-    tabId: overrides.tabId,
-    terminalTitle: overrides.terminalTitle,
-    stateHistory: overrides.stateHistory ?? [],
-    interrupted: overrides.interrupted,
-    mainAgent: overrides.mainAgent
-  }
-}
-
-function makeHistory(
-  state: AgentStateHistoryEntry['state'],
-  startedAt: number,
-  interrupted = false
-): AgentStateHistoryEntry {
-  return { state, prompt: '', startedAt, interrupted: interrupted || undefined }
-}
-
-function ptyMapForTabs(tabsByWorktree: Record<string, TerminalTab[]>): Record<string, string[]> {
-  const out: Record<string, string[]> = {}
-  for (const tabs of Object.values(tabsByWorktree)) {
-    for (const tab of tabs) {
-      out[tab.id] = ['pty-1']
-    }
-  }
-  return out
-}
-
-/**
- * Sort helper: builds the attention map and runs the smart comparator. Mirrors
- * what callers do in production (visible-worktrees, WorktreeList).
- */
-function sortSmartAt(
-  now: number,
-  worktrees: Worktree[],
-  tabsByWorktree: Record<string, TerminalTab[]>,
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
-): Worktree[] {
-  const attention = buildAttentionByWorktree(
-    worktrees,
-    tabsByWorktree,
-    agentStatusByPaneKey,
-    {},
-    ptyMapForTabs(tabsByWorktree),
-    now
-  )
-  return [...worktrees].sort(buildWorktreeComparator('smart', repoMap, now, attention))
-}
-
-function sortSmart(
-  worktrees: Worktree[],
-  tabsByWorktree: Record<string, TerminalTab[]>,
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
-): Worktree[] {
-  return sortSmartAt(NOW, worktrees, tabsByWorktree, agentStatusByPaneKey)
-}
+import {
+  makeEntry,
+  makeHistory,
+  makeTab,
+  makeWorktree,
+  NOW,
+  paneKey,
+  ptyMapForTabs,
+  repoMap,
+  sortSmart,
+  sortSmartAt
+} from './smart-sort-test-fixtures'
 
 describe('smart sort — class invariants', () => {
+  it('promotes a waiting Trae worktree above a completed worktree', () => {
+    const trae = makeWorktree({ id: 'trae', displayName: 'Trae' })
+    const done = makeWorktree({ id: 'done', displayName: 'Done' })
+    const tabs = {
+      [trae.id]: [makeTab({ id: 'tab-trae', worktreeId: trae.id, launchAgent: 'trae' })],
+      [done.id]: [makeTab({ id: 'tab-done', worktreeId: done.id })]
+    }
+    const entries = {
+      [paneKey('tab-trae', '1')]: makeEntry({
+        paneKey: paneKey('tab-trae', '1'),
+        agentType: 'trae',
+        state: 'waiting',
+        stateStartedAt: NOW - 60_000,
+        updatedAt: NOW - 1_000
+      }),
+      [paneKey('tab-done', '1')]: makeEntry({
+        paneKey: paneKey('tab-done', '1'),
+        state: 'done',
+        stateStartedAt: NOW - 10_000,
+        updatedAt: NOW - 500
+      })
+    }
+
+    expect(sortSmart([done, trae], tabs, entries).map((worktree) => worktree.id)).toEqual([
+      'trae',
+      'done'
+    ])
+  })
+
   it('ranks blocked above done regardless of which stateStartedAt is newer', () => {
     const blocked = makeWorktree({ id: 'blocked', displayName: 'Blocked' })
     const done = makeWorktree({ id: 'done', displayName: 'Done' })
