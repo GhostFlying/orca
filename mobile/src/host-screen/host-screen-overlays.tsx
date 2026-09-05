@@ -214,6 +214,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         routeVisible={showNewWorktree}
         client={client}
         hostId={hostId}
+        hostLabelById={state.hostLabelById}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={state.worktrees}
         // The seam, not react-native's `Linking`: this screen is in the tasks page closure, and
