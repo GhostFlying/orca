@@ -82,8 +82,6 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   trae: {
     // Use TRAE CN’s unique traecli alias; unrelated bytedance/trae-agent also installs trae-cli.
     detectCmd: 'traecli',
-    // TraeX runs as traex while retaining the traecli public command.
-    detectCmdAliases: ['traex'],
     promptInjectionMode: 'argv',
     // Cobra’s -- stops subcommands and flags from consuming prompt text such as help/config/-….
     argvPromptSeparator: '--'
@@ -344,6 +342,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEnt
 
 export function isTuiAgent(value: unknown): value is TuiAgent {
   return typeof value === 'string' && Object.hasOwn(TUI_AGENT_CONFIG, value)
+}
+
+export function toTuiAgent(value: unknown): TuiAgent | null {
+  return isTuiAgent(value) ? value : null
 }
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {

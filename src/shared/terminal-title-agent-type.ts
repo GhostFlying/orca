@@ -22,6 +22,7 @@ import {
 } from './pi-compatible-synthetic-title'
 import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
+import type { ObservedAgent } from './observed-agent'
 import type { TerminalAgent } from './terminal-agent'
 
 export const CLAUDE_IDLE = '\u2733' // ✳ (eight-spoked asterisk — Claude Code idle prefix)
@@ -173,11 +174,10 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'codex')) {
     return 'Codex'
   }
-  if (
-    titleHasAgentName(title, 'trae') ||
-    titleHasAgentName(title, 'traecli') ||
-    titleHasAgentName(title, 'traex')
-  ) {
+  if (titleHasAgentName(title, 'traex')) {
+    return 'TraeX'
+  }
+  if (titleHasAgentName(title, 'trae') || titleHasAgentName(title, 'traecli')) {
     return 'Trae'
   }
   if (titleHasAgentName(title, 'openclaude')) {
@@ -265,16 +265,26 @@ export { isClaudeIdentityFrameTitle } from './agent-title-core'
 export function resolveTerminalTitleAgentType(title: string): TerminalAgent | null {
   const label = getAgentLabel(title)
   const parsed = label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
-  return resolveCanonicalPaneAgentIdentity({
+  const resolved = resolveCanonicalPaneAgentIdentity({
     title,
     // Preserve this public parser’s legacy fallback; pane-identity consumers enforce the canonical resolver’s fence on raw titles.
     uncoveredFallback: { agent: parsed, titleOnly: false }
   }).agent
+  return resolved === 'traex' ? null : resolved
 }
+
+function computeObservedTerminalTitleAgentType(title: string): ObservedAgent | null {
+  return collectExplicitAgentTitleEvidence(title).agent
+}
+
+/** Pure in `title` — includes identities Orca observes but cannot launch. */
+export const resolveObservedTerminalTitleAgentType: (title: string) => ObservedAgent | null =
+  memoizeTitleClassification(computeObservedTerminalTitleAgentType)
 
 /** Activity and task mentions cannot establish identity for display or input routing. */
 function computeExplicitTerminalTitleAgentType(title: string): TerminalAgent | null {
-  return collectExplicitAgentTitleEvidence(title).agent
+  const agent = resolveObservedTerminalTitleAgentType(title)
+  return agent === 'traex' ? null : agent
 }
 
 /** Pure in `title` — memoized so repeated selector reads skip the canonical/title parse. */

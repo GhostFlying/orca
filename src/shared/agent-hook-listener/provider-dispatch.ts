@@ -91,6 +91,7 @@ export function normalizeProviderEvent(input: {
       break
     case 'codex':
     case 'trae':
+    case 'traex':
       payload = normalizeCodexEvent(state, eventName, promptText, paneKey, hookPayload, source)
       break
     case 'gemini':

@@ -17,7 +17,7 @@ export function readPaneProviderSession(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): AgentProviderSessionMetadata | null {
-  if (source === 'codex' && readString(hookPayload, 'agent_id')) {
+  if ((source === 'codex' || source === 'traex') && readString(hookPayload, 'agent_id')) {
     return null
   }
   if (source === 'grok' && isGrokSubagentEvent(hookPayload)) {

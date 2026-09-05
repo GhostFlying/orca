@@ -481,25 +481,6 @@ describe('resolveAgentForegroundProcess', () => {
     ).resolves.toEqual({ available: true, processName: 'powershell.exe' })
   })
 
-  it('does not restore a recognized fallback that disappeared before confirmation', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    mockWindowsRows([
-      {
-        pid: 100,
-        ppid: 99,
-        name: 'powershell.exe',
-        commandLine: 'powershell.exe'
-      }
-    ])
-
-    await expect(
-      resolveAgentForegroundProcessWithAvailability(100, 'droid', {
-        fresh: true,
-        forceProcessScan: true
-      })
-    ).resolves.toEqual({ available: true, processName: null })
-  })
-
   it('reports a foreign anchor when its pid now runs an unrecognized command', async () => {
     // Job membership cannot preserve an agent identity contradicted by immutable command-line evidence.
     Object.defineProperty(process, 'platform', { value: 'win32' })

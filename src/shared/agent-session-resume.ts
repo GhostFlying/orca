@@ -222,7 +222,9 @@ export function extractAgentProviderSession(
     case 'qoder':
     case 'codebuddy':
     case 'claude':
-    case 'codex': {
+    case 'codex':
+    case 'muse':
+    case 'traex': {
       const id = readSessionId(payload, ['session_id'])
       return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
     }
@@ -233,10 +235,6 @@ export function extractAgentProviderSession(
     case 'kimi': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
-    }
-    case 'muse': {
-      const id = readSessionId(payload, ['session_id'])
-      return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
     }
     // ZCode deletes its per-invocation transcript_path temp file when the hook returns; only its ID is durable.
     case 'zcode': {

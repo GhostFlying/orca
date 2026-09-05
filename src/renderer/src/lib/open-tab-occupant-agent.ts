@@ -50,9 +50,8 @@ export function resolveOpenTabOccupantAgent({
     resolveSiblingCompletedTabAgent(agentStatusByPaneKey, layout, tabId) ??
     resolveSiblingRetainedTabAgent(retainedAgentsByPaneKey, layout, tabId)
   const focusedPaneKey = focusedPaneKeyFor(tabId, layout)
-  const processAgent = focusedPaneKey
-    ? (paneForegroundAgentByPaneKey?.[focusedPaneKey]?.agent ?? null)
-    : null
+  const process = focusedPaneKey ? paneForegroundAgentByPaneKey?.[focusedPaneKey] : undefined
+  const processAgent = process?.agent === 'traex' ? null : (process?.agent ?? null)
   const sleepingSessionAgent = focusedPaneKey
     ? (sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null)
     : null

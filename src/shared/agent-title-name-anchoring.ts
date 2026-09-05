@@ -6,17 +6,17 @@ import {
   titleHasAgentName
 } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
-import type { TerminalAgent } from './terminal-agent'
+import type { ObservedAgent } from './observed-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
 /** Names matched as whole tokens, paired with the agent each identifies. */
-const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [
+const NAME_TOKENS: readonly (readonly [string, ObservedAgent])[] = [
   ['claude', 'claude'],
   ['openclaude', 'openclaude'],
   ['codex', 'codex'],
   ['trae', 'trae'],
   ['traecli', 'trae'],
-  ['traex', 'trae'],
+  ['traex', 'traex'],
   ['copilot', 'copilot'],
   ['cursor', 'cursor'],
   ['gemini', 'gemini'],
@@ -30,7 +30,7 @@ const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [
 ]
 
 /** Agents whose name is matched by a dedicated pattern rather than a plain token. */
-const PATTERN_NAMES: readonly (readonly [RegExp, TerminalAgent])[] = [
+const PATTERN_NAMES: readonly (readonly [RegExp, ObservedAgent])[] = [
   [AGY_AGENT_NAME_RE, 'antigravity'],
   [DROID_AGENT_NAME_RE, 'droid'],
   [HERMES_AGENT_NAME_RE, 'hermes']
@@ -43,7 +43,7 @@ const EMITTED_DISPLAY_LABEL_AGENTS = [
   'prime-agent',
   'command-code',
   'copilot'
-] as const satisfies readonly TerminalAgent[]
+] as const satisfies readonly ObservedAgent[]
 
 const DISPLAY_LABELS = [
   ...EMITTED_DISPLAY_LABEL_AGENTS.map(
@@ -52,18 +52,18 @@ const DISPLAY_LABELS = [
   ['claude code', 'claude'],
   ['gemini cli', 'gemini'],
   ['agent teams', 'claude-agent-teams']
-] satisfies readonly (readonly [string, TerminalAgent])[]
+] satisfies readonly (readonly [string, ObservedAgent])[]
 
 const WINDOWS_LAUNCHER_SUFFIX_RE = /\.(?:exe|cmd|bat|ps1)$/i
-const RESERVED_OWNER_IDS: ReadonlyMap<string, TerminalAgent> = new Map([
+const RESERVED_OWNER_IDS: ReadonlyMap<string, ObservedAgent> = new Map([
   ['pi', 'pi'],
   ['omp', 'omp'],
   ['claude-agent-teams', 'claude-agent-teams'],
   ['qwen-code', 'qwen-code']
 ])
 
-export function namesIn(text: string): TerminalAgent[] {
-  const found = new Set<TerminalAgent>()
+export function namesIn(text: string): ObservedAgent[] {
+  const found = new Set<ObservedAgent>()
   for (const [token, agent] of NAME_TOKENS) {
     if (titleHasAgentName(text, token)) {
       found.add(agent)
@@ -84,7 +84,7 @@ function stripBareNameDecoration(text: string): string {
     .replace(/[^\p{L}\p{N}]+$/u, '')
 }
 
-function agentForBareName(text: string): TerminalAgent | null {
+function agentForBareName(text: string): ObservedAgent | null {
   const trimmed = text.trim()
   if (!trimmed || /[\\/]/.test(trimmed)) {
     return null
@@ -102,7 +102,7 @@ function agentForBareName(text: string): TerminalAgent | null {
   return names.length === 1 && /^[\p{L}\p{N}]+$/u.test(bareToken) ? names[0] : null
 }
 
-export function agentForWholeTitle(text: string): TerminalAgent | null {
+export function agentForWholeTitle(text: string): ObservedAgent | null {
   const trimmed = text.trim()
   if (!trimmed || /[\\/]/.test(trimmed)) {
     return null
@@ -119,7 +119,7 @@ export function agentForWholeTitle(text: string): TerminalAgent | null {
   return agentForBareName(stripped)
 }
 
-export function agentForOwnerSuffix(text: string): TerminalAgent | null {
+export function agentForOwnerSuffix(text: string): ObservedAgent | null {
   const normalized = text.trim().toLowerCase()
   return RESERVED_OWNER_IDS.get(normalized) ?? agentForBareName(text)
 }
@@ -129,7 +129,7 @@ const NATIVE_STATUS_RE =
   /(?:\s+(?:(?:ready|idle|done|working|thinking|running|waiting|permission)|\[(?:ready|idle|done|working|thinking|running|waiting|permission)\])|\s+-\s+action required)$/i
 
 /** Only payload delimiters consume later pipes; bare names/statuses still require the full frame. */
-export function agentForNamedTitlePrefix(text: string): TerminalAgent | null {
+export function agentForNamedTitlePrefix(text: string): ObservedAgent | null {
   const undecorated = stripLeadingAgentTitleDecorationOrEmpty(text).trim()
   const match = NATIVE_PAYLOAD_RE.exec(undecorated)
   return match ? agentForNativeName(undecorated.slice(0, match.index)) : null
@@ -153,7 +153,7 @@ export function isNeutralAgentTitleWrapper(header: string): boolean {
 }
 
 /** Native frames identify an agent by a complete name, a named status, or a name before task text. */
-export function agentForNativeFrame(text: string): TerminalAgent | null {
+export function agentForNativeFrame(text: string): ObservedAgent | null {
   if (isCursorAgentTitle(text)) {
     return 'cursor'
   }
@@ -167,7 +167,7 @@ export function agentForNativeFrame(text: string): TerminalAgent | null {
   return agentForNativeName(frameName)
 }
 
-function agentForNativeName(text: string): TerminalAgent | null {
+function agentForNativeName(text: string): ObservedAgent | null {
   const normalized = text.replace(WINDOWS_LAUNCHER_SUFFIX_RE, '').toLowerCase()
   if (normalized === 'jcode' || normalized === 'opencode2') {
     return normalized
@@ -183,7 +183,7 @@ function agentForNativeName(text: string): TerminalAgent | null {
 }
 
 /** Shell auto-titles keep arguments as content owned by the command-position name. */
-export function agentForShellCommand(text: string): TerminalAgent | null {
+export function agentForShellCommand(text: string): ObservedAgent | null {
   if (text.trim() !== stripLeadingAgentTitleDecorationOrEmpty(text) || /[|>]/.test(text)) {
     return null
   }
@@ -193,9 +193,9 @@ export function agentForShellCommand(text: string): TerminalAgent | null {
 
 export function namesConsumedByAnchoredLabels(
   segments: readonly string[],
-  anchoredNames: ReadonlySet<TerminalAgent>
-): Set<TerminalAgent> {
-  const consumed = new Set<TerminalAgent>()
+  anchoredNames: ReadonlySet<ObservedAgent>
+): Set<ObservedAgent> {
+  const consumed = new Set<ObservedAgent>()
   for (const segment of segments) {
     const normalized = stripBareNameDecoration(segment).toLowerCase()
     const label = DISPLAY_LABELS.find(([text]) => text === normalized)
