@@ -34,6 +34,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       return eventName === 'UserPromptSubmit'
     case 'codex':
     case 'trae':
+    case 'traex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'gemini':
       return eventName === 'BeforeAgent'
@@ -135,6 +136,7 @@ export function extractToolFields(
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
     case 'trae':
+    case 'traex':
       return extractCodexToolFields(eventName, hookPayload)
     case 'gemini':
       return extractGeminiToolFields(eventName, hookPayload)

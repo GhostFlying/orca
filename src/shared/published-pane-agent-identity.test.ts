@@ -30,6 +30,12 @@ describe('resolvePublishedPaneAgentIdentity', () => {
     expect(resolve({ launchAgent: 'claude', foregroundAgent: 'codex' })).toBe('codex')
   })
 
+  it('keeps observed-only TraeX distinct without making it launchable', () => {
+    expect(resolve({ hookAgent: 'traex', hookIsLive: true })).toBe('traex')
+    expect(resolve({ foregroundAgent: 'traex' })).toBe('traex')
+    expect(resolve({ title: 'Session ready - traex' })).toBe('traex')
+  })
+
   describe('title is the last resort, and the parser is what makes that safe', () => {
     // The misdelivery this PR exists to stop, re-checked with title ALLOWED at the bottom. The old
     // code matched `buildAgentNameRe('claude').test(title)`; the parser is categorically stricter

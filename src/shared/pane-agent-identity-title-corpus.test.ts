@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { createHash, randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { collectAgentTitleEvidence } from './agent-title-evidence'
+import type { ObservedAgent } from './observed-agent'
 import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
 import type { TuiAgent } from './tui-agent'
 
@@ -64,7 +65,7 @@ function loadRecordedTitleCorpus(): { checkpointCount: number; titles: string[] 
 }
 
 /** What the canonical adapter answers when a title is all a pane has (the uncovered lane). */
-function canonicalTitleOnlyAgent(title: string): TuiAgent | null {
+function canonicalTitleOnlyAgent(title: string): ObservedAgent | null {
   return resolveCanonicalPaneAgentIdentity({ title }).agent
 }
 
