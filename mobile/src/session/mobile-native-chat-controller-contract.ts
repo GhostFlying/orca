@@ -1,4 +1,9 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../src/shared/native-chat/input/native-chat-picker-items'
+import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
+import type { MobileNativeChatTab } from './native-chat/mobile-native-chat-eligibility'
+import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
+import type { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
@@ -101,4 +106,26 @@ export type MobileNativeChatController = {
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
   nativeChatSessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
   nativeChatAcceptsImages: boolean
+}
+
+export type MobileNativeChatControllerArgs = {
+  client: RpcClient | null
+  hostId: string
+  worktreeId: string
+  activeSessionTab: MobileNativeChatTab | null
+  activeSessionTabId: string | null
+  activeHandleRef: MutableRefObject<string | null>
+  deviceTokenRef: MutableRefObject<string | null>
+  nativeChatTranscriptIsLocalReadable: boolean
+  traexChatSupported: boolean
+  nativeChatInputLeaseReady: boolean
+  /** Live socket state; the lease collapses on disconnect but one render later. */
+  connState: ConnectionState
+  /** Host capability fact from the shared runtime status probe. */
+  agentSessionHostSupport?: StructuredAgentSessionHostSupport | null
+  /** Forwarded to the session lane, a refusal's cause with it. */
+  onSendError: Parameters<typeof useMobileNativeChatSessionLane>[0]['onSendError']
+  /** Retires a held failure banner. Any accepted chat write clears it — a delivered
+   *  answer or permission reply must not sit under a stale "not sent". */
+  onSendResolved: () => void
 }

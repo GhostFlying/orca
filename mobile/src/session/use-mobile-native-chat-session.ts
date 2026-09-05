@@ -70,14 +70,26 @@ export function useMobileNativeChatSession(args: {
   agent: string | null
   sessionId: string | null
   transcriptPath: string | null
+  terminal?: string | null
+  worktree?: string | null
 }): MobileNativeChatSession {
-  const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
+  const {
+    client,
+    sourceIdentity,
+    agent,
+    sessionId,
+    transcriptPath,
+    terminal = null,
+    worktree = null
+  } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
   const identity = encodeNativeChatTranscriptIdentity([
     sourceIdentity,
     agent,
     sessionId,
-    transcriptPath
+    transcriptPath,
+    terminal,
+    worktree
   ])
   // Derive pre-read status from props now; a passive effect would lag one commit.
   const initialStatus: MobileNativeChatStatus =
@@ -151,6 +163,8 @@ export function useMobileNativeChatSession(args: {
         // Use a distinct token per screen so another viewer cannot evict this host feed.
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid()),
         capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 },
+        ...(terminal ? { terminal } : {}),
+        ...(worktree ? { worktree } : {}),
         ...(transcriptPath ? { transcriptPath } : {})
       },
       (raw) => {
@@ -215,7 +229,7 @@ export function useMobileNativeChatSession(args: {
       supersede()
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList, supersede])
+  }, [client, agent, sessionId, transcriptPath, terminal, worktree, identity, setList, supersede])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || !hasMore) {
@@ -239,7 +253,9 @@ export function useMobileNativeChatSession(args: {
           limit: beforeOffset === null ? nextLimit : pageLimit,
           capabilities: { transcriptSourceOrder: 1 },
           ...(beforeOffset === null ? {} : { beforeOffset }),
-          ...(transcriptPath ? { transcriptPath } : {})
+          ...(transcriptPath ? { transcriptPath } : {}),
+          ...(terminal ? { terminal } : {}),
+          ...(worktree ? { worktree } : {})
         },
         { timeoutMs, budgetSpansConnect: true }
       )
@@ -281,7 +297,17 @@ export function useMobileNativeChatSession(args: {
       setHasMore(more)
       return more ? 'drew' : 'end'
     })
-  }, [client, agent, sessionId, transcriptPath, hasMore, setList, loadOlderPages])
+  }, [
+    client,
+    agent,
+    sessionId,
+    transcriptPath,
+    terminal,
+    worktree,
+    hasMore,
+    setList,
+    loadOlderPages
+  ])
 
   // Retain history through any unsettled read so disconnect/error cannot replace the conversation with a card.
   const visibleMessages = transcriptRetentionRef.current.visible({
