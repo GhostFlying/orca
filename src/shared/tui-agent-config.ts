@@ -116,6 +116,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: the unrelated open-source bytedance/trae-agent also installs a `trae-cli`
     // binary, so detect TRAE CN's CLI on `traecli`, an alias only TRAE CN ships.
     detectCmd: 'traecli',
+    // Why: current TraeX releases expose the runtime binary as traex while
+    // keeping traecli as the public command/symlink.
+    detectCmdAliases: ['traex'],
     // Why: `traecli [prompt]` takes the task as a positional argv, same as Claude/Codex.
     promptInjectionMode: 'argv',
     // Why: separator so prompts starting with `help`/`config`/`-…` aren't parsed as a

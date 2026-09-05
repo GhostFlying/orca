@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { homedir } from 'node:os'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 
 const { execFileAsyncMock, runProcessMock } = vi.hoisted(() => ({
@@ -273,6 +274,40 @@ describe('PreflightHandler', () => {
       expect.objectContaining({
         program: '/home/dev/.local/bin/claude',
         args: ['--version']
+      })
+    )
+  })
+
+  it('resolves Trae homes through the remote login environment', async () => {
+    const home = homedir()
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: `__ORCA_TRAE_HOME__${home}/.config/trae\n__ORCA_TRAECLI_HOME__${home}/.cache/traecli\n`,
+      stderr: '',
+      timedOut: false
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+    new PreflightHandler(dispatcher as never)
+
+    await expect(requestHandlers.get('preflight.resolveTraeHomes')!({})).resolves.toEqual({
+      traeHomeDir: `${home}/.config/trae`,
+      traeCliHomeDir: `${home}/.cache/traecli`
+    })
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: expect.any(String),
+        args: expect.any(Array),
+        env: expect.any(Object),
+        timeoutMs: 5000,
+        maxOutputBytes: expect.any(Number)
       })
     )
   })

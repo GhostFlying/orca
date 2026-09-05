@@ -8,7 +8,8 @@ import { isPwshAvailableAsync } from '../main/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
-import { runProcess } from '../shared/child-process/run-process'
+import { probeCommandVersion } from './preflight-command-version'
+import { resolveRelayTraeHomes } from './preflight-trae-home-resolver'
 
 const execFileAsync = promisify(execFile)
 
@@ -51,6 +52,7 @@ export class PreflightHandler {
     this.dispatcher.onRequest('preflight.detectWindowsTerminalCapabilities', () =>
       this.detectWindowsTerminalCapabilities()
     )
+    this.dispatcher.onRequest('preflight.resolveTraeHomes', () => this.resolveTraeHomes())
   }
 
   // Why: the client sends the command list rather than importing TUI_AGENT_CONFIG
@@ -134,38 +136,16 @@ export class PreflightHandler {
     }
   }
 
+  private async resolveTraeHomes(): Promise<{ traeHomeDir: string; traeCliHomeDir: string }> {
+    const shell =
+      pickTrustedPosixShell(process.env, resolveAccountLoginShell(process.platform)) ?? '/bin/sh'
+    return resolveRelayTraeHomes(shell, getShellCommandMode(shell))
+  }
+
   // Why: SSH exec channels give the relay a minimal environment without shell
   // startup files sourced. Ask the user's configured shell so agent dirs added
   // by zsh/bash/fish startup hooks match the remote terminal experience.
   // Windows has no POSIX shell on native OpenSSH hosts, so use where.exe there.
-}
-
-async function probeCommandVersion(executablePath: string): Promise<string | null> {
-  try {
-    const env = buildRelayCommandEnv(process.env, process.platform)
-    const pathKey = process.platform === 'win32' && env.Path !== undefined ? 'Path' : 'PATH'
-    const executableDir = path.dirname(executablePath)
-    const inheritedPath = env[pathKey]
-    const result = await runProcess({
-      program: executablePath,
-      args: ['--version'],
-      env: {
-        ...env,
-        [pathKey]: inheritedPath
-          ? `${executableDir}${path.delimiter}${inheritedPath}`
-          : executableDir
-      },
-      timeoutMs: 5_000,
-      maxOutputBytes: 4_096
-    })
-    if (result.code !== 0) {
-      return null
-    }
-    const output = `${result.stdout}\n${result.stderr}`.trim()
-    return output.length > 0 ? output : null
-  } catch {
-    return null
-  }
 }
 
 function isDetectionUnsupportedInRuntime(
