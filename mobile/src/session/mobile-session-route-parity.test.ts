@@ -62,12 +62,12 @@ const HOST_COMPONENT_NAMES = new Set([
   'View'
 ])
 
-const HEAD_MAIN_HOOK_SHA256 = '10071240ef9edafc2b9c8bed73be83dceaf7828e3b29f17dab55da020a7697a6'
-const HEAD_HOOK_BINDING_SHA256 = '1dadb8c3dc0573ea20659ce7251629669e618dd0effaeac3a4536b29c2e865a1'
+const HEAD_MAIN_HOOK_SHA256 = '90aa8cdaa5f928f8ec2fe386187e5cd02cbee434abd0d6df611505074f11aa4d'
+const HEAD_HOOK_BINDING_SHA256 = 'be8c5a26289570f49b91668e62e52b3969ee9962bc9c0ba8e8e16d5223aaf423'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '2a9e4825df007f6ef53b81aa5004991d6318eee7507b44d625c07e630be432eb'
 const HEAD_CALLBACK_BODY_SHA256 = '22103ba85a86e3a3fcb80a7509c7a455d79863010cde3af02db6565b55e3ebe9'
-const HEAD_EFFECT_SHA256 = 'd9ebfaabc1e79773cdada7ab370b20459ed972f1f8edce1652199f4d0391cd13'
+const HEAD_EFFECT_SHA256 = '737b3cca90d32e03daa89599c63d51cc5dbe9cfed3d6f56a69ff443580e675c7'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 const HEAD_NESTED_FUNCTION_SHA256 =
   '536c72b233c813bb0cea164b090bdce5406ceb965bbc5b83c1f89b89b46f3821'
@@ -81,13 +81,13 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 const HEAD_RUNTIME_STRING_SHA256 =
   '31951b0b83be01ebfa659c4b94df9ad7eaff6404df5338fbade89eb7473a3cb4'
 const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
-const HEAD_LEAF_JSX_SHA256 = '21dba981875e173f692590bf910d60964660c5f4cbb79f3a377c7e54f6a1f016'
+const HEAD_LEAF_JSX_SHA256 = 'f1e0730222588bec3c90f6566dbe5f66ab6b2bf85736552c4a89d122b97c562c'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
 const HEAD_IDENTITY_FIELD_SHA256 =
   '91146853930a34dd1f3d80e5c97fbacd7cf19fb93dd26fe8fc6f29169622f9d6'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
-const HEAD_CAPABILITY_SHA256 = 'ca219f7909a091717110b823d5b94a20770ad3ae51894e0fa765e8628309392d'
+const HEAD_CAPABILITY_SHA256 = '2820ba27b6c7c509a19915473a32cec6eb04c64f111d22b612401a21408323b6'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 type HookFacts = {
@@ -472,7 +472,7 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(266)
+    expect(main.hooks).toHaveLength(267)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(77)
@@ -511,7 +511,7 @@ describe('mobile session route extraction parity', () => {
     expect(hash(compatibility.identityFields)).toBe(HEAD_IDENTITY_FIELD_SHA256)
     expect(compatibility.navigation).toHaveLength(6)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)
-    expect(compatibility.capabilities).toHaveLength(5)
+    expect(compatibility.capabilities).toHaveLength(6)
     expect(hash(compatibility.capabilities)).toBe(HEAD_CAPABILITY_SHA256)
   })
 
