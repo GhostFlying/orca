@@ -21,6 +21,7 @@ import {
 } from '../copilot/copilot-managed-hook-definitions'
 import { getDevinManagedCommand, getDevinRemoteManagedCommand } from '../devin/hook-settings'
 import { getGrokManagedCommand } from '../grok/grok-hook-script'
+import { getTraeManagedCommand } from '../trae/trae-hook-definition'
 import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -84,6 +85,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getCodexCommand(path), wrapReadablePosixHookCommand(path)],
       remote: (path) => [wrapPosixHookCommand(path), wrapReadablePosixHookCommand(path)]
+    }
+  ],
+  [
+    'trae',
+    {
+      local: (path) => [getTraeManagedCommand(path)],
+      remote: (path) => [wrapPosixHookCommand(path)]
     }
   ],
   ['gemini', standardCommands],
