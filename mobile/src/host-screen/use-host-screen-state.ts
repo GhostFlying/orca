@@ -61,6 +61,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     alwaysShowDefaultBranch: true
   })
   const [groupMode, setGroupMode] = useState<MobileGroupMode>('repo')
+  const [showPinnedWorktreesInGroups, setShowPinnedWorktreesInGroups] = useState(false)
   const [workspaceStatuses, setWorkspaceStatuses] = useState<readonly WorkspaceStatusDefinition[]>(
     DEFAULT_MOBILE_WORKSPACE_STATUSES
   )
@@ -150,6 +151,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setSearch,
     setShowFilterModal,
     setShowGroupPicker,
+    setShowPinnedWorktreesInGroups,
     setShowSearch,
     setShowSortPicker,
     setSleptIds,
@@ -159,6 +161,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setWorktreesLoaded,
     showFilterModal,
     showGroupPicker,
+    showPinnedWorktreesInGroups,
     showSearch,
     showSortPicker,
     sleptIds,
