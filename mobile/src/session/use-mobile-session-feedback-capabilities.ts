@@ -32,6 +32,7 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     null
   )
   const [quickCommandsSupported, setQuickCommandsSupported] = useState<boolean | null>(null)
+  const [traexChatSupported, setTraexChatSupported] = useState<boolean | null>(null)
   // Why: stable callbacks (handleFileTap) read the live value via this ref, since
   // the capability probe resolves after the callbacks are created.
   const browserScreencastSupportedRef = useRef(browserScreencastSupported)
@@ -115,6 +116,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     setAgentSessionHistorySupported,
     quickCommandsSupported,
     setQuickCommandsSupported,
+    traexChatSupported,
+    setTraexChatSupported,
     browserScreencastSupportedRef,
     reconciledCreateWarningState,
     createWarning,

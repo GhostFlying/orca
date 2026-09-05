@@ -15,6 +15,8 @@ export function useMobileNativeChatSessionLane({
   sessionId,
   sourceIdentity,
   callerIdentity,
+  terminal,
+  worktree,
   enabled,
   connState,
   onSendError
@@ -29,6 +31,8 @@ export function useMobileNativeChatSessionLane({
   sessionId: string | null
   sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
   callerIdentity: string
+  terminal: string | null
+  worktree: string | null
   enabled: boolean
   connState: ConnectionState
   onSendError: (message: string) => void
@@ -41,7 +45,9 @@ export function useMobileNativeChatSessionLane({
     sourceIdentity,
     agent: structured ? null : resolvedAgent,
     sessionId: structured ? null : sessionId,
-    transcriptPath: structured ? null : transcriptPath
+    transcriptPath: structured ? null : transcriptPath,
+    terminal: structured ? null : terminal,
+    worktree: structured ? null : worktree
   })
   const structuredSession = useMobileStructuredAgentSession({
     client,
