@@ -23,6 +23,7 @@ vi.mock('../git/worktree', async (importOriginal) => ({
 
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { OrcaRuntimeService } from './orca-runtime'
+import { WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS } from './orca-runtime-postlude'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
@@ -150,6 +151,49 @@ describe('worktree.ps on a degraded repo scan', () => {
       const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
 
       expect(result.worktrees.map((worktree) => worktree.worktreeId)).toContain(WORKTREE_ID)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the last successful branch and name when a later scan stalls', async () => {
+    vi.useFakeTimers()
+    try {
+      const listWorktrees = listWorktreesStrictMock
+        .mockResolvedValueOnce([
+          {
+            path: REPO_PATH,
+            head: 'abc',
+            branch: 'main',
+            isBare: false,
+            isMainWorktree: true
+          },
+          {
+            path: WORKTREE_PATH,
+            head: 'def',
+            branch: 'feature',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ])
+        .mockImplementation(neverSettles)
+      const runtimeStore = makeStore({
+        metaById: {
+          [WORKTREE_ID]: makeMeta({ displayName: '' }),
+          [MAIN_WORKTREE_ID]: makeMeta({ displayName: '', instanceId: 'parent-instance' })
+        }
+      })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This focused fixture provides every store method exercised by worktree scanning.
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+      await runtime.getWorktreePs(10_000)
+      await vi.advanceTimersByTimeAsync(WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS + 1)
+      const degraded = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
+
+      const worktree = degraded.worktrees.find((row) => row.worktreeId === WORKTREE_ID)
+      expect(worktree?.branch).toBe('feature')
+      expect(worktree?.displayName).toBe('feature')
+      expect(listWorktrees).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
     }
