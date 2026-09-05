@@ -16,7 +16,10 @@ function buildActions(overrides: Partial<SheetArgs> = {}) {
     target: { handle: 'terminal-1' },
     tabs: [],
     isTabChatView: () => false,
-    nativeChatTranscriptIsLocalReadable: true,
+    nativeChatCapabilities: {
+      nativeChatTranscriptIsLocalReadable: true,
+      traexChatSupported: true
+    },
     onDismiss: vi.fn(),
     onToggleChat: vi.fn(),
     isPhoneMode: () => false,

@@ -61,8 +61,7 @@ export function useMobileSessionNativeChatDictation(
     canSend,
     canCompose,
     liveInputEnabled,
-    showToast,
-    resetLiveInputFocus
+    showToast
   } = scope
   const nativeChatScopeKey = mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
   const nativeChatSendError = useMobileNativeChatSendError({
@@ -90,6 +89,7 @@ export function useMobileSessionNativeChatDictation(
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
+    traexChatSupported: scope.traexChatSupported === true,
     nativeChatInputLeaseReady,
     connState,
     agentSessionHostSupport,
@@ -107,7 +107,7 @@ export function useMobileSessionNativeChatDictation(
   )
   const routeKey = nativeChatScopeKey ?? `${hostId}\0${worktreeId}`
   const getSendCompletionGeneration = useMobileSendCompletionGeneration({
-    onBlur: resetLiveInputFocus,
+    onBlur: scope.resetLiveInputFocus,
     surfaceKey: JSON.stringify([routeKey, activeHandle, showNativeChat, liveInputEnabled])
   })
 
