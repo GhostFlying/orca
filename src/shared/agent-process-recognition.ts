@@ -2,10 +2,18 @@ import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
+import type { ObservedAgent } from './observed-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
+import { tokenizeCommandLine } from './command-line-tokenizer'
 import { getFirstCommandToken } from './command-token-scanner'
 
-export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
+export type RecognizedAgentProcess = { agent: ObservedAgent; processName: string }
+
+export function requiresAgentCommandLineVerification(
+  recognition: RecognizedAgentProcess | null
+): boolean {
+  return recognition?.agent === 'traex'
+}
 
 const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const INTERPRETER_SCRIPT_EXTENSION_RE = /\.(?:js|mjs|cjs)$/i
@@ -55,8 +63,8 @@ const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
 }
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
-const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
-const AGENT_TYPE_IDS = new Set<TuiAgent>()
+const PROCESS_TO_AGENT = new Map<string, ObservedAgent>()
+const AGENT_TYPE_IDS = new Set<ObservedAgent>()
 
 for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   TuiAgent,
@@ -80,7 +88,12 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   }
 }
 
-function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
+// TraeX shares Trae's implementation and config, but the invocation name is a
+// distinct product identity and is intentionally not launchable by Orca.
+PROCESS_TO_AGENT.set('traex', 'traex')
+AGENT_TYPE_IDS.add('traex')
+
+function agentForNormalizedProcess(normalized: string): ObservedAgent | undefined {
   const exact = PROCESS_TO_AGENT.get(normalized)
   if (exact) {
     return exact
@@ -99,48 +112,6 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
 function recognizedAgentForProcess(normalized: string): RecognizedAgentProcess | null {
   const agent = agentForNormalizedProcess(normalized)
   return agent ? { agent, processName: normalized } : null
-}
-
-function tokenizeCommandLine(commandLine: string): string[] {
-  const tokens: string[] = []
-  let current = ''
-  let quote: '"' | "'" | null = null
-  let escaped = false
-  for (let index = 0; index < commandLine.length; index += 1) {
-    const char = commandLine[index]
-    if (escaped) {
-      current += char
-      escaped = false
-      continue
-    }
-    if (char === '\\' && quote !== "'") {
-      const next = commandLine[index + 1]
-      if (next && (/\s/.test(next) || next === '"' || next === "'" || next === '\\')) {
-        escaped = true
-        continue
-      }
-    }
-    if ((char === '"' || char === "'") && quote === null) {
-      quote = char
-      continue
-    }
-    if (quote === char) {
-      quote = null
-      continue
-    }
-    if (/\s/.test(char) && quote === null) {
-      if (current) {
-        tokens.push(current)
-        current = ''
-      }
-      continue
-    }
-    current += char
-  }
-  if (current) {
-    tokens.push(current)
-  }
-  return tokens
 }
 
 function tokenLooksExecutable(token: string, index: number, firstNormalized: string): boolean {
@@ -330,7 +301,7 @@ export function isRecognizedAgentType(agentType: AgentType | null | undefined): 
     return false
   }
   return (
-    AGENT_TYPE_IDS.has(agentType as TuiAgent) ||
+    AGENT_TYPE_IDS.has(agentType as ObservedAgent) ||
     agentForNormalizedProcess(normalizeProcessName(agentType)) !== undefined
   )
 }

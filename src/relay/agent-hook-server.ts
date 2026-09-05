@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
@@ -30,7 +30,6 @@ import {
 import {
   isAgentHookSource,
   REMOTE_AGENT_HOOK_ENV,
-  type AgentHookRelayEnvelope,
   type AgentHookSource
 } from '../shared/agent-hook-relay'
 import {
@@ -41,38 +40,26 @@ import {
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
 import { buildRelayHookEnvelope, hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
+import { listenOnRelayHookServer } from './agent-hook-http-listener'
+import type {
+  RelayHookForward,
+  RelayHookServerOptions,
+  RelayHookServerStartOptions
+} from './agent-hook-server-contract'
 import {
+  type CachedPaneEnvelopeMeta,
   evictCachedPanesOverCap,
   selectReplayableCachedPanes
 } from './agent-hook-cached-pane-status'
 
-export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
-
-export type RelayHookServerOptions = {
-  /** Where to put endpoint.env / endpoint.cmd. Defaults to `$HOME/.orca-relay/agent-hooks`. */
-  endpointDir?: string
-  /** Env tag forwarded into hook payloads. Defaults to "remote", which main excludes from dev-vs-prod mismatch warnings. */
-  env?: string
-  /** Fixed auth token. WSL relay passes the host-issued token (already in guest env via WSLENV) so unmodified hook clients authenticate. Defaults to a fresh UUID. */
-  token?: string
-  /** Preferred bind port. WSL relay passes the Windows listener's port so env-sourced client coords stay truthful; falls back to :0 if occupied. Defaults to :0. */
-  preferredPort?: number
-  forward: RelayHookForward
-  /**
-   * True when the host has been told this pane's tab is gone and no PTY has re-bound the paneKey.
-   * Posts from such a pane come from a process the user already closed, so they describe no surface
-   * any client owns. Defaults to "never retired", which is the pre-existing behaviour — a listener
-   * with no PTY handler behind it (the WSL relay) keeps forwarding everything.
-   */
-  isPaneSurfaceRetired?: (paneKey: string) => boolean
-}
-
-export type RelayHookServerStartOptions = {
-  publishEndpoint?: boolean
-}
+export type {
+  RelayHookForward,
+  RelayHookServerOptions,
+  RelayHookServerStartOptions
+} from './agent-hook-server-contract'
 
 export class RelayAgentHookServer {
-  private server: ReturnType<typeof createServer> | null = null
+  private server: Server | null = null
   private port = 0
   private token = ''
   private env: string
@@ -85,10 +72,7 @@ export class RelayAgentHookServer {
   })
   // Why: retain envelope metadata so replays match live POSTs.
   // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
-  private lastEnvelopeMetaByPaneKey = new Map<
-    string,
-    { source: AgentHookSource; env?: string; version?: string }
-  >()
+  private lastEnvelopeMetaByPaneKey = new Map<string, CachedPaneEnvelopeMeta>()
   private forward: RelayHookForward
   private isPaneSurfaceRetired: (paneKey: string) => boolean
   private fixedToken: string | undefined
@@ -155,28 +139,14 @@ export class RelayAgentHookServer {
   }
 
   private listenOn(port: number): Promise<void> {
-    this.server = createServer((req, res) => this.handleRequest(req, res))
-    return new Promise<void>((resolve, reject) => {
-      const onStartupError = (err: Error): void => {
-        this.server?.off('listening', onListening)
-        // Why: clear failed server refs so later start() calls can retry.
-        this.server = null
-        reject(err)
+    return listenOnRelayHookServer(
+      port,
+      (request, response) => void this.handleRequest(request, response),
+      (server) => {
+        this.server = server
       }
-      const onListening = (): void => {
-        this.server?.off('error', onStartupError)
-        this.server?.on('error', (err) => {
-          process.stderr.write(`[relay-hook-server] server error: ${err.message}\n`)
-        })
-        const address = this.server!.address()
-        if (address && typeof address === 'object') {
-          this.port = address.port
-        }
-        resolve()
-      }
-      this.server!.once('error', onStartupError)
-      // Why: loopback only — reachable by the in-box agent CLI (127.0.0.1), not from outside the box.
-      this.server!.listen(port, '127.0.0.1', onListening)
+    ).then((boundPort) => {
+      this.port = boundPort
     })
   }
 
@@ -283,9 +253,22 @@ export class RelayAgentHookServer {
         // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
         const env = hookBodyEnv(hookBody)
         const version = hookBodyVersion(hookBody)
-        this.applyEvent(event, source, env, version)
-        this.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, event, env, version)
-        this.retryScheduler.scheduleCodexSubagentPoll(source, hookBody, event, env, version)
+        const effectiveSource = event.source ?? source
+        this.applyEvent(event, effectiveSource, env, version)
+        this.retryScheduler.scheduleAssistantMessageRetry(
+          effectiveSource,
+          hookBody,
+          event,
+          env,
+          version
+        )
+        this.retryScheduler.scheduleCodexSubagentPoll(
+          effectiveSource,
+          hookBody,
+          event,
+          env,
+          version
+        )
       }
       res.writeHead(204)
       res.end()
@@ -325,10 +308,9 @@ export class RelayAgentHookServer {
     // Why: keep PostCompact identity in the replay cache so the client can re-run ownership when
     // it reconnects. Stripping it would let a cold relay replay a completion as an ordinary `done`
     // row and resurrect a pane that the client had already retired.
-    const cachedEvent = event
     // Why: delete-then-set makes Map insertion order = recency, so the cap below evicts the longest-idle pane.
     this.state.lastStatusByPaneKey.delete(event.paneKey)
-    this.state.lastStatusByPaneKey.set(event.paneKey, cachedEvent)
+    this.state.lastStatusByPaneKey.set(event.paneKey, event)
     this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
     evictCachedPanesOverCap(this.state.lastStatusByPaneKey, (key) => this.clearPaneState(key))
@@ -346,8 +328,14 @@ export class RelayAgentHookServer {
     if (!event) {
       return
     }
-    this.applyEvent(event, record.source, hookBodyEnv(body), hookBodyVersion(body), {
-      isReplay: true
-    })
+    this.applyEvent(
+      event,
+      event.source ?? record.source,
+      hookBodyEnv(body),
+      hookBodyVersion(body),
+      {
+        isReplay: true
+      }
+    )
   }
 }

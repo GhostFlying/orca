@@ -20,6 +20,7 @@ import {
   SYNTHETIC_AGENT_TITLE_AGENTS,
   SYNTHETIC_AGENT_TITLE_PROFILES
 } from './synthetic-agent-title'
+import type { ObservedAgent } from './observed-agent'
 import type { TuiAgent } from './tui-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
@@ -49,22 +50,22 @@ export type AgentTitleEvidenceReason =
   | 'no-evidence'
 
 export type AgentTitleEvidence = {
-  readonly vendorMarkers: readonly TuiAgent[]
-  readonly anchoredNames: readonly TuiAgent[]
-  readonly freeTextNames: readonly TuiAgent[]
+  readonly vendorMarkers: readonly ObservedAgent[]
+  readonly anchoredNames: readonly ObservedAgent[]
+  readonly freeTextNames: readonly ObservedAgent[]
   /** Null whenever the title cannot answer on its own. Callers fall back to stronger signals. */
-  readonly agent: TuiAgent | null
+  readonly agent: ObservedAgent | null
   readonly reason: AgentTitleEvidenceReason
 }
 
 /** Names matched as whole tokens, paired with the agent each identifies. */
-const NAME_TOKENS: readonly (readonly [string, TuiAgent])[] = [
+const NAME_TOKENS: readonly (readonly [string, ObservedAgent])[] = [
   ['claude', 'claude'],
   ['openclaude', 'openclaude'],
   ['codex', 'codex'],
   ['trae', 'trae'],
   ['traecli', 'trae'],
-  ['traex', 'trae'],
+  ['traex', 'traex'],
   ['copilot', 'copilot'],
   ['cursor', 'cursor'],
   ['gemini', 'gemini'],
@@ -138,8 +139,8 @@ function getEvidenceTitleSegments(title: string): string[] {
   return segments
 }
 
-function namesIn(text: string): TuiAgent[] {
-  const found = new Set<TuiAgent>()
+function namesIn(text: string): ObservedAgent[] {
+  const found = new Set<ObservedAgent>()
   for (const [token, agent] of NAME_TOKENS) {
     if (titleHasAgentName(text, token)) {
       found.add(agent)
@@ -160,7 +161,7 @@ function stripBareNameDecoration(text: string): string {
     .replace(/[^\p{L}\p{N}]+$/u, '')
 }
 
-function agentForBareName(text: string): TuiAgent | null {
+function agentForBareName(text: string): ObservedAgent | null {
   const trimmed = text.trim()
   if (!trimmed || /[\\/]/.test(trimmed)) {
     return null
@@ -179,7 +180,7 @@ function agentForBareName(text: string): TuiAgent | null {
   return names.length === 1 && /^[\p{L}\p{N}]+$/u.test(bareToken) ? names[0] : null
 }
 
-function agentForWholeTitle(text: string): TuiAgent | null {
+function agentForWholeTitle(text: string): ObservedAgent | null {
   const trimmed = text.trim()
   if (!trimmed || /[\\/]/.test(trimmed)) {
     return null
@@ -195,12 +196,12 @@ function agentForWholeTitle(text: string): TuiAgent | null {
   return agentForBareName(stripped)
 }
 
-function agentForOwnerSuffix(text: string): TuiAgent | null {
+function agentForOwnerSuffix(text: string): ObservedAgent | null {
   const normalized = text.trim().toLowerCase()
   return RESERVED_OWNER_IDS.get(normalized) ?? agentForBareName(text)
 }
 
-function agentForSyntheticTitle(text: string): TuiAgent | null {
+function agentForSyntheticTitle(text: string): ObservedAgent | null {
   const trimmed = text.trim()
   if (/[\\/]/.test(trimmed)) {
     return null
@@ -229,8 +230,8 @@ function agentForSyntheticTitle(text: string): TuiAgent | null {
   return null
 }
 
-function collectVendorMarkers(segments: readonly string[]): TuiAgent[] {
-  const markers = new Set<TuiAgent>()
+function collectVendorMarkers(segments: readonly string[]): ObservedAgent[] {
+  const markers = new Set<ObservedAgent>()
   for (const segment of segments) {
     // Why prefix-only: a sigil marks the pane's own status line only in the identity position.
     // The same character inside task text is decoration, not a vendor emission.
@@ -254,9 +255,9 @@ function collectVendorMarkers(segments: readonly string[]): TuiAgent[] {
 
 function namesConsumedByAnchoredLabels(
   segments: readonly string[],
-  anchoredNames: ReadonlySet<TuiAgent>
-): Set<TuiAgent> {
-  const consumed = new Set<TuiAgent>()
+  anchoredNames: ReadonlySet<ObservedAgent>
+): Set<ObservedAgent> {
+  const consumed = new Set<ObservedAgent>()
   for (const segment of segments) {
     const label = DISPLAY_LABELS.find(
       ([text]) => text === stripBareNameDecoration(segment).toLowerCase()
@@ -270,8 +271,8 @@ function namesConsumedByAnchoredLabels(
   return consumed
 }
 
-function collectAnchoredNames(segments: readonly string[]): TuiAgent[] {
-  const anchored = new Set<TuiAgent>()
+function collectAnchoredNames(segments: readonly string[]): ObservedAgent[] {
+  const anchored = new Set<ObservedAgent>()
 
   for (const segment of segments) {
     // Why anchored and not a bare marker: the native envelope owns the whole wrapped pane title.

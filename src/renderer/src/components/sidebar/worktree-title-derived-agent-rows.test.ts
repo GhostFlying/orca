@@ -70,7 +70,7 @@ describe('buildTitleDerivedAgentRows', () => {
     ])
   })
 
-  it('projects TraeX titles as canonical Trae rows before hook status arrives', () => {
+  it('keeps TraeX title rows distinct from Trae before hook status arrives', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'trae' })],
       entries: [],
@@ -84,7 +84,7 @@ describe('buildTitleDerivedAgentRows', () => {
     })
 
     expect(rows.map((row) => [row.agentType, row.state, row.entry.prompt])).toEqual([
-      ['trae', 'working', 'Trae']
+      ['traex', 'working', 'TraeX']
     ])
   })
 

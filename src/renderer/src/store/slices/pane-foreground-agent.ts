@@ -1,10 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { ObservedAgent } from '../../../../shared/observed-agent'
 
 export type PaneForegroundAgentEntry = {
   /** Recognized agent process in the pane's foreground; null when unknown. */
-  agent: TuiAgent | null
+  agent: ObservedAgent | null
   /** True only when fresh provider evidence is safe for input-byte routing. */
   routingTrusted?: boolean
   /** True after exit/input evidence revokes routing until provider confirmation. */

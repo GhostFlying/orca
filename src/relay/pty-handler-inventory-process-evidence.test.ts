@@ -168,6 +168,13 @@ describe('PtyHandler inventory foreground evidence', () => {
     expect((await listProcesses())[0].title).toBe('node')
   })
 
+  it('does not restore a bare TraeX name after command-line evidence rejects it', async () => {
+    mockGetStrictProcessTableSnapshot.mockResolvedValue(paneRows(4000, ['traex app-server']))
+    await spawnPane(4000, 'traex')
+
+    expect((await listProcesses())[0].title).toBe('shell')
+  })
+
   // The cost that matters is per-CAPTURE, not per-pane: the defect this guards against is a
   // full-table walk for every pane, which is what an O(PTY x rows) inventory looked like. Two
   // linear passes build the two indexes the resolver reads — parent/child correlation, and which
