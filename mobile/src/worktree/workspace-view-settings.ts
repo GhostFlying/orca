@@ -22,6 +22,14 @@ export type WorkspaceViewSettings = {
   workspaceStatuses?: WorkspaceStatusDefinition[]
 }
 
+/** Normalizes the optional desktop preference, defaulting missing or invalid values to false. */
+export function getShowPinnedWorktreesInGroups(settings: unknown): boolean {
+  if (typeof settings !== 'object' || settings === null) {
+    return false
+  }
+  return Reflect.get(settings, 'showPinnedWorktreesInGroups') === true
+}
+
 const GROUP_TO_DESKTOP: Record<MobileGroupMode, NonNullable<WorkspaceViewSettings['groupBy']>> = {
   none: 'none',
   workspaceStatus: 'workspace-status',
