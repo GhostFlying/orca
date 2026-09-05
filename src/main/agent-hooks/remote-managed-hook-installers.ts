@@ -22,6 +22,8 @@ import { dshHookService } from '../dsh/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { traeHookService } from '../trae/hook-service'
+import type { TraeHomePaths } from '../trae/trae-home-paths'
 
 export type RemoteManagedHookInstallOptions = {
   /** Redirected runtime CODEX_HOME, including managed WSL homes. */
@@ -32,6 +34,8 @@ export type RemoteManagedHookInstallOptions = {
   /** Login-shell KIRO_HOME on the execution host; it replaces ~/.kiro outright. */
   kiroHomeDir?: string
   claudeVersion?: string
+  /** Resolved in the remote login environment; never inherited from the client host. */
+  traeHomePaths?: Partial<TraeHomePaths>
   /** Cancellation stops the next installer; individual mutations remain atomic. */
   signal?: AbortSignal
   /** Only positively detected, enabled agents may mutate configs; omitted/empty installs nothing. */
@@ -63,6 +67,11 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
         codexHomeDir: options?.codexHomeDir,
         deferTrustUntilConfigToml: options?.deferTrustUntilConfigToml
       })
+  ],
+  [
+    'trae',
+    (sftp, remoteHome, options) =>
+      traeHookService.installRemote(sftp, remoteHome, options?.traeHomePaths)
   ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
   ['qoder', (sftp, remoteHome) => qoderHookService.installRemote(sftp, remoteHome)],

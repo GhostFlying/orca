@@ -25,9 +25,15 @@ describe('the host-stamped turn end', () => {
     rmSync(directory, { recursive: true, force: true })
   })
 
-  async function post(payload: Record<string, unknown>, path = '/hook/claude'): Promise<void> {
-    expect((await postHookEvent(server, buildBody(payload), path)).status).toBe(204)
-    // Separate host timestamps by advancing real time between events.
+  async function post(
+    payload: Record<string, unknown>,
+    path = '/hook/claude',
+    observedAgent?: string
+  ): Promise<void> {
+    expect((await postHookEvent(server, buildBody(payload, { observedAgent }), path)).status).toBe(
+      204
+    )
+    // Distinct host stamps: each event lands on a later millisecond.
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
   const row = () => server.getStatusSnapshot()[0]
@@ -126,6 +132,25 @@ describe('the host-stamped turn end', () => {
     await codex({ hook_event_name: 'Stop', turn_id: 'turn-b', stop_hook_active: true })
     expect(row()?.turnEndedAt).toBeGreaterThan(mailTurn!)
     expect(row()).not.toHaveProperty('hostTurn')
+  })
+
+  it.each(['trae', 'traex'])('ends %s turns on its Codex-compatible Stop event', async (source) => {
+    const observedAgent = source === 'traex' ? source : undefined
+    await post(
+      { hook_event_name: 'UserPromptSubmit', prompt: 'Plan it' },
+      '/hook/trae',
+      observedAgent
+    )
+    await post(
+      { hook_event_name: 'Stop', last_assistant_message: 'Planned.' },
+      '/hook/trae',
+      observedAgent
+    )
+    expect(row()).toMatchObject({
+      agentType: source,
+      turnEndedAt: expect.any(Number),
+      turnEndDisposition: 'identified'
+    })
   })
 
   it('ends Command Code turns by transcript position; a same-position repeat is ambiguous', async () => {

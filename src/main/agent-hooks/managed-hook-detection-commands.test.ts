@@ -19,7 +19,20 @@ describe('managed hook detection commands', () => {
   })
 
   it('maps detected TUI ids back to managed hook targets', () => {
-    expect(detectedManagedHookAgents(['codex', 'opencode', 'droid'])).toEqual(['codex', 'droid'])
+    expect(detectedManagedHookAgents(['codex', 'trae', 'opencode', 'droid'])).toEqual([
+      'codex',
+      'trae',
+      'droid'
+    ])
+  })
+
+  it('detects both Trae executable names under one canonical target', () => {
+    expect(buildManagedHookDetectionCommands(null, 'linux')).toEqual(
+      expect.arrayContaining([
+        { id: 'trae', cmd: 'traecli' },
+        { id: 'trae', cmd: 'traex' }
+      ])
+    )
   })
 
   it('requests a version only for Claude capability detection', () => {
