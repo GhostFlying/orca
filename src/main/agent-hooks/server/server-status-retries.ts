@@ -27,6 +27,10 @@ type TranscriptPoll = {
   original: EnrichedAgentHookEventPayload
 }
 
+function transcriptPollKey(paneKey: string, source: AgentHookSource): string {
+  return source === 'trae' ? `${paneKey}\0${source}` : paneKey
+}
+
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
   private observedLocalHook?: { accepted: boolean; receivedAt?: number }
   private readonly claudeHelperKills = new ClaudeHelperKillPoller(this.state, {
@@ -101,6 +105,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   protected clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
     this.claudeHelperKills.clear(paneKey)
+    this.transcriptPollScheduler.clear(`${paneKey}\0trae`)
   }
 
   protected scheduleTranscriptPoll(
@@ -112,15 +117,17 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       return
     }
     // Nested CLIs inherit pane keys; another provider must not clear this transcript poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'codex' && source !== 'trae' && source !== 'muse') {
       return
     }
+    const pollKey = transcriptPollKey(original.paneKey, source)
+    this.transcriptPollScheduler.clear(pollKey)
     if (!shouldPollHookTranscript(this.state, source, original)) {
-      this.transcriptPollScheduler.clear(original.paneKey)
+      this.transcriptPollScheduler.clear(pollKey)
       return
     }
     this.transcriptPollScheduler.schedule(
-      original.paneKey,
+      pollKey,
       { source, body, original },
       hookTranscriptWatchPath(this.state, source, original.paneKey)
     )
@@ -130,7 +137,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     const { source, body, original } = poll
     // Recheck ownership at callback time; newer events supersede this payload even if children remain.
     if (
-      paneKey !== original.paneKey ||
+      paneKey !== transcriptPollKey(original.paneKey, source) ||
       !this.server ||
       this.state.lastStatusByPaneKey.get(original.paneKey) !== original
     ) {
