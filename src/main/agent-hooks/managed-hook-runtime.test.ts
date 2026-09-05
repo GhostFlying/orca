@@ -17,7 +17,8 @@ const { execFile } = await import('node:child_process')
 const execFileMock = vi.mocked(execFile)
 const { execFile: actualExecFile } =
   await vi.importActual<typeof NodeChildProcess>('node:child_process')
-const { installManagedHooks, resolveRelayGrokHome } = await import('./managed-hook-runtime')
+const { installManagedHooks, resolveRelayGrokHome, resolveRelayTraeHomePaths } =
+  await import('./managed-hook-runtime')
 
 type ExecFileCallback = (error: Error | null, result?: { stdout: string; stderr: string }) => void
 
@@ -120,6 +121,20 @@ describe.runIf(process.platform !== 'win32')('resolveRelayGrokHome', () => {
   })
 })
 
+describe.runIf(process.platform !== 'win32')('resolveRelayTraeHomePaths', () => {
+  it('uses the remote login environment', async () => {
+    vi.stubEnv('SHELL', '/bin/zsh')
+    stubProbeOutput(
+      '__ORCA_TRAE_HOME__/home/orca/.config/trae\n__ORCA_TRAECLI_HOME__/home/orca/.cache/traecli\n'
+    )
+
+    await expect(resolveRelayTraeHomePaths('/home/orca')).resolves.toEqual({
+      traeHomeDir: '/home/orca/.config/trae',
+      traeCliHomeDir: '/home/orca/.cache/traecli'
+    })
+  })
+})
+
 describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
   it.each([
     ['omitted', undefined],
@@ -155,6 +170,7 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
       errors: 0
     })
 
-    expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME, SHELL_RUNS_NAME])
+    // No provider-specific home probe should run for an unrelated allowlist.
+    expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME])
   })
 })

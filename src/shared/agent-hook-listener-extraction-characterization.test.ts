@@ -16,6 +16,7 @@ const MOVED_PANE = makePaneKey('tab-hooks', '22222222-2222-4222-8222-22222222222
 const ROUTES = {
   '/hook/claude': 'claude',
   '/hook/codex': 'codex',
+  '/hook/trae': 'trae',
   '/hook/gemini': 'gemini',
   '/hook/antigravity': 'antigravity',
   '/hook/amp': 'amp',
@@ -189,6 +190,7 @@ describe('agent hook extraction boundaries', () => {
     state.ampCompletedCacheKeys.add(sibling)
     state.claudeLeadStateByPaneKey.set(PANE, { state: 'working' })
     state.codexLeadStateByPaneKey.set(PANE, { state: 'working' })
+    state.codexLeadStateByPaneKey.set(scoped, { state: 'working' })
 
     clearPaneCacheState(state, PANE)
 
@@ -202,6 +204,7 @@ describe('agent hook extraction boundaries', () => {
     expect(state.ampCompletedCacheKeys.has(sibling)).toBe(true)
     expect(state.claudeLeadStateByPaneKey.has(PANE)).toBe(false)
     expect(state.codexLeadStateByPaneKey.has(PANE)).toBe(false)
+    expect(state.codexLeadStateByPaneKey.has(scoped)).toBe(false)
   })
 
   it('preserves cache mutation from a provider reset that emits no row', () => {

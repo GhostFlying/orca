@@ -41,6 +41,9 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
   it('maps explicit product-name titles to their TuiAgent id', () => {
     expect(resolveExplicitTerminalTitleAgentType('✳ Claude Code')).toBe('claude')
     expect(resolveExplicitTerminalTitleAgentType('⠋ Codex')).toBe('codex')
+    expect(resolveExplicitTerminalTitleAgentType('Trae ready')).toBe('trae')
+    expect(resolveExplicitTerminalTitleAgentType('traecli.exe')).toBe('trae')
+    expect(resolveExplicitTerminalTitleAgentType('traex')).toBe('trae')
     expect(resolveExplicitTerminalTitleAgentType('✦ Gemini CLI')).toBe('gemini')
     expect(resolveExplicitTerminalTitleAgentType('MiMo Code')).toBe('mimo-code')
     expect(resolveExplicitTerminalTitleAgentType('⠋ OpenClaude')).toBe('openclaude')

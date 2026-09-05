@@ -10,6 +10,13 @@ import {
   readManagedHookHostIdentity,
   scopeManagedHookHostIdentity
 } from './managed-hook-owner-identity'
+import {
+  buildPosixTraeHomeProbeScript,
+  normalizePosixTraeHomePaths,
+  parsePosixTraeHomeProbeOutput,
+  TRAE_HOME_PROBE_MAX_LENGTH,
+  type TraeHomePaths
+} from '../trae/trae-home-paths'
 
 const execFileAsync = promisify(execFile)
 const GROK_HOME_MAX_LENGTH = 4096
@@ -73,6 +80,27 @@ export async function resolveRelayGrokHome(home: string, signal?: AbortSignal): 
   }
 }
 
+export async function resolveRelayTraeHomePaths(
+  home: string,
+  signal?: AbortSignal
+): Promise<TraeHomePaths> {
+  try {
+    const shell = resolveLoginShell()
+    const shellName = basename(shell)
+    const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
+    const { stdout } = await execFileAsync(shell, [mode, buildPosixTraeHomeProbeScript()], {
+      encoding: 'utf8',
+      timeout: GROK_HOME_PROBE_TIMEOUT_MS,
+      maxBuffer: TRAE_HOME_PROBE_MAX_LENGTH * 3,
+      signal
+    })
+    return parsePosixTraeHomeProbeOutput(home, stdout)
+  } catch {
+    signal?.throwIfAborted()
+    return normalizePosixTraeHomePaths(home, {})
+  }
+}
+
 export async function installManagedHooks(options?: {
   signal?: AbortSignal
   hostKeyFingerprint?: string
@@ -85,7 +113,10 @@ export async function installManagedHooks(options?: {
     return { installers: 0, errors: 0 }
   }
   const home = homedir()
-  const grokHomeDir = await resolveRelayGrokHome(home, options?.signal)
+  const [grokHomeDir, traeHomePaths] = await Promise.all([
+    agents.includes('grok') ? resolveRelayGrokHome(home, options?.signal) : undefined,
+    agents.includes('trae') ? resolveRelayTraeHomePaths(home, options?.signal) : undefined
+  ])
   options?.signal?.throwIfAborted()
   const hostIdentity = scopeManagedHookHostIdentity(
     await readManagedHookHostIdentity(),
@@ -99,7 +130,8 @@ export async function installManagedHooks(options?: {
         createManagedHookLocalFilesystem(),
         home,
         {
-          grokHomeDir,
+          ...(grokHomeDir ? { grokHomeDir } : {}),
+          ...(traeHomePaths ? { traeHomePaths } : {}),
           signal: options?.signal,
           agents
         }
