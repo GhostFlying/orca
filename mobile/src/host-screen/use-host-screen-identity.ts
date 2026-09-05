@@ -26,6 +26,7 @@ export function useHostScreenIdentity(args: {
     setRepoColorsByName,
     setRepoHostIdByRepoId,
     setRepoIconsByName,
+    setShowPinnedWorktreesInGroups,
     setWorktrees,
     setWorktreesLoaded
   } = state
@@ -57,6 +58,7 @@ export function useHostScreenIdentity(args: {
     setHostName('')
     setHostStoredDescriptor(null)
     setError('')
+    setShowPinnedWorktreesInGroups(false)
     setRepoColorsByName(new Map())
     setRepoIconsByName(new Map())
     setRepoHostIdByRepoId(new Map())

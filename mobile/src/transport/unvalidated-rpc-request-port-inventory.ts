@@ -108,7 +108,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // which has a substitute, so reaching this send means standing in for both engines rather than
   // pinning a device input.
   { file: 'src/host-screen/host-screen-overlays.tsx', references: 1 },
-
   // src/notifications/ — push registration and delivery. Nothing is left here. Registration and
   // unregistration migrated in step 4; see mobile-push-registration-operations.ts. Tray
   // reconciliation followed once a scenario could declare the notification tray and the stored host
