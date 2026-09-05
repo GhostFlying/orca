@@ -3,7 +3,7 @@ import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-title-owner'
 import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-status-hooks-setting'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type { ObservedAgent } from '../../../shared/observed-agent'
 import { hookLaneCanAnnouncePaneTurnEnd } from './agent-hook-completion-notifications'
 import { hookTurnEndEvidence } from './agent-hook-turn-end-capability'
 
@@ -11,18 +11,19 @@ import { hookTurnEndEvidence } from './agent-hook-turn-end-capability'
 export function hookLaneTurnEndEvidence(
   paneKey: string,
   ptyId: string | null | undefined,
-  agent: TerminalAgent | null
+  agent: ObservedAgent | null
 ): 'identified' | 'ambiguous' | null {
   const { agentStatusByPaneKey, settings } = useAppStore.getState()
   const row = agentStatusByPaneKey[paneKey]
   const owner = row?.agentType
+  const hooksAgent = owner === 'traex' ? 'trae' : owner
   const evidence = hookTurnEndEvidence(ptyId, row)
   // Title authority remains for unfinished turns and agents whose hooks were uninstalled.
   if (
     row?.state !== 'done' ||
     evidence === 'legacy' ||
-    !isTuiAgent(owner) ||
-    !isAgentStatusHooksEnabledForAgent(settings, owner) ||
+    !isTuiAgent(hooksAgent) ||
+    !isAgentStatusHooksEnabledForAgent(settings, hooksAgent) ||
     !hookLaneCanAnnouncePaneTurnEnd(paneKey)
   ) {
     return null
@@ -33,7 +34,7 @@ export function hookLaneTurnEndEvidence(
 export function hookLaneOwnsAgentTurnEnds(
   paneKey: string,
   ptyId: string | null | undefined,
-  agent: TerminalAgent | null
+  agent: ObservedAgent | null
 ): boolean {
   return hookLaneTurnEndEvidence(paneKey, ptyId, agent) === 'identified'
 }
@@ -43,7 +44,7 @@ export function hookLaneTitleTurnEndEvidence(
   paneKey: string,
   ptyId: string | null | undefined,
   title: string | null,
-  foregroundAgent: TerminalAgent | null
+  foregroundAgent: ObservedAgent | null
 ): 'identified' | 'ambiguous' | null {
   const agent = (title ? resolveCommittedTitleAgentType(title) : null) ?? foregroundAgent
   return hookLaneTurnEndEvidence(paneKey, ptyId, agent)

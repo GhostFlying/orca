@@ -33,9 +33,10 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
   session.rememberCommandInferredPaneAgent = (): void => {
     const commandLine = session.pendingShellCommandLine.trim()
     session.resetPendingShellCommandLine()
-    const candidateAgent = commandLine
+    const recognizedAgent = commandLine
       ? (recognizeAgentLaunchCommand(commandLine)?.agent ?? null)
       : null
+    const candidateAgent = isTuiAgent(recognizedAgent) ? recognizedAgent : null
     const state = useAppStore.getState()
     const registeredLaunchAgent =
       state.agentLaunchConfigByPaneKey[session.cacheKey]?.identity.agentType

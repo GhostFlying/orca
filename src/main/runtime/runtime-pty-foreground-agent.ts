@@ -185,7 +185,8 @@ export class RuntimePtyForegroundAgent {
       return null
     }
     const foregroundName = result.process
-    const agent = recognizeAgentProcess(foregroundName)?.agent ?? null
+    const observedAgent = recognizeAgentProcess(foregroundName)?.agent ?? null
+    const agent = observedAgent === 'traex' ? null : observedAgent
     // Native Claude's p_comm is its versions/<semver> binary; only a process-table scan reads its argv.
     if (agent || !foregroundName || !NATIVE_CLAUDE_VERSION_NAME.test(foregroundName)) {
       this.confirmedByPtyId.delete(ptyId)
@@ -199,8 +200,9 @@ export class RuntimePtyForegroundAgent {
     if (process.platform === 'win32') {
       return null
     }
-    const confirmedAgent =
+    const observedConfirmedAgent =
       recognizeAgentProcess(await this.confirm(result.controller, ptyId))?.agent ?? null
+    const confirmedAgent = observedConfirmedAgent === 'traex' ? null : observedConfirmedAgent
     if (result.controller !== this.deps.getController()) {
       return null
     }

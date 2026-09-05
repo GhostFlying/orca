@@ -84,9 +84,9 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
     // OMP needs paste and submit in one write; the foreground consumer wins, with launchAgent only a startup fallback.
-    const submitWithPaste = agentPromptSubmitJoinsPasteFrame(
-      pty?.foregroundAgent ?? pty?.launchAgent
-    )
+    const observedAgent = pty?.foregroundAgent ?? pty?.launchAgent
+    const promptAgent = observedAgent === 'traex' ? undefined : observedAgent
+    const submitWithPaste = agentPromptSubmitJoinsPasteFrame(promptAgent)
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
     // A ready Claude composer never settles this gate, adding its full 8s cap; desktop paste submits in about 2s.

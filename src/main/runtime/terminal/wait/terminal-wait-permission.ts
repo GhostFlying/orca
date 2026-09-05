@@ -20,6 +20,7 @@ import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
 import { resolvePtyWriteHostPlatform } from '../input/pty-write-host-platform'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import { toTuiAgent } from '../../../../shared/tui-agent-config'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import { hasExplicitIdleTitle } from '../../tui-idle-evidence'
 import {
@@ -183,7 +184,6 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     }
   }
 
-  /** The pane's main-agent turn from the hook server's store, for tui-idle's hook lane. */
   protected readTuiIdleHookTurnForPty(ptyId: string, agent: TuiAgent): TuiIdleHookTurn | null {
     const pty = this.ptysById.get(ptyId)
     const join = this.readHookRowJoinForPty(ptyId)
@@ -300,7 +300,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
 
   protected getPtyAgent(ptyId: string): TerminalAgent | null {
     const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    return toTuiAgent(pty?.launchAgent ?? pty?.foregroundAgent)
   }
 
   protected isAgentPromptPermissionBlocked(

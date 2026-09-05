@@ -26,6 +26,12 @@ describe('resolvePublishedPaneAgentIdentity', () => {
     expect(resolve({ launchAgent: 'claude', foregroundAgent: 'codex' })).toBe('codex')
   })
 
+  it('keeps observed-only TraeX distinct without making it launchable', () => {
+    expect(resolve({ hookAgent: 'traex', hookIsLive: true })).toBe('traex')
+    expect(resolve({ foregroundAgent: 'traex' })).toBe('traex')
+    expect(resolve({ title: 'Session ready - traex' })).toBe('traex')
+  })
+
   describe('title is the last resort, and the parser is what makes that safe', () => {
     // Strict title evidence rejects names in task prose that the old substring matcher accepted.
     it('does not name a Codex pane Claude from its task text', () => {
