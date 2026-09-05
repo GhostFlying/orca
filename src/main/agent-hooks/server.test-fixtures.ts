@@ -23,6 +23,7 @@ export type Body = {
   version?: string
   agentProcess?: string
   tmuxPane?: string
+  observedAgent?: string
   payload: Record<string, unknown>
 }
 

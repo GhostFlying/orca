@@ -124,6 +124,10 @@ describe('agent process recognition', () => {
       agent: 'trae',
       processName: 'traecli'
     })
+    expect(recognizeAgentProcessFromCommandLine('traex --resume AUTO')).toEqual({
+      agent: 'trae',
+      processName: 'traex'
+    })
     // Why: past `--` nothing is a flag, so this is the interactive pane Orca itself launches.
     expect(recognizeAgentProcessFromCommandLine('traecli -- "--print the release notes"')).toEqual({
       agent: 'trae',
