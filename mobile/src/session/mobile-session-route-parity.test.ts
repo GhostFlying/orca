@@ -62,8 +62,8 @@ const HOST_COMPONENT_NAMES = new Set([
   'View'
 ])
 
-const HEAD_MAIN_HOOK_SHA256 = '1b436d21f48e4d7b316178ba9eb7d8f0d3801ffd4e42b6b8987adb1cfcbac570'
-const HEAD_HOOK_BINDING_SHA256 = '5b324d661574950c24c47ad9675afc40f34bf3d6dc0ea7b81a469cf708803dc8'
+const HEAD_MAIN_HOOK_SHA256 = '8ce72daebf0bc9138d74e3a582da5a033683b797197b9a4e9ddf53a2914cf3f2'
+const HEAD_HOOK_BINDING_SHA256 = 'fc37c1ddccc926b4f5755fc22761e678edb5c3eb01ea0c5fc782915b5cf52d34'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '2a9e4825df007f6ef53b81aa5004991d6318eee7507b44d625c07e630be432eb'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
@@ -85,7 +85,7 @@ const HEAD_CALLBACK_BODY_SHA256 = 'ceba525103ccac47df766063d58593ba083d59785f862
 // refusal the timer site passed when it had no reply at all. Refreshed once more for the
 // last-visited-worktree effect, whose bare store write became the one writer of that key, so the
 // hybrid shell's page mirror sees it as it is written rather than one `init` later.
-const HEAD_EFFECT_SHA256 = '224184b2559a09067001ac2bfc8779122637c5f40727ba4bcbb789264fc91b4e'
+const HEAD_EFFECT_SHA256 = '5744fa179bacfdf5027b9856c79bfe57d296ef7f16277666ab9d1ea54a160944'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // Same pin for the 12 bodies that sit in nested functions rather than callbacks, moved by the same
 // rewrite of those send and read expressions. Count unchanged. Refreshed again in step 6 for
@@ -110,13 +110,13 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 const HEAD_RUNTIME_STRING_SHA256 =
   'fcb1e8d5926d52055279eec6e3805bf2d51403e2b9414c30d9c034d4a87c32b9'
 const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
-const HEAD_LEAF_JSX_SHA256 = '21dba981875e173f692590bf910d60964660c5f4cbb79f3a377c7e54f6a1f016'
+const HEAD_LEAF_JSX_SHA256 = 'f1e0730222588bec3c90f6566dbe5f66ab6b2bf85736552c4a89d122b97c562c'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
 const HEAD_IDENTITY_FIELD_SHA256 =
   '91146853930a34dd1f3d80e5c97fbacd7cf19fb93dd26fe8fc6f29169622f9d6'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
-const HEAD_CAPABILITY_SHA256 = '67c3154b71b542bb63a4365d3ea75aef19ef133c02f509318619618221786fab'
+const HEAD_CAPABILITY_SHA256 = '72f8aae33be08835bd3efa05b02ed0c74da6c94559f9ac0dfb0cfdb745c60205'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 type HookFacts = {
@@ -501,7 +501,7 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(270)
+    expect(main.hooks).toHaveLength(271)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(77)
@@ -540,7 +540,7 @@ describe('mobile session route extraction parity', () => {
     expect(hash(compatibility.identityFields)).toBe(HEAD_IDENTITY_FIELD_SHA256)
     expect(compatibility.navigation).toHaveLength(6)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)
-    expect(compatibility.capabilities).toHaveLength(6)
+    expect(compatibility.capabilities).toHaveLength(7)
     expect(hash(compatibility.capabilities)).toBe(HEAD_CAPABILITY_SHA256)
   })
 

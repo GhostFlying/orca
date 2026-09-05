@@ -38,7 +38,9 @@ describe('useMobileNativeChatSession', () => {
       sourceIdentity: 'host-a\0workspace-a',
       agent: 'claude',
       sessionId: 'session',
-      transcriptPath: null
+      transcriptPath: null,
+      terminal: null,
+      worktree: null
     })
     return null
   }
@@ -460,7 +462,9 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       sourceIdentity,
       agent,
       sessionId,
-      transcriptPath: null
+      transcriptPath: null,
+      terminal: null,
+      worktree: null
     })
     renders.push({
       sessionId,

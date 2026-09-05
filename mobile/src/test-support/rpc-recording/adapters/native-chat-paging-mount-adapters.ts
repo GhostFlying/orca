@@ -33,7 +33,9 @@ export function nativeChatPagingMountAdapters(
           sourceIdentity: SOURCE_IDENTITY,
           agent: AGENT,
           sessionId: SESSION,
-          transcriptPath: TRANSCRIPT_PATH
+          transcriptPath: TRANSCRIPT_PATH,
+          terminal: null,
+          worktree: null
         })
       }, effect)
       return {
