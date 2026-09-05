@@ -19,6 +19,7 @@ import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
 import { resolvePtyWriteHostPlatform } from '../input/pty-write-host-platform'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import { hasExplicitIdleTitle } from '../../tui-idle-evidence'
 import {
@@ -293,7 +294,8 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
 
   protected getPtyAgent(ptyId: string): TerminalAgent | null {
     const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    const observedAgent = pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    return isTuiAgent(observedAgent) ? observedAgent : null
   }
 
   protected isAgentPromptPermissionBlocked(

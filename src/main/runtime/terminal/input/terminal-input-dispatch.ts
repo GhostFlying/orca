@@ -219,7 +219,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         return wrapTerminalBracketedPasteText(prompt)
       }
       const pty = this.ptysById.get(ptyId)
-      const agent = pty?.foregroundAgent ?? pty?.launchAgent
+      const observedAgent = pty?.foregroundAgent ?? pty?.launchAgent
+      const agent = observedAgent === 'traex' ? undefined : observedAgent
       return buildAgentPromptPasteBytes(
         prompt,
         agentPromptTakesLeadLine(agent) ? options.leadLine : undefined

@@ -21,6 +21,11 @@ vi.mock('../git/worktree', async (importOriginal) => ({
   listWorktreesStrict: listWorktreesStrictMock
 }))
 
+const readRepoWorktreeAdminFingerprintMock = vi.hoisted(() => vi.fn())
+vi.mock('./repo-worktree-admin-fingerprint', () => ({
+  readRepoWorktreeAdminFingerprint: readRepoWorktreeAdminFingerprintMock
+}))
+
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
@@ -142,6 +147,8 @@ describe('worktree.ps on a degraded repo scan', () => {
   beforeEach(() => {
     listWorktreesStrictMock.mockReset()
     listWorktreesStrictMock.mockResolvedValue([])
+    readRepoWorktreeAdminFingerprintMock.mockReset()
+    readRepoWorktreeAdminFingerprintMock.mockResolvedValue(null)
   })
 
   it('keeps persisted worktrees when a remote scan stalls past the per-repo budget', async () => {
@@ -162,7 +169,7 @@ describe('worktree.ps on a degraded repo scan', () => {
   it('keeps the last successful branch and name when a later scan stalls', async () => {
     vi.useFakeTimers()
     try {
-      const listWorktrees = listWorktreesStrictMock
+      listWorktreesStrictMock
         .mockResolvedValueOnce([
           {
             path: REPO_PATH,
@@ -196,7 +203,7 @@ describe('worktree.ps on a degraded repo scan', () => {
       const worktree = degraded.worktrees.find((row) => row.worktreeId === WORKTREE_ID)
       expect(worktree?.branch).toBe('feature')
       expect(worktree?.displayName).toBe('feature')
-      expect(listWorktrees).toHaveBeenCalledTimes(2)
+      expect(listWorktreesStrictMock).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
     }

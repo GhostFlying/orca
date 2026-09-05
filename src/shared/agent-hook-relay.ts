@@ -10,6 +10,7 @@ import type {
   TurnEndDisposition
 } from './agent-status-types'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentHookObservedAgent } from './agent-hook-observed-agent'
 
 // The relay must retain the URL-derived source discriminator for CLI attribution.
 const AGENT_HOOK_SOURCES = [
@@ -20,6 +21,7 @@ const AGENT_HOOK_SOURCES = [
   'qwen-code',
   'codebuddy',
   'trae',
+  'traex',
   'gemini',
   'antigravity',
   'amp',
@@ -58,6 +60,8 @@ export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
 /** Wire envelope for a single hook event flowing relay → Orca. */
 export type AgentHookRelayEnvelope = {
   source: AgentHookSource
+  /** Refines a compatibility-projected source without requiring old hosts to know it. */
+  observedAgent?: AgentHookObservedAgent
   paneKey: string
   agentPresence?: AgentProcessPresence
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */

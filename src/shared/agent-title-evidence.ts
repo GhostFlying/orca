@@ -1,18 +1,15 @@
 import {
-  AGY_AGENT_NAME_RE,
   CLAUDE_IDLE,
-  DROID_AGENT_NAME_RE,
   GEMINI_IDLE,
   GEMINI_PERMISSION,
   GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
-  HERMES_AGENT_NAME_RE,
   containsAgentSpinnerGlyph,
   isClaudeIdentityFrameSegment,
   isClaudeManagementTitle,
-  isCursorNativeAgentTitle,
-  titleHasAgentName
+  isCursorNativeAgentTitle
 } from './agent-title-core'
+import { findAgentNamesInTitle } from './agent-title-name-tokens'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
@@ -21,7 +18,7 @@ import {
   SYNTHETIC_AGENT_TITLE_AGENTS,
   SYNTHETIC_AGENT_TITLE_PROFILES
 } from './synthetic-agent-title'
-import type { TerminalAgent } from './terminal-agent'
+import type { ObservedAgent } from './observed-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
 /** Collect before ranking: anchored identity names outrank vendor glyphs, which outrank free-text mentions. Free text alone never identifies a pane; prefer no icon to a wrong one. Activity parsing handles generic busy signals separately. */
@@ -34,40 +31,13 @@ export type AgentTitleEvidenceReason =
   | 'no-evidence'
 
 export type AgentTitleEvidence = {
-  readonly vendorMarkers: readonly TerminalAgent[]
-  readonly anchoredNames: readonly TerminalAgent[]
-  readonly freeTextNames: readonly TerminalAgent[]
+  readonly vendorMarkers: readonly ObservedAgent[]
+  readonly anchoredNames: readonly ObservedAgent[]
+  readonly freeTextNames: readonly ObservedAgent[]
   /** Null whenever the title cannot answer on its own. Callers fall back to stronger signals. */
-  readonly agent: TerminalAgent | null
+  readonly agent: ObservedAgent | null
   readonly reason: AgentTitleEvidenceReason
 }
-
-/** Names matched as whole tokens, paired with the agent each identifies. */
-const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [
-  ['claude', 'claude'],
-  ['openclaude', 'openclaude'],
-  ['codex', 'codex'],
-  ['trae', 'trae'],
-  ['traecli', 'trae'],
-  ['traex', 'trae'],
-  ['copilot', 'copilot'],
-  ['cursor', 'cursor'],
-  ['gemini', 'gemini'],
-  ['antigravity', 'antigravity'],
-  ['opencode', 'opencode'],
-  ['mimo', 'mimo-code'],
-  ['openclaw', 'openclaw'],
-  ['aider', 'aider'],
-  ['grok', 'grok'],
-  ['devin', 'devin']
-]
-
-/** Agents whose name is matched by a dedicated pattern rather than a plain token. */
-const PATTERN_NAMES: readonly (readonly [RegExp, TerminalAgent])[] = [
-  [AGY_AGENT_NAME_RE, 'antigravity'],
-  [DROID_AGENT_NAME_RE, 'droid'],
-  [HERMES_AGENT_NAME_RE, 'hermes']
-]
 
 /** Catalog labels known to be emitted as terminal titles, not merely presented in Orca's UI. */
 const EMITTED_DISPLAY_LABEL_AGENTS = [
@@ -76,7 +46,7 @@ const EMITTED_DISPLAY_LABEL_AGENTS = [
   'prime-agent',
   'command-code',
   'copilot'
-] as const satisfies readonly TerminalAgent[]
+] as const satisfies readonly ObservedAgent[]
 
 const DISPLAY_LABELS = [
   ...EMITTED_DISPLAY_LABEL_AGENTS.map(
@@ -85,7 +55,7 @@ const DISPLAY_LABELS = [
   ['claude code', 'claude'],
   ['gemini cli', 'gemini'],
   ['agent teams', 'claude-agent-teams']
-] satisfies readonly (readonly [string, TerminalAgent])[]
+] satisfies readonly (readonly [string, ObservedAgent])[]
 
 const GEMINI_GLYPHS = [GEMINI_WORKING, GEMINI_SILENT_WORKING, GEMINI_IDLE, GEMINI_PERMISSION]
 const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[\u00B7\u2014:-]\s*|\s+)gemini\s+\d/i
@@ -95,7 +65,7 @@ const OWNER_SUFFIX_RE = /\s-\s+([A-Za-z][\w-]*)\s*$/
 const WINDOWS_LAUNCHER_SUFFIX_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const WRAPPER_SEPARATOR = ' | '
 const MAX_WRAPPER_EVIDENCE_SEGMENTS = 8
-const RESERVED_OWNER_IDS: ReadonlyMap<string, TerminalAgent> = new Map([
+const RESERVED_OWNER_IDS: ReadonlyMap<string, ObservedAgent> = new Map([
   ['pi', 'pi'],
   ['omp', 'omp'],
   ['claude-agent-teams', 'claude-agent-teams'],
@@ -119,21 +89,6 @@ function getEvidenceTitleSegments(title: string): string[] {
   return segments
 }
 
-function namesIn(text: string): TerminalAgent[] {
-  const found = new Set<TerminalAgent>()
-  for (const [token, agent] of NAME_TOKENS) {
-    if (titleHasAgentName(text, token)) {
-      found.add(agent)
-    }
-  }
-  for (const [pattern, agent] of PATTERN_NAMES) {
-    if (pattern.test(text)) {
-      found.add(agent)
-    }
-  }
-  return [...found]
-}
-
 function stripBareNameDecoration(text: string): string {
   return text
     .trim()
@@ -141,7 +96,7 @@ function stripBareNameDecoration(text: string): string {
     .replace(/[^\p{L}\p{N}]+$/u, '')
 }
 
-function agentForBareName(text: string): TerminalAgent | null {
+function agentForBareName(text: string): ObservedAgent | null {
   const trimmed = text.trim()
   if (!trimmed || /[\\/]/.test(trimmed)) {
     return null
@@ -154,12 +109,12 @@ function agentForBareName(text: string): TerminalAgent | null {
     return label[1]
   }
   const bareToken = stripped.replace(WINDOWS_LAUNCHER_SUFFIX_RE, '')
-  const names = namesIn(bareToken)
+  const names = findAgentNamesInTitle(bareToken)
   // Require the whole remainder to be the name; task phrases and hyphenated directories cannot anchor identity.
   return names.length === 1 && /^[\p{L}\p{N}]+$/u.test(bareToken) ? names[0] : null
 }
 
-function agentForWholeTitle(text: string): TerminalAgent | null {
+function agentForWholeTitle(text: string): ObservedAgent | null {
   const trimmed = text.trim()
   if (!trimmed || /[\\/]/.test(trimmed)) {
     return null
@@ -176,12 +131,12 @@ function agentForWholeTitle(text: string): TerminalAgent | null {
   return agentForBareName(stripped)
 }
 
-function agentForOwnerSuffix(text: string): TerminalAgent | null {
+function agentForOwnerSuffix(text: string): ObservedAgent | null {
   const normalized = text.trim().toLowerCase()
   return RESERVED_OWNER_IDS.get(normalized) ?? agentForBareName(text)
 }
 
-function agentForSyntheticTitle(text: string): TerminalAgent | null {
+function agentForSyntheticTitle(text: string): ObservedAgent | null {
   const trimmed = text.trim()
   if (/[\\/]/.test(trimmed)) {
     return null
@@ -210,8 +165,8 @@ function agentForSyntheticTitle(text: string): TerminalAgent | null {
   return null
 }
 
-function collectVendorMarkers(segments: readonly string[]): TerminalAgent[] {
-  const markers = new Set<TerminalAgent>()
+function collectVendorMarkers(segments: readonly string[]): ObservedAgent[] {
+  const markers = new Set<ObservedAgent>()
   for (const segment of segments) {
     // Only a leading identity-position sigil counts; the same glyph inside task text is decoration.
     if (GEMINI_GLYPHS.some((glyph) => segment.startsWith(glyph))) {
@@ -234,14 +189,14 @@ function collectVendorMarkers(segments: readonly string[]): TerminalAgent[] {
 
 function namesConsumedByAnchoredLabels(
   segments: readonly string[],
-  anchoredNames: ReadonlySet<TerminalAgent>
-): Set<TerminalAgent> {
-  const consumed = new Set<TerminalAgent>()
+  anchoredNames: ReadonlySet<ObservedAgent>
+): Set<ObservedAgent> {
+  const consumed = new Set<ObservedAgent>()
   for (const segment of segments) {
     const normalized = stripBareNameDecoration(segment).toLowerCase()
     const label = DISPLAY_LABELS.find(([text]) => text === normalized)
     if (label && anchoredNames.has(label[1])) {
-      for (const name of namesIn(label[0])) {
+      for (const name of findAgentNamesInTitle(label[0])) {
         consumed.add(name)
       }
     }
@@ -251,9 +206,9 @@ function namesConsumedByAnchoredLabels(
 
 function collectAnchoredNames(
   segments: readonly string[],
-  vendorMarkers: readonly TerminalAgent[]
-): TerminalAgent[] {
-  const anchored = new Set<TerminalAgent>()
+  vendorMarkers: readonly ObservedAgent[]
+): ObservedAgent[] {
+  const anchored = new Set<ObservedAgent>()
   // Why: a native owner's task text can end with DSB's product-name suffix, including inside wrappers.
   const allowDsbTitle = vendorMarkers.length === 0 && !segments.some(isOpenCodeNativeTitle)
 
@@ -320,7 +275,7 @@ export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
   const anchoredNames = collectAnchoredNames(segments, vendorMarkers)
   const anchoredSet = new Set(anchoredNames)
   const anchoredLabelNames = namesConsumedByAnchoredLabels(segments, anchoredSet)
-  const freeTextNames = namesIn(title).filter(
+  const freeTextNames = findAgentNamesInTitle(title).filter(
     (agent) => !anchoredSet.has(agent) && !anchoredLabelNames.has(agent)
   )
   const evidence = { vendorMarkers, anchoredNames, freeTextNames } as const
