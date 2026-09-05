@@ -122,6 +122,12 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
       store,
       scanRepo: (repo, projectRuntimeByRepoId) =>
         this.listRepoWorktreesForListing(repo, projectRuntimeByRepoId),
+      lastSuccessfulScan: (repo) => {
+        const cached = this.worktreeScanCache.get(
+          `${repo.id}\0${getRepoExecutionHostId(repo)}`
+        )?.result
+        return cached?.ok ? cached.worktrees : null
+      },
       listFolderWorkspaces: (repo, repoOwnerCount) =>
         listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
     }
