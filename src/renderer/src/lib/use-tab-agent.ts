@@ -21,6 +21,7 @@ import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 
 // A shell name or the tab's neutral default title (where inferred-interrupt reset parks it); blank titles are no evidence.
 function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
@@ -222,9 +223,12 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     const activeLeafId = s.terminalLayoutsByTabId[tab.id]?.activeLeafId
     return activeLeafId && isTerminalLeafId(activeLeafId) ? makePaneKey(tab.id, activeLeafId) : null
   })
-  const processAgent = useAppStore((s) =>
-    focusedPaneKey ? (s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agent ?? null) : null
-  )
+  const processAgent = useAppStore((s) => {
+    const agent = focusedPaneKey
+      ? (s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agent ?? null)
+      : null
+    return isTuiAgent(agent) ? agent : null
+  })
   const processShellForeground = useAppStore((s) =>
     focusedPaneKey
       ? Boolean(s.paneForegroundAgentByPaneKey[focusedPaneKey]?.shellForeground)

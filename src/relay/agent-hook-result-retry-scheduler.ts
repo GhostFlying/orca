@@ -18,14 +18,14 @@ const ASSISTANT_MESSAGE_RETRY_MS = 50
 const CODEX_SUBAGENT_POLL_MS = 1_000
 
 type CodexSubagentPoll = {
-  source: Extract<AgentHookSource, 'codex' | 'trae'>
+  source: Extract<AgentHookSource, 'codex' | 'trae' | 'traex'>
   body: unknown
   original: AgentHookEventPayload
   env?: string
   version?: string
 }
 
-function codexSubagentPollKey(paneKey: string, source: 'codex' | 'trae'): string {
+function codexSubagentPollKey(paneKey: string, source: 'codex' | 'trae' | 'traex'): string {
   return source === 'codex' ? paneKey : `${paneKey}\0${source}`
 }
 
@@ -75,6 +75,7 @@ export class AgentHookResultRetryScheduler {
   clearCodexSubagentPoll(paneKey: string): void {
     this.codexSubagentPollScheduler.clear(paneKey)
     this.codexSubagentPollScheduler.clear(`${paneKey}\0trae`)
+    this.codexSubagentPollScheduler.clear(`${paneKey}\0traex`)
   }
 
   scheduleCodexSubagentPoll(
@@ -85,7 +86,8 @@ export class AgentHookResultRetryScheduler {
     version?: string
   ): void {
     // Why: an unrelated nested CLI inherits ORCA_PANE_KEY, so it must not end a live Codex-compatible poll.
-    const compatibleSource = source === 'codex' || source === 'trae' ? source : null
+    const compatibleSource =
+      source === 'codex' || source === 'trae' || source === 'traex' ? source : null
     if (!compatibleSource) {
       return
     }

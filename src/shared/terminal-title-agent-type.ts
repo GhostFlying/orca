@@ -172,11 +172,10 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'codex')) {
     return 'Codex'
   }
-  if (
-    titleHasAgentName(title, 'trae') ||
-    titleHasAgentName(title, 'traecli') ||
-    titleHasAgentName(title, 'traex')
-  ) {
+  if (titleHasAgentName(title, 'traex')) {
+    return 'TraeX'
+  }
+  if (titleHasAgentName(title, 'trae') || titleHasAgentName(title, 'traecli')) {
     return 'Trae'
   }
   if (titleHasAgentName(title, 'openclaude')) {
@@ -272,12 +271,13 @@ function isGenericClaudeStatusClaim(title: string, titleAgent: TuiAgent | null):
 export function resolveTerminalTitleAgentType(title: string): TuiAgent | null {
   const label = getAgentLabel(title)
   const parsed = label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
-  return resolveCanonicalPaneAgentIdentity({
+  const resolved = resolveCanonicalPaneAgentIdentity({
     title,
     // Preserve this public title-parser adapter's historical answer; pane identity
     // consumers pass raw titles to the canonical resolver and enforce its fence.
     uncoveredFallback: { agent: parsed, titleOnly: false }
   }).agent
+  return resolved === 'traex' ? null : resolved
 }
 
 /**

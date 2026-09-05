@@ -15,12 +15,12 @@ import {
 import { AgentHookServerStatusUpdate } from './server-status-update'
 
 type CodexSubagentPoll = {
-  source: Extract<AgentHookSource, 'codex' | 'trae'>
+  source: Extract<AgentHookSource, 'codex' | 'trae' | 'traex'>
   body: unknown
   original: EnrichedAgentHookEventPayload
 }
 
-function codexSubagentPollKey(paneKey: string, source: 'codex' | 'trae'): string {
+function codexSubagentPollKey(paneKey: string, source: 'codex' | 'trae' | 'traex'): string {
   return source === 'codex' ? paneKey : `${paneKey}\0${source}`
 }
 
@@ -46,6 +46,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   protected clearCodexSubagentPoll(paneKey: string): void {
     this.codexSubagentPollScheduler.clear(paneKey)
     this.codexSubagentPollScheduler.clear(`${paneKey}\0trae`)
+    this.codexSubagentPollScheduler.clear(`${paneKey}\0traex`)
   }
 
   protected scheduleCodexSubagentPoll(
@@ -54,7 +55,8 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     original: EnrichedAgentHookEventPayload
   ): void {
     // Why: an unrelated nested CLI inherits ORCA_PANE_KEY, so it must not end a live Codex-compatible poll.
-    const compatibleSource = source === 'codex' || source === 'trae' ? source : null
+    const compatibleSource =
+      source === 'codex' || source === 'trae' || source === 'traex' ? source : null
     if (!compatibleSource) {
       return
     }

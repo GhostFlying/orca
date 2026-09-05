@@ -1,4 +1,5 @@
 import { collectAgentTitleEvidence } from './agent-title-evidence'
+import type { ObservedAgent } from './observed-agent'
 import { resolvePaneAgentIdentity } from './pane-agent-identity-resolver'
 import type { TuiAgent } from './tui-agent'
 
@@ -31,13 +32,13 @@ export function resolvePublishedPaneAgentIdentity(args: {
    * only one that survives WSL, where the Windows host reads the foreground process as `wsl.exe`
    * rather than the agent running inside the distro.
    */
-  hookAgent?: TuiAgent | null
+  hookAgent?: ObservedAgent | null
   /** Whether that hook belongs to a turn in progress, as opposed to one that finished. */
   hookIsLive?: boolean
   launchAgent?: TuiAgent | null
-  foregroundAgent?: TuiAgent | null
+  foregroundAgent?: ObservedAgent | null
   title?: string | null
-}): TuiAgent | undefined {
+}): ObservedAgent | undefined {
   const titleAgent = args.title ? collectAgentTitleEvidence(args.title).agent : null
   return (
     resolvePaneAgentIdentity({
