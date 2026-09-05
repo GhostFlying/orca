@@ -104,6 +104,7 @@ export class RuntimeClientSettingsController {
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       worktreeCardDetailsRow: settings.worktreeCardDetailsRow !== false,
       compactWorktreeCards: settings.compactWorktreeCards === true,
+      showPinnedWorktreesInGroups: settings.showPinnedWorktreesInGroups === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       minimaxEndpoint: settings.minimaxEndpoint ?? 'overseas',

@@ -31,6 +31,7 @@ export type RuntimeClientSettings = Pick<
   | 'experimentalNewWorktreeCardStyle'
   | 'worktreeCardDetailsRow'
   | 'compactWorktreeCards'
+  | 'showPinnedWorktreesInGroups'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
   | 'minimaxEndpoint'
