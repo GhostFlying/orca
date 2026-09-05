@@ -91,4 +91,19 @@ describe('new workspace project targets', () => {
       expect.objectContaining({ id: 'ssh', label: 'SSH · build-server', detail: '/home/dev/orca' })
     ])
   })
+
+  it('uses the host catalog label for SSH targets', () => {
+    expect(
+      getNewWorkspaceRunTarget(
+        {
+          id: 'ssh',
+          displayName: 'orca',
+          path: '/home/dev/orca',
+          executionHostId: 'ssh:build-server'
+        },
+        'linux',
+        new Map([['ssh:build-server', 'Build Server']])
+      )
+    ).toEqual({ label: 'SSH · Build Server', detail: '/home/dev/orca' })
+  })
 })
