@@ -40,6 +40,7 @@ const AGENT_HOOK_SOURCES = [
   'codex',
   'qoder',
   'codebuddy',
+  'trae',
   'gemini',
   'antigravity',
   'amp',

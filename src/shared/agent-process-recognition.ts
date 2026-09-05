@@ -14,13 +14,14 @@ import {
 import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
+type ProcessName = string | null | undefined
 
 const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const INTERPRETER_SCRIPT_EXTENSION_RE = /\.(?:js|mjs|cjs)$/i
 const PYTHON_SCRIPT_EXTENSION_RE = /\.(?:py|pyw)$/i
 
 function normalizeProcessName(
-  processName: string | null | undefined,
+  processName: ProcessName,
   options: { stripInterpreterScriptExtension?: boolean } = {}
 ): string {
   if (!processName) {
@@ -150,26 +151,22 @@ function recognizePythonEntrypoint(
 // exact-name check never matches and readiness/follow-up delivery would stall.
 // Scoped to muse: a generic `-suffix` rule would misclassify short agent names
 // (see the ante-obsidian test).
-export function isExpectedAgentProcess(
-  processName: string | null | undefined,
-  expectedProcess: string
-): boolean {
+export function isExpectedAgentProcess(processName: ProcessName, expectedProcess: string): boolean {
   const normalizedProcess = normalizeProcessName(processName)
   const normalizedExpected = normalizeProcessName(expectedProcess)
   if (!normalizedProcess || !normalizedExpected) {
     return false
   }
+  const expectedAgent = agentForNormalizedProcess(normalizedExpected)
   return (
     normalizedProcess === normalizedExpected ||
     normalizedProcess.startsWith(`${normalizedExpected}.`) ||
-    (normalizedExpected === 'qodercli' && /^qodercli-\d/.test(normalizedProcess)) ||
-    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
+    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-')) ||
+    (expectedAgent !== undefined && agentForNormalizedProcess(normalizedProcess) === expectedAgent)
   )
 }
 
-export function recognizeAgentProcess(
-  processName: string | null | undefined
-): RecognizedAgentProcess | null {
+export function recognizeAgentProcess(processName: ProcessName): RecognizedAgentProcess | null {
   const normalized = normalizeProcessName(processName)
   return recognizedAgentForProcess(normalized)
 }
@@ -214,7 +211,7 @@ export function recognizeAgentProcessFromCommandLine(
   }
   return keep ? viaEntrypoint : filterHeadlessOneShotAgentCommand(viaEntrypoint, tokens)
 }
-export function isAgentForegroundWrapperProcess(processName: string | null | undefined): boolean {
+export function isAgentForegroundWrapperProcess(processName: ProcessName): boolean {
   const normalized = normalizeProcessName(processName)
   return (
     FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES.has(normalized) || PYTHON_PROCESS_RE.test(normalized)

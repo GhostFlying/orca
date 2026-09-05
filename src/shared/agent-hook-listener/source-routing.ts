@@ -7,6 +7,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/codex': 'codex',
   '/hook/qoder': 'qoder',
   '/hook/codebuddy': 'codebuddy',
+  '/hook/trae': 'trae',
   '/hook/gemini': 'gemini',
   '/hook/antigravity': 'antigravity',
   '/hook/amp': 'amp',

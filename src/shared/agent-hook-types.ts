@@ -9,6 +9,7 @@ export const AGENT_HOOK_TARGETS = [
   'codex',
   'qoder',
   'codebuddy',
+  'trae',
   'gemini',
   'antigravity',
   'amp',
