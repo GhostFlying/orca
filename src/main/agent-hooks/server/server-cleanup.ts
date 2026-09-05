@@ -17,6 +17,7 @@ import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 import { recordAgentExit } from './agent-exit-evidence'
+import { clearDisconnectedAgentState } from './server-disconnected-agent-state'
 
 export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
   /** The resume-identity remnant of a dropped row: a `providerSessionOnly` entry carries no state
@@ -282,18 +283,8 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       if (deleted) {
         statusChanged = true
         this.commitStatusRowMutation(deleted, undefined)
-        if (deleted.payload.agentType === 'codex') {
-          // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
-          this.state.codexSubagentRosterByPaneKey.delete(paneKey)
-          this.state.codexLeadStateByPaneKey.delete(paneKey)
-        } else if (deleted.payload.agentType === 'claude') {
-          this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
-          this.state.claudeLeadStateByPaneKey.delete(paneKey)
-          this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-          this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-          this.state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
-          this.state.claudeSessionOwnerByPaneKey.delete(paneKey)
-        }
+        // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
+        clearDisconnectedAgentState(this.state, paneKey, deleted.payload.agentType)
       }
     }
     for (const [paneKey, evidence] of this.currentAuthorityObservations) {
