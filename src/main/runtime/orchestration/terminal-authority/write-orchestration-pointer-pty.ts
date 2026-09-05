@@ -10,6 +10,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import type { ObservedAgent } from '../../../../shared/observed-agent'
 import { selectRuntimeHookAgentRowForPane } from '../../runtime-mobile-agent-status-projection'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../../../shared/published-pane-agent-identity'
@@ -93,22 +94,29 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
 
   protected resolvePaneAgentIdentityField(
     launchAgent: TuiAgent | null | undefined,
-    foregroundAgent: TerminalAgent | null | undefined,
+    foregroundAgent: ObservedAgent | null | undefined,
     title: string | null,
     paneKey: string | null
   ): { agentIdentity?: TerminalAgent } {
     const hookRow = paneKey
       ? selectRuntimeHookAgentRowForPane(this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? [])
       : null
-    const hookAgent = isTuiAgent(hookRow?.agentType) ? hookRow.agentType : null
-    const agentIdentity = resolvePublishedPaneAgentIdentity({
+    const hookAgent =
+      hookRow?.agentType === 'traex'
+        ? 'traex'
+        : isTuiAgent(hookRow?.agentType)
+          ? hookRow.agentType
+          : null
+    const observedIdentity = resolvePublishedPaneAgentIdentity({
       hookAgent,
       hookIsLive: hookRow?.agentIsLive,
       launchAgent,
       foregroundAgent,
       title
     })
-    return agentIdentity ? { agentIdentity } : {}
+    return observedIdentity && observedIdentity !== 'traex'
+      ? { agentIdentity: observedIdentity }
+      : {}
   }
 
   /** A user's pane name from the saved layout: every client's pane rename lands there. */

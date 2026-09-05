@@ -176,11 +176,10 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'codex')) {
     return 'Codex'
   }
-  if (
-    titleHasAgentName(title, 'trae') ||
-    titleHasAgentName(title, 'traecli') ||
-    titleHasAgentName(title, 'traex')
-  ) {
+  if (titleHasAgentName(title, 'traex')) {
+    return 'TraeX'
+  }
+  if (titleHasAgentName(title, 'trae') || titleHasAgentName(title, 'traecli')) {
     return 'Trae'
   }
   if (titleHasAgentName(title, 'openclaude')) {
@@ -286,11 +285,12 @@ function isGenericClaudeStatusClaim(title: string, titleAgent: TerminalAgent | n
 export function resolveTerminalTitleAgentType(title: string): TerminalAgent | null {
   const label = getAgentLabel(title)
   const parsed = label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
-  return resolveCanonicalPaneAgentIdentity({
+  const resolved = resolveCanonicalPaneAgentIdentity({
     title,
     // Preserve this public parser’s legacy fallback; pane-identity consumers enforce the canonical resolver’s fence on raw titles.
     uncoveredFallback: { agent: parsed, titleOnly: false }
   }).agent
+  return resolved === 'traex' ? null : resolved
 }
 
 /** Treat bare Claude-style prefixes as activity only; explicit identity requires a Claude Code name, not a task/workspace spinner. */
