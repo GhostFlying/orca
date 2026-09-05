@@ -90,7 +90,6 @@ vi.mock('../../../native-chat/transcript-watch', () => ({
     )
   }
 }))
-
 import { boundSubagentEntryId } from '../../../native-chat/subagent-entry-id-bounds'
 import { NATIVE_CHAT_METHODS } from './native-chat'
 
