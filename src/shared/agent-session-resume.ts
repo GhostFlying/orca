@@ -279,6 +279,7 @@ export function extractAgentProviderSession(
       return id ? { key: 'conversation_id', id } : null
     }
     case 'amp':
+    case 'trae':
     case 'command-code':
     case 'hermes':
       return null

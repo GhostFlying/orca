@@ -25,6 +25,7 @@ import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { qwenCodeHookService } from '../qwen-code/hook-service'
 import { qoderCnHookService, qoderHookService } from '../qoder/hook-service'
+import { traeHookService } from '../trae/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 import { jcodeHookService } from '../jcode/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
@@ -43,6 +44,7 @@ describe('remote hook service registry coverage', () => {
       ['claude', claudeHookService],
       ['openclaude', openClaudeHookService],
       ['codex', codexHookService],
+      ['trae', traeHookService],
       ['gemini', geminiHookService],
       ['antigravity', antigravityHookService],
       ['amp', ampHookService],

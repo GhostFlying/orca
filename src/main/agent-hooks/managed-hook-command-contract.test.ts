@@ -25,6 +25,7 @@ import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook
 import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-settings'
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
 import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/hook-settings'
+import { getTraeManagedCommand } from '../trae/trae-hook-definition'
 import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -140,6 +141,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getCodexCommand(path), wrapReadablePosixHookCommand(path)],
       remote: (path) => [wrapPosixHookCommand(path), wrapReadablePosixHookCommand(path)]
+    }
+  ],
+  [
+    'trae',
+    {
+      local: (path) => [getTraeManagedCommand(path)],
+      remote: (path) => [wrapPosixHookCommand(path)]
     }
   ],
   ['gemini', standardCommands],
