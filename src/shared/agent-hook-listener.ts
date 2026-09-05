@@ -1,6 +1,7 @@
 import { readAgentProcessIdentity } from './agent-process-presence'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
+import { resolveObservedHookSource } from './agent-hook-observed-agent'
 import { extractAgentProviderSession } from './agent-session-resume'
 import {
   canAcceptClaudeCompactCompletion,
@@ -37,7 +38,7 @@ const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
 
 export function normalizeHookPayload(
   state: HookListenerState,
-  source: AgentHookSource,
+  routeSource: AgentHookSource,
   body: unknown,
   expectedEnv: string,
   options: {
@@ -51,7 +52,7 @@ export function normalizeHookPayload(
     ) => boolean | 'preserve-poster'
   } = {}
 ): AgentHookEventPayload | null {
-  const envelope = parseHookEnvelope(state, source, body, expectedEnv)
+  const envelope = parseHookEnvelope(state, routeSource, body, expectedEnv)
   if (!envelope) {
     return null
   }
@@ -63,6 +64,7 @@ export function normalizeHookPayload(
     worktreeId: stampedWorktreeId,
     launchToken: stampedLaunchToken
   } = envelope
+  const source = resolveObservedHookSource(routeSource, record)
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }

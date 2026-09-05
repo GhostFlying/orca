@@ -8,7 +8,6 @@ import { isPwshAvailableAsync } from '../main/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
-import { runProcess } from '@orca/process-host'
 import { probeCommandVersion } from './preflight-command-version'
 import { resolveRelayTraeHomes } from './preflight-trae-home-resolver'
 
