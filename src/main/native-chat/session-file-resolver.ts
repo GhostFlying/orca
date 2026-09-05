@@ -51,6 +51,16 @@ function codexAccountSessionsDirs(): string[] {
   }
 }
 
+function traexSessionsDirs(): string[] {
+  const traeHome = process.env.TRAE_HOME?.trim() || join(homedir(), '.trae')
+  const candidates = [
+    join(process.env.TRAECLI_HOME?.trim() || join(traeHome, 'cli'), 'sessions'),
+    join(traeHome, 'cli', 'sessions'),
+    join(homedir(), '.trae', 'sessions')
+  ]
+  return uniqueDirs(candidates)
+}
+
 function grokSessionsDir(): string {
   return resolveGrokSessionsDir(process.env, homedir())
 }
@@ -60,6 +70,8 @@ export type ResolveSessionFileOptions = {
   claudeProjectsDir?: string
   /** Defaults to managed Codex then CODEX_HOME/~/.codex, in order. */
   codexSessionsDirs?: string[]
+  /** Override TraeX's CLI-owned session roots. */
+  traexSessionsDirs?: string[]
   grokSessionsDir?: string
   ompSessionsDir?: string
   /** Hook paths are authoritative: Claude filenames may differ from its reported session ID. */
@@ -119,15 +131,26 @@ export async function resolveSessionFilePath(
     return null
   }
 
+  const trimmedSessionId = sessionId.trim()
+  if (!trimmedSessionId) {
+    return null
+  }
+
   // Host hook paths prove a host-launched agent, so its transcript cannot be in a guest.
   const wslTier = !jsonlHookPath
-  const resolved = await resolveSessionFileById(
-    transcriptAgent,
-    sessionId,
-    options,
-    wslTier,
-    signal
-  )
+  const resolved =
+    agent === 'traex'
+      ? await resolveTiered(
+          'codex',
+          trimmedSessionId,
+          options.traexSessionsDirs ?? traexSessionsDirs(),
+          {
+            wslTier: false,
+            signal,
+            strictErrors: options.strictErrors
+          }
+        )
+      : await resolveSessionFileById(transcriptAgent, trimmedSessionId, options, wslTier, signal)
   if (!resolved && unavailable) {
     throw unavailable
   }
