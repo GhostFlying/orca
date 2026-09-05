@@ -60,16 +60,13 @@ function releaseIdentity({ release, parsed }) {
   }
 }
 
-export function validateReleaseCommit({ tag, sha, subject, packageVersion }) {
+export function validateReleaseCommit({ tag, sha, packageVersion }) {
   const parsed = parseStableTag(tag)
   if (!parsed) {
     throw new Error('upstream release tag must match vX.Y.Z')
   }
   if (!COMMIT_SHA_PATTERN.test(sha)) {
     throw new Error('release SHA must be a lowercase commit SHA')
-  }
-  if (subject !== `release: ${tag}`) {
-    throw new Error(`release commit subject must be release: ${tag}`)
   }
   if (packageVersion !== parsed.version) {
     throw new Error(`package.json version ${packageVersion} does not match ${tag}`)

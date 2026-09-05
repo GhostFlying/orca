@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
-  assertForkPatchContract,
+  assertForkPatchPaths,
   inspectForkCandidate,
   inspectForkPatchStack,
   isDirectExecution
@@ -53,20 +53,6 @@ function appendCommit(root, file, value, subject) {
   git(root, 'add', file)
   git(root, 'commit', '-m', subject)
   return git(root, 'rev-parse', 'HEAD')
-}
-
-function stablePatchId(root, commit) {
-  const patch = execFileSync('git', ['show', '--pretty=format:', commit], {
-    cwd: root,
-    encoding: 'utf8'
-  })
-  return execFileSync('git', ['patch-id', '--stable'], {
-    cwd: root,
-    encoding: 'utf8',
-    input: patch
-  })
-    .trim()
-    .split(' ')[0]
 }
 
 describe('inspectForkPatchStack', () => {
@@ -283,45 +269,17 @@ describe('CLI entrypoint', () => {
   })
 })
 
-describe('fork patch contract', () => {
-  it('accepts an ordered subset when an upstream release absorbs a patch', () => {
+describe('fork patch path boundary', () => {
+  it('accepts every business commit in source range without pinning identity or subject', () => {
     const root = createRepository()
     git(root, 'switch', '-c', 'fork')
-    const first = appendCommit(
-      root,
-      'mobile/first.ts',
-      'first\n',
-      'fix(mobile): honor pinned workspace display preference'
-    )
-    const third = appendCommit(
-      root,
-      'mobile/third.ts',
-      'third\n',
-      'fix(mobile): show SSH labels in Run on picker'
-    )
+    const first = appendCommit(root, 'mobile/first.ts', 'first\n', 'arbitrary first patch')
+    const second = appendCommit(root, 'mobile/second.ts', 'second\n', 'renamed replayed patch')
 
-    expect(
-      assertForkPatchContract(
-        [first, third],
-        root,
-        [
-          'fix(mobile): honor pinned workspace display preference',
-          'fix(mobile): show SSH labels in Run on picker'
-        ],
-        null
-      )
-    ).toEqual([
-      'fix(mobile): honor pinned workspace display preference',
-      'fix(mobile): show SSH labels in Run on picker'
-    ])
+    expect(() => assertForkPatchPaths([first, second], root)).not.toThrow()
   })
 
-  it('rejects extra patches and maintenance-path changes', () => {
-    const extraRoot = createRepository()
-    git(extraRoot, 'switch', '-c', 'fork')
-    const extra = appendCommit(extraRoot, 'mobile/extra.ts', 'extra\n', 'unapproved patch')
-    expect(() => assertForkPatchContract([extra], extraRoot)).toThrow('unexpected fork patch')
-
+  it('rejects business patches that change maintenance paths', () => {
     const maintenanceRoot = createRepository()
     git(maintenanceRoot, 'switch', '-c', 'fork')
     const maintenance = appendCommit(
@@ -330,14 +288,9 @@ describe('fork patch contract', () => {
       'name: changed\n',
       'fix(mobile): honor pinned workspace display preference'
     )
-    expect(() =>
-      assertForkPatchContract(
-        [maintenance],
-        maintenanceRoot,
-        ['fix(mobile): honor pinned workspace display preference'],
-        null
-      )
-    ).toThrow('changes a maintenance path')
+    expect(() => assertForkPatchPaths([maintenance], maintenanceRoot)).toThrow(
+      'changes a maintenance path'
+    )
   })
 })
 
@@ -363,27 +316,21 @@ describe('candidate transaction metadata', () => {
       `Upstream-Release: v1.4.188\nUpstream-Commit: ${upstream}\nFork-Maintenance-Source-Fork: ${sourceFork}\nFork-Maintenance-Source-Anchor: ${sourceAnchor}\nFork-Maintenance-Source-Preview: ${sourcePreview}\nFork-Maintenance-Generated: upstream-anchor-v1`
     )
     const anchor = git(root, 'rev-parse', 'HEAD')
-    appendCommit(
+    const patch = appendCommit(
       root,
       'mobile/change.ts',
       'change\n',
       'fix(mobile): show SSH labels in Run on picker'
     )
 
-    expect(
-      inspectForkCandidate({
-        candidateRef: 'HEAD',
-        cwd: root,
-        expectedPatchIds: [null, null, stablePatchId(root, 'HEAD')]
-      })
-    ).toMatchObject({
+    expect(inspectForkCandidate({ candidateRef: 'HEAD', cwd: root })).toMatchObject({
       anchorSha: anchor,
       upstreamSha: upstream,
       upstreamTag: 'v1.4.188',
       sourceForkSha: sourceFork,
       sourceAnchorSha: sourceAnchor,
       sourcePreviewSha: sourcePreview,
-      patchSubjects: ['fix(mobile): show SSH labels in Run on picker']
+      patchCommits: [patch]
     })
   })
 })

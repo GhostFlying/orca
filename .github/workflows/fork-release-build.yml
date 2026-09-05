@@ -60,7 +60,6 @@ jobs:
           ' "$RUNNER_TEMP/fork-candidate.json" >>"$GITHUB_OUTPUT"
           upstream_sha="$(jq -r .upstreamSha "$RUNNER_TEMP/fork-candidate.json")"
           upstream_tag="$(jq -r .upstreamTag "$RUNNER_TEMP/fork-candidate.json")"
-          test "$(git show -s --format=%s "$upstream_sha")" = "release: $upstream_tag"
           test "v$(git show "$upstream_sha:package.json" | jq -r .version)" = "$upstream_tag"
       - name: Verify current transaction refs
         id: refs

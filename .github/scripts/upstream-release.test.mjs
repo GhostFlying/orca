@@ -36,12 +36,19 @@ describe('upstream stable release selection', () => {
     expect(() => resolveStableRelease(releases, 'v1.4.189-rc.0')).toThrow('must match vX.Y.Z')
   })
 
-  it('validates the version-bump release commit', () => {
+  it('validates release commit identity by tag, SHA, and package version', () => {
     expect(
       validateReleaseCommit({
         tag: 'v1.4.188',
         sha: 'a'.repeat(40),
-        subject: 'release: v1.4.188',
+        packageVersion: '1.4.188'
+      })
+    ).toMatchObject({ version: '1.4.188' })
+    expect(
+      validateReleaseCommit({
+        tag: 'v1.4.188',
+        sha: 'b'.repeat(40),
+        subject: 'release: v1.4.188 artifact gate fixes',
         packageVersion: '1.4.188'
       })
     ).toMatchObject({ version: '1.4.188' })
@@ -49,10 +56,9 @@ describe('upstream stable release selection', () => {
       validateReleaseCommit({
         tag: 'v1.4.188',
         sha: 'a'.repeat(40),
-        subject: 'some main commit',
-        packageVersion: '1.4.188'
+        packageVersion: '1.4.189'
       })
-    ).toThrow('release commit subject')
+    ).toThrow('package.json version')
   })
 
   it('fetches every Releases API page', async () => {

@@ -23,15 +23,6 @@ env:
   PREVIEW_BRANCH: sync/upstream-release
   FORK_COMMITTER_NAME: GhostFlying
   FORK_COMMITTER_EMAIL: 4019569+GhostFlying@users.noreply.github.com
-  PINNED_WORKSPACE_BRANCH: GhostFlying/fix_mobile_pinned_workspace_parity
-  PINNED_WORKSPACE_SHA: 02d0d5597b65b338754972fa25e4f3d4df499f22
-  PINNED_WORKSPACE_BASE_SHA: 1727b71f0f6bdd94c6c0a75531bed7641ff00c6e
-  PINNED_CORNETFISH_BRANCH: GhostFlying/cornetfish
-  PINNED_CORNETFISH_SHA: 6646250976a9e5b8c64f819ee9f0a88ea5b66d90
-  PINNED_WORKTREE_SCAN_BRANCH: p/luchengxuan/worktree-scan-last-known-good
-  PINNED_WORKTREE_SCAN_SHA: 3f41b32e1b345f737c67abe4d7ea94e7dbb70f82
-  PINNED_TRAE_STATUS_SHA: 1e5e90e127b5df8c6372485a2ae067a300880b39
-  PINNED_MOBILE_TRAEX_CHAT_SHA: c16e7260035b67d4c88891ec7790a0a697eed34a
 
 jobs:
   prepare:
@@ -62,7 +53,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_UPSTREAM_TAG: ${{ inputs.upstream_tag }}
         run: node .github/scripts/upstream-release.mjs
-      - name: Fetch pinned refs and release commit
+      - name: Fetch transaction refs and release commit
         id: refs
         env:
           UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
@@ -70,25 +61,15 @@ jobs:
           set -euo pipefail
           git remote add upstream "https://github.com/$UPSTREAM_REPOSITORY.git"
           git fetch --no-tags origin \
-            "+refs/heads/$FORK_BRANCH:refs/remotes/origin/$FORK_BRANCH" \
-            "+refs/heads/$PINNED_WORKSPACE_BRANCH:refs/remotes/origin/pinned-workspace" \
-            "+refs/heads/$PINNED_CORNETFISH_BRANCH:refs/remotes/origin/pinned-cornetfish" \
-            "+refs/heads/$PINNED_WORKTREE_SCAN_BRANCH:refs/remotes/origin/pinned-worktree-scan"
-          test "$(git rev-parse refs/remotes/origin/pinned-workspace)" = "$PINNED_WORKSPACE_SHA"
-          test "$(git rev-parse refs/remotes/origin/pinned-cornetfish)" = "$PINNED_CORNETFISH_SHA"
-          test "$(git rev-parse refs/remotes/origin/pinned-worktree-scan)" = \
-            "$PINNED_WORKTREE_SCAN_SHA"
-          git merge-base --is-ancestor "$PINNED_WORKSPACE_BASE_SHA" "$PINNED_WORKSPACE_SHA"
-          git merge-base --is-ancestor "$PINNED_TRAE_STATUS_SHA" \
-            "refs/remotes/origin/$FORK_BRANCH"
-          git merge-base --is-ancestor "$PINNED_MOBILE_TRAEX_CHAT_SHA" \
-            "refs/remotes/origin/$FORK_BRANCH"
+            "+refs/heads/$FORK_BRANCH:refs/remotes/origin/$FORK_BRANCH"
           anchor_lease_sha="$(git ls-remote origin "refs/heads/$ANCHOR_BRANCH" | awk '{print $1}')"
-          if [[ -n "$anchor_lease_sha" ]]; then
-            git fetch --no-tags origin \
-              "+refs/heads/$ANCHOR_BRANCH:refs/remotes/origin/$ANCHOR_BRANCH"
-            test "$(git rev-parse "refs/remotes/origin/$ANCHOR_BRANCH^{commit}")" = "$anchor_lease_sha"
+          if [[ -z "$anchor_lease_sha" ]]; then
+            echo "::error::$ANCHOR_BRANCH is missing; restore it explicitly before syncing."
+            exit 1
           fi
+          git fetch --no-tags origin \
+            "+refs/heads/$ANCHOR_BRANCH:refs/remotes/origin/$ANCHOR_BRANCH"
+          test "$(git rev-parse "refs/remotes/origin/$ANCHOR_BRANCH^{commit}")" = "$anchor_lease_sha"
           git fetch --no-tags upstream \
             "+refs/tags/$UPSTREAM_TAG:refs/tags/upstream-release-target"
           preview_lease_sha="$(git ls-remote origin "refs/heads/$PREVIEW_BRANCH" | awk '{print $1}')"
@@ -98,9 +79,7 @@ jobs:
             test "$(git rev-parse "refs/remotes/origin/$PREVIEW_BRANCH^{commit}")" = "$preview_lease_sha"
           fi
           target_sha="$(git rev-parse 'refs/tags/upstream-release-target^{commit}')"
-          subject="$(git show -s --format=%s "$target_sha")"
           package_version="$(git show "$target_sha:package.json" | jq -r .version)"
-          test "$subject" = "release: $UPSTREAM_TAG"
           test "v$package_version" = "$UPSTREAM_TAG"
           echo "preview_lease_sha=$preview_lease_sha" >>"$GITHUB_OUTPUT"
           echo "anchor_lease_sha=$anchor_lease_sha" >>"$GITHUB_OUTPUT"
@@ -112,29 +91,10 @@ jobs:
           TARGET_SHA: ${{ steps.refs.outputs.target_sha }}
         run: |
           set -euo pipefail
-          if [[ -z "$ANCHOR_LEASE_SHA" ]]; then
-            echo "anchor_sha=0000000000000000000000000000000000000000" >>"$GITHUB_OUTPUT"
-            echo "fork_sha=$(git rev-parse "refs/remotes/origin/$FORK_BRANCH^{commit}")" >>"$GITHUB_OUTPUT"
-            jq -n \
-              --arg anchorSha 0000000000000000000000000000000000000000 \
-              --arg forkSha "$(git rev-parse "refs/remotes/origin/$FORK_BRANCH^{commit}")" \
-              --arg upstreamSha "$TARGET_SHA" \
-              --arg first "$PINNED_WORKSPACE_BASE_SHA" \
-              --arg second "$PINNED_WORKSPACE_SHA" \
-              --arg third "$PINNED_CORNETFISH_SHA" \
-              --arg fourth "$PINNED_WORKTREE_SCAN_SHA" \
-              --arg fifth "$PINNED_TRAE_STATUS_SHA" \
-              --arg sixth "$PINNED_MOBILE_TRAEX_CHAT_SHA" \
-              '{version: 1, $anchorSha, $forkSha, $upstreamSha, patchCommits: [$first, $second, $third, $fourth, $fifth, $sixth], patchCount: 6, generatedMaintenanceSnapshotSha: null}' \
-              >"$RUNNER_TEMP/fork-sync-state.json"
-            echo "result=pending" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
           node .github/scripts/fork-maintenance-state.mjs inspect \
             --anchor="refs/remotes/origin/$ANCHOR_BRANCH" \
             --fork="refs/remotes/origin/$FORK_BRANCH" \
-            --target="$TARGET_SHA" \
-            --enforce-patch-contract=true >"$RUNNER_TEMP/fork-sync-state.json"
+            --target="$TARGET_SHA" >"$RUNNER_TEMP/fork-sync-state.json"
           jq . "$RUNNER_TEMP/fork-sync-state.json"
           jq -r '"anchor_sha=\(.anchorSha)"' "$RUNNER_TEMP/fork-sync-state.json" >>"$GITHUB_OUTPUT"
           jq -r '"fork_sha=\(.forkSha)"' "$RUNNER_TEMP/fork-sync-state.json" >>"$GITHUB_OUTPUT"
@@ -156,6 +116,7 @@ jobs:
           set -euo pipefail
           maintenance_paths=(
             .github/fork-maintenance-plan.md
+            .github/fork-maintenance-v1.4.197-implementation-plan.md
             .github/scripts/fork-maintenance-state.mjs
             .github/scripts/fork-maintenance-state.test.mjs
             .github/scripts/fork-maintenance-workflow.test.mjs

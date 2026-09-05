@@ -7,25 +7,10 @@ const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/
 const GIT_BINARY = process.env.ORCA_FORK_MAINTENANCE_GIT_BINARY || 'git'
 const GENERATED_ANCHOR_TRAILER = 'Fork-Maintenance-Generated: upstream-anchor-v1'
 const GENERATED_SNAPSHOT_TRAILER = 'Fork-Maintenance-Generated: maintenance-snapshot-v1'
-export const EXPECTED_FORK_PATCH_SUBJECTS = [
-  'fix(mobile): honor pinned workspace display preference',
-  'docs(mobile): document workspace settings loaders',
-  'fix(mobile): show SSH labels in Run on picker',
-  'fix(runtime): preserve worktree names across scan stalls',
-  'fix(agents): complete Trae status integration',
-  'feat(mobile): support existing TraeX chats'
-]
-export const EXPECTED_FORK_PATCH_IDS = [
-  'efa983e7d8a0055bb52cec99cc8f0374c581a46b',
-  '3ee38c9ce1f44247484a9ab150b7ef6e55eb4ddd',
-  'afda6350fc567b1ee8cd5440985e33dc0d218a36',
-  'cfe77ffb8b7c8725946d738824143657780a776a',
-  '06701e764b3d94e4444d9a608578b754a5ae51d0',
-  '97917f68867d43a321779ccdae139e17ecc04c1f'
-]
 const MAINTENANCE_PATHS = [
   'AGENTS.md',
   '.github/fork-maintenance-plan.md',
+  '.github/fork-maintenance-v1.4.197-implementation-plan.md',
   '.github/scripts/fork-maintenance-state.mjs',
   '.github/scripts/fork-maintenance-state.test.mjs',
   '.github/scripts/fork-release-assets.mjs',
@@ -71,22 +56,6 @@ function commitHasTrailer(commitSha, trailer, cwd) {
   return lines(git(['log', '-1', '--format=%B', commitSha], cwd)).includes(trailer)
 }
 
-function patchId(commitSha, cwd) {
-  const patch = execFileSync(GIT_BINARY, ['show', '--pretty=format:', commitSha], {
-    cwd,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
-  const result = execFileSync(GIT_BINARY, ['patch-id', '--stable'], {
-    cwd,
-    encoding: 'utf8',
-    input: patch,
-    stdio: ['pipe', 'pipe', 'pipe']
-  }).trim()
-  const [value] = result.split(' ')
-  return requireCommitSha(value, 'patchId')
-}
-
 function isMaintenancePath(path) {
   return MAINTENANCE_PATHS.some((allowedPath) =>
     allowedPath.endsWith('/') ? path.startsWith(allowedPath) : path === allowedPath
@@ -102,37 +71,15 @@ function assertGeneratedMaintenanceCommit(commitSha, cwd) {
   }
 }
 
-export function assertForkPatchContract(
-  patchCommits,
-  cwd = process.cwd(),
-  expectedSubjects = EXPECTED_FORK_PATCH_SUBJECTS,
-  expectedPatchIds = EXPECTED_FORK_PATCH_IDS
-) {
-  let expectedIndex = 0
-  const subjects = []
+export function assertForkPatchPaths(patchCommits, cwd = process.cwd()) {
   for (const commitSha of patchCommits) {
-    const subject = git(['show', '-s', '--format=%s', commitSha], cwd)
-    const currentPatchId = patchId(commitSha, cwd)
-    while (
-      (expectedSubjects[expectedIndex] !== subject ||
-        (expectedPatchIds && expectedPatchIds[expectedIndex] !== currentPatchId)) &&
-      expectedIndex < expectedSubjects.length
-    ) {
-      expectedIndex += 1
-    }
-    if (expectedIndex >= expectedSubjects.length) {
-      throw new Error(`unexpected fork patch: ${subject} (${currentPatchId})`)
-    }
     const changedPaths = lines(
       git(['diff-tree', '--no-commit-id', '--name-only', '-r', `${commitSha}^`, commitSha], cwd)
     )
     if (changedPaths.some(isMaintenancePath)) {
       throw new Error(`fork patch ${commitSha} changes a maintenance path`)
     }
-    subjects.push(subject)
-    expectedIndex += 1
   }
-  return subjects
 }
 
 function requireGeneratedAnchor(anchorSha, cwd) {
@@ -211,6 +158,7 @@ export function inspectForkPatchStack({
   const patchCommits = rangeCommits.filter(
     (commitSha) => !generatedWorkflowSnapshots.includes(commitSha)
   )
+  assertForkPatchPaths(patchCommits, cwd)
   return {
     version: 1,
     anchorSha,
@@ -223,11 +171,7 @@ export function inspectForkPatchStack({
   }
 }
 
-export function inspectForkCandidate({
-  candidateRef,
-  cwd = process.cwd(),
-  expectedPatchIds = EXPECTED_FORK_PATCH_IDS
-}) {
+export function inspectForkCandidate({ candidateRef, cwd = process.cwd() }) {
   const candidateSha = requireCommitSha(
     git(['rev-parse', `${candidateRef}^{commit}`], cwd),
     'candidateSha'
@@ -246,12 +190,6 @@ export function inspectForkCandidate({
     targetRef: `${anchorSha}^`,
     cwd
   })
-  const patchSubjects = assertForkPatchContract(
-    state.patchCommits,
-    cwd,
-    EXPECTED_FORK_PATCH_SUBJECTS,
-    expectedPatchIds
-  )
   const upstreamTag = requiredTrailer(anchorSha, 'Upstream-Release', cwd)
   if (!/^v\d+\.\d+\.\d+$/.test(upstreamTag)) {
     throw new Error('Upstream-Release trailer must match vX.Y.Z')
@@ -267,10 +205,16 @@ export function inspectForkCandidate({
     requiredTrailer(anchorSha, 'Fork-Maintenance-Source-Fork', cwd),
     'sourceForkSha'
   )
-  const sourceAnchorTrailer = requireCommitSha(
+  if (/^0+$/.test(sourceForkSha)) {
+    throw new Error('Fork-Maintenance-Source-Fork must identify the captured production fork')
+  }
+  const sourceAnchorSha = requireCommitSha(
     requiredTrailer(anchorSha, 'Fork-Maintenance-Source-Anchor', cwd),
     'sourceAnchorSha'
   )
+  if (/^0+$/.test(sourceAnchorSha)) {
+    throw new Error('Fork-Maintenance-Source-Anchor must identify the captured production anchor')
+  }
   const sourcePreviewSha = requireCommitSha(
     requiredTrailer(anchorSha, 'Fork-Maintenance-Source-Preview', cwd),
     'sourcePreviewSha'
@@ -281,9 +225,8 @@ export function inspectForkCandidate({
     upstreamTag,
     upstreamSha,
     sourceForkSha,
-    sourceAnchorSha: /^0+$/.test(sourceAnchorTrailer) ? null : sourceAnchorTrailer,
-    sourcePreviewSha: /^0+$/.test(sourcePreviewSha) ? null : sourcePreviewSha,
-    patchSubjects
+    sourceAnchorSha,
+    sourcePreviewSha: /^0+$/.test(sourcePreviewSha) ? null : sourcePreviewSha
   }
 }
 
@@ -316,9 +259,6 @@ function runCli(argv) {
       forkRef: requiredOption(options, 'fork'),
       targetRef: requiredOption(options, 'target')
     })
-    if (options['enforce-patch-contract'] === 'true') {
-      result.patchSubjects = assertForkPatchContract(result.patchCommits)
-    }
     console.log(JSON.stringify(result))
     return
   }

@@ -37,11 +37,21 @@ describe('fork release maintenance workflows', () => {
     expect(syncText).not.toContain('refs/remotes/upstream/main')
     expect(sync.env.ANCHOR_BRANCH).toBe('upstream-release')
     expect(sync.env.PREVIEW_BRANCH).toBe('sync/upstream-release')
-    expect(sync.env.PINNED_WORKTREE_SCAN_BRANCH).toBe('p/luchengxuan/worktree-scan-last-known-good')
-    expect(syncText).toContain('refs/remotes/origin/pinned-worktree-scan')
-    expect(sync.env.PINNED_TRAE_STATUS_SHA).toBe('1e5e90e127b5df8c6372485a2ae067a300880b39')
-    expect(sync.env.PINNED_MOBILE_TRAEX_CHAT_SHA).toBe('c16e7260035b67d4c88891ec7790a0a697eed34a')
-    expect(syncText).toContain('patchCount: 6')
+    expect(Object.keys(sync.env)).not.toContainEqual(expect.stringMatching(/^PINNED_/))
+    expect(syncText).not.toContain('refs/remotes/origin/pinned-')
+    expect(syncText).not.toContain('enforce-patch-contract')
+    expect(stateText).not.toContain('EXPECTED_FORK_PATCH')
+    expect(stateText).not.toContain(`['patch-id', '--stable']`)
+    expect(stateText).toContain('assertForkPatchPaths')
+    expect(syncText).toContain(`'.patchCommits[]'`)
+  })
+
+  it('fails closed when the production anchor is missing', () => {
+    const fetch = job(sync, 'prepare').steps.find(
+      (step) => step.name === 'Fetch transaction refs and release commit'
+    )
+    expect(fetch.run).toContain('$ANCHOR_BRANCH is missing; restore it explicitly before syncing.')
+    expect(fetch.run).not.toContain('anchor_sha=0000000000000000000000000000000000000000')
   })
 
   it('routes context-free agents to a preserved conflict runbook', () => {
