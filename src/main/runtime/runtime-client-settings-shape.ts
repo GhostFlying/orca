@@ -22,6 +22,7 @@ export type RuntimeClientSettings = Pick<
   | 'experimentalNewWorktreeCardStyle'
   | 'experimentalNativeChat'
   | 'compactWorktreeCards'
+  | 'showPinnedWorktreesInGroups'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
   | 'minimaxEndpoint'
