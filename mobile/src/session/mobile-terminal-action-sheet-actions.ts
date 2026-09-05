@@ -15,6 +15,7 @@ export function getMobileTerminalActionSheetActions<
   tabs: readonly Tab[]
   isTabChatView: (tabId: string) => boolean
   nativeChatTranscriptIsLocalReadable: boolean
+  traexChatSupported: boolean
   onDismiss: () => void
   onToggleChat: (tabId: string) => void
   isPhoneMode: (handle: string) => boolean
@@ -41,6 +42,7 @@ export function getMobileTerminalActionSheetActions<
       tabs: args.tabs,
       isTabChatView: args.isTabChatView,
       nativeChatTranscriptIsLocalReadable: args.nativeChatTranscriptIsLocalReadable,
+      traexChatSupported: args.traexChatSupported,
       onClose: args.onDismiss,
       onToggle: args.onToggleChat
     }),
