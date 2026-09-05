@@ -26,6 +26,10 @@ type TranscriptPoll = {
   original: EnrichedAgentHookEventPayload
 }
 
+function transcriptPollKey(paneKey: string, source: AgentHookSource): string {
+  return source === 'trae' ? `${paneKey}\0${source}` : paneKey
+}
+
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
   private readonly transcriptPollScheduler = new AgentTranscriptPollScheduler<TranscriptPoll>(
     CODEX_SUBAGENT_POLL_MS,
@@ -47,6 +51,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
+    this.transcriptPollScheduler.clear(`${paneKey}\0trae`)
   }
 
   protected scheduleTranscriptPoll(
@@ -55,15 +60,17 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     original: EnrichedAgentHookEventPayload
   ): void {
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'codex' && source !== 'trae' && source !== 'muse') {
       return
     }
+    const pollKey = transcriptPollKey(original.paneKey, source)
+    this.transcriptPollScheduler.clear(pollKey)
     if (!shouldPollHookTranscript(this.state, source, original)) {
-      this.transcriptPollScheduler.clear(original.paneKey)
+      this.transcriptPollScheduler.clear(pollKey)
       return
     }
     this.transcriptPollScheduler.schedule(
-      original.paneKey,
+      pollKey,
       { source, body, original },
       hookTranscriptWatchPath(this.state, source, original.paneKey)
     )
@@ -74,7 +81,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     // Keep the identity check at callback time: a newer event supersedes this
     // payload even when its pane still has transcript children.
     if (
-      paneKey !== original.paneKey ||
+      paneKey !== transcriptPollKey(original.paneKey, source) ||
       !this.server ||
       this.state.lastStatusByPaneKey.get(original.paneKey) !== original
     ) {

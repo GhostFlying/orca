@@ -28,6 +28,7 @@ import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-se
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
 import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/hook-settings'
 import { getKiroManagedCommand, getKiroRemoteManagedCommand } from '../kiro/hook-settings'
+import { getTraeManagedCommand } from '../trae/trae-hook-definition'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import { wrapWindowsBatchHookCommand } from './windows-direct-cmd-hook-command'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
@@ -140,6 +141,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getCodexCommand(path), wrapReadablePosixHookCommand(path)],
       remote: (path) => [wrapPosixHookCommand(path), wrapReadablePosixHookCommand(path)]
+    }
+  ],
+  [
+    'trae',
+    {
+      local: (path) => [getTraeManagedCommand(path)],
+      remote: (path) => [wrapPosixHookCommand(path)]
     }
   ],
   ['gemini', standardCommands],
