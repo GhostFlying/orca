@@ -17,7 +17,7 @@ export function shouldPollHookTranscript(
         Boolean(state.codexSubagentTranscriptByPaneKey.get(event.paneKey)?.parent.filePath))
     )
   }
-  if (source === 'trae') {
+  if (source === 'trae' || source === 'traex') {
     return hasCodexTranscriptSubagents(state, event.paneKey, source)
   }
   if (source === 'muse') {
