@@ -7,6 +7,7 @@ import {
 } from '../../../shared/agent-status-types'
 import { isTurnEndedAt } from '../../../shared/agent-hook-turn-end-timing'
 import { restoreShedStatusFields } from '../../../shared/agent-hook-relay'
+import { resolveObservedHookSource } from '../../../shared/agent-hook-observed-agent'
 import {
   MAX_PANE_KEY_LEN,
   warnOnHookEnvOrVersionMismatch
@@ -103,7 +104,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     let tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
     const {
       hookEventName,
-      source,
+      source: wireSource,
       providerPromptId,
       grokPromptBoundary,
       compactTrigger,
@@ -116,6 +117,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       toolAgentType,
       providerSession
     } = normalizeRemoteEnvelopeFields(envelope)
+    const source = wireSource ? resolveObservedHookSource(wireSource, envelope) : undefined
     if (envelope.statusUnavailable === true && envelope.payload === null) {
       const previous = this.state.lastStatusByPaneKey.get(paneKey)
       if (
@@ -153,6 +155,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       envelope.shedFields,
       this.state.lastStatusByPaneKey.get(paneKey)?.payload
     )
+    if (source === 'traex' && normalizedPayload.agentType === 'trae') {
+      normalizedPayload = { ...normalizedPayload, agentType: 'traex' }
+    }
     if (
       envelope.providerSessionOnly === true &&
       !readAgentProcessPresence(envelope.agentPresence)?.ended &&
