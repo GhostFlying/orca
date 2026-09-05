@@ -30,6 +30,7 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   codebuddy: 'UserPromptSubmit',
   codex: 'SessionStart',
   trae: 'SessionStart',
+  traex: 'SessionStart',
   gemini: 'BeforeAgent',
   antigravity: 'PreInvocation',
   amp: 'agent.start',
