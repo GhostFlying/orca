@@ -4,6 +4,7 @@ import { supportsMobileQuickCommands } from '../terminal/quick-commands'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
 import {
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  MOBILE_TRAEX_CHAT_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { runAcceptedMobileSessionTabsEffects } from './mobile-session-tabs-accepted-effects'
@@ -36,6 +37,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setAgentSessionHistorySupported,
     setAgentSessionPromptCancelSupported,
     setQuickCommandsSupported,
+    setTraexChatSupported,
     nativeChatStream,
     fetchTerminals,
     applySessionTabs,
@@ -154,6 +156,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setAgentSessionHistorySupported(null)
       setAgentSessionPromptCancelSupported(null)
       setQuickCommandsSupported(null)
+      setTraexChatSupported(null)
       setShowQuickCommands(false)
       hostQueryReplyInputSupportedRef.current = false
       return
@@ -164,6 +167,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setAgentSessionHistorySupported(null)
     setAgentSessionPromptCancelSupported(null)
     setQuickCommandsSupported(null)
+    setTraexChatSupported(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
     // Why: the probe retries — a relay→direct cutover or request timeout rejects
@@ -175,6 +179,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
         capabilities.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY)
       )
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
+      setTraexChatSupported(capabilities.includes(MOBILE_TRAEX_CHAT_RUNTIME_CAPABILITY))
       // Why: hosts without this capability strip inputKind from terminal.send,
       // so a forwarded xterm reply would become floor-stealing shell input.
       hostQueryReplyInputSupportedRef.current = capabilities.includes(
