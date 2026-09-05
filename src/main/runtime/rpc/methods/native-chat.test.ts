@@ -21,7 +21,16 @@ const cachedResult = vi.hoisted(() => ({
     }
   }
 }))
-const tailRead = vi.hoisted(() => ({ signal: undefined as AbortSignal | undefined }))
+const tailRead = vi.hoisted(() => ({
+  args: null as Record<string, unknown> | null,
+  signal: undefined as AbortSignal | undefined
+}))
+const remoteRead = vi.hoisted(() => ({
+  args: null as Record<string, unknown> | null,
+  provider: null as unknown,
+  signal: undefined as AbortSignal | undefined
+}))
+const sshFilesystemProvider = vi.hoisted(() => ({ value: null as unknown }))
 const watcher = vi.hoisted(() => ({
   args: null as null | {
     onInitialSnapshot?: (
@@ -64,12 +73,13 @@ const watcher = vi.hoisted(() => ({
   unsubscribe: vi.fn()
 }))
 vi.mock('../../../native-chat/transcript-watch', () => ({
-  readNativeChatTranscriptTail: ({ limit }: { limit: number }, signal?: AbortSignal) => {
+  readNativeChatTranscriptTail: (args: { limit: number }, signal?: AbortSignal) => {
+    tailRead.args = args
     tailRead.signal = signal
     const messages = cachedResult.value.messages
     return Promise.resolve({
-      messages: messages.slice(-limit),
-      hasMore: messages.length > limit,
+      messages: messages.slice(-args.limit),
+      hasMore: messages.length > args.limit,
       beforeOffset: 123,
       ...(cachedResult.value.lifecycle ? { lifecycle: cachedResult.value.lifecycle } : {})
     })
@@ -86,6 +96,25 @@ vi.mock('../../../native-chat/transcript-watch', () => ({
       Promise.resolve({ unsubscribe: watcher.unsubscribe, watching: watcher.watching })
     )
   }
+}))
+vi.mock('../../../native-chat/remote-transcript-access', () => ({
+  readRemoteNativeChatTranscriptTail: (
+    provider: unknown,
+    args: Record<string, unknown>,
+    signal?: AbortSignal
+  ) => {
+    remoteRead.provider = provider
+    remoteRead.args = args
+    remoteRead.signal = signal
+    return Promise.resolve({ messages: [], hasMore: false, beforeOffset: 0 })
+  },
+  subscribeRemoteNativeChatTranscript: vi.fn(async () => ({
+    unsubscribe: vi.fn(),
+    watching: true
+  }))
+}))
+vi.mock('../../../providers/ssh-filesystem-dispatch', () => ({
+  getSshFilesystemProvider: () => sshFilesystemProvider.value
 }))
 
 import { NATIVE_CHAT_METHODS } from './native-chat'
@@ -164,6 +193,120 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     await readSessionHandler()({ agent: 'claude', sessionId: 's' }, context)
 
     expect(tailRead.signal).toBe(controller.signal)
+  })
+
+  it('uses runtime-confirmed TraeX transcript authority instead of the client path', async () => {
+    const resolveNativeChatTraexSession = vi.fn(() => ({
+      transcriptPath: '/trusted/rollout.jsonl',
+      connectionId: null
+    }))
+    const context = {
+      runtime: { resolveNativeChatTraexSession } as unknown as RpcContext['runtime'],
+      clientKind: 'mobile' as const
+    }
+
+    await readSessionHandler()(
+      {
+        agent: 'traex',
+        sessionId: 'traex-session',
+        transcriptPath: '/untrusted/client.jsonl',
+        terminal: 'terminal-1',
+        worktree: 'wt-1'
+      },
+      context
+    )
+
+    expect(resolveNativeChatTraexSession).toHaveBeenCalledWith(
+      'terminal-1',
+      'wt-1',
+      'traex-session'
+    )
+    expect(tailRead.args).toMatchObject({
+      agent: 'traex',
+      sessionId: 'traex-session',
+      transcriptPath: '/trusted/rollout.jsonl'
+    })
+  })
+
+  it('never falls back to a client TraeX transcript path when hook authority omits one', async () => {
+    const context = {
+      runtime: {
+        resolveNativeChatTraexSession: vi.fn(() => ({ connectionId: null }))
+      } as unknown as RpcContext['runtime'],
+      clientKind: 'mobile' as const
+    }
+
+    await readSessionHandler()(
+      {
+        agent: 'traex',
+        sessionId: 'traex-session',
+        transcriptPath: '/untrusted/client.jsonl',
+        terminal: 'terminal-1',
+        worktree: 'wt-1'
+      },
+      context
+    )
+
+    expect(tailRead.args).toMatchObject({
+      agent: 'traex',
+      sessionId: 'traex-session',
+      transcriptPath: undefined
+    })
+  })
+
+  it('routes Model-A TraeX transcript reads through the terminal SSH provider', async () => {
+    const provider = { marker: 'ssh-filesystem-provider' }
+    sshFilesystemProvider.value = provider
+    const controller = new AbortController()
+    const context = {
+      runtime: {
+        resolveNativeChatTraexSession: vi.fn(() => ({
+          transcriptPath: '/remote/rollout.jsonl',
+          connectionId: 'ssh-1'
+        }))
+      } as unknown as RpcContext['runtime'],
+      clientKind: 'mobile' as const,
+      signal: controller.signal
+    }
+
+    await readSessionHandler()(
+      {
+        agent: 'traex',
+        sessionId: 'traex-session',
+        terminal: 'terminal-1',
+        worktree: 'wt-1'
+      },
+      context
+    )
+
+    expect(remoteRead.provider).toBe(provider)
+    expect(remoteRead.args).toMatchObject({
+      agent: 'traex',
+      transcriptPath: '/remote/rollout.jsonl'
+    })
+    expect(remoteRead.signal).toBe(controller.signal)
+    sshFilesystemProvider.value = null
+  })
+
+  it('rejects TraeX reads without terminal-bound hook authority', async () => {
+    const context = {
+      runtime: {
+        resolveNativeChatTraexSession: vi.fn(() => null)
+      } as unknown as RpcContext['runtime'],
+      clientKind: 'mobile' as const
+    }
+
+    await expect(
+      readSessionHandler()(
+        {
+          agent: 'traex',
+          sessionId: 'traex-session',
+          terminal: 'terminal-1',
+          worktree: 'wt-1'
+        },
+        context
+      )
+    ).rejects.toThrow('TraeX session is not confirmed for this terminal')
   })
 
   it('clips oversized tool output for mobile clients', async () => {

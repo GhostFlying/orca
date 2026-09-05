@@ -178,6 +178,41 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     return pty ? { worktreeId: pty.worktreeId, connectionId: pty.connectionId } : null
   }
 
+  resolveNativeChatTraexSession(
+    handle: string,
+    worktreeId: string,
+    sessionId: string
+  ): { transcriptPath?: string; connectionId: string | null } | null {
+    const terminal = this.resolveTerminalContext(handle)
+    const paneKey = this.getTerminalPaneKey(handle)
+    if (!terminal || terminal.worktreeId !== worktreeId || !paneKey) {
+      return null
+    }
+    const rows =
+      this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ??
+      (this.getAgentProviderSessionSnapshotFn?.() ?? []).filter((row) => row.paneKey === paneKey)
+    const match = rows
+      .filter(
+        (row) =>
+          row.agentType === 'traex' &&
+          row.providerSession?.id === sessionId &&
+          row.connectionId === terminal.connectionId
+      )
+      .reduce<(typeof rows)[number] | undefined>(
+        (latest, row) => (!latest || row.receivedAt > latest.receivedAt ? row : latest),
+        undefined
+      )
+    if (!match?.providerSession) {
+      return null
+    }
+    return {
+      connectionId: terminal.connectionId,
+      ...(match.providerSession.transcriptPath
+        ? { transcriptPath: match.providerSession.transcriptPath }
+        : {})
+    }
+  }
+
   // Why: remote clients cannot resolve this runtime's WSL project preference,
   // so host-affecting RPCs (skill discovery) resolve it from the owning store.
   resolveProjectRuntimeForWorktree(
