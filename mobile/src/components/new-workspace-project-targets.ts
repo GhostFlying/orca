@@ -1,14 +1,10 @@
 import type { Repo } from '../../../src/shared/repo-types'
-import {
-  getExecutionHostLabel,
-  getLocalExecutionHostLabel,
-  getRepoExecutionHostId,
-  parseExecutionHostId
-} from '../../../src/shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
 import {
   getProjectIdentityKey,
   getProjectProviderIdentity
 } from '../../../src/shared/project-host-setup-projection'
+import { getHostContextLabel } from '../../../src/shared/worktree/host-context-labels'
 
 type WorkspaceRepo = Pick<Repo, 'id' | 'displayName' | 'path'> &
   Partial<
@@ -60,14 +56,15 @@ export function buildNewWorkspaceProjectOptions<TRepo extends WorkspaceRepo>(
 
 export function getNewWorkspaceRunTarget(
   repo: WorkspaceRepo,
-  localPlatform: NodeJS.Platform | null = null
+  localPlatform: NodeJS.Platform | null = null,
+  hostLabelById: ReadonlyMap<string, string> = new Map()
 ): {
   label: string
   detail: string
 } {
   const hostId = getRepoExecutionHostId(repo)
   const host = parseExecutionHostId(hostId)
-  const hostLabel = getExecutionHostLabel(hostId)
+  const hostLabel = getHostContextLabel(hostId, { hostLabelById, hostPlatform: localPlatform })
   if (host?.kind === 'ssh') {
     return { label: `SSH · ${hostLabel}`, detail: repo.path }
   }
@@ -75,7 +72,7 @@ export function getNewWorkspaceRunTarget(
     return { label: `Remote · ${hostLabel}`, detail: repo.path }
   }
   return {
-    label: localPlatform ? getLocalExecutionHostLabel(localPlatform) : 'This computer',
+    label: hostLabel,
     detail: repo.path
   }
 }
@@ -83,7 +80,8 @@ export function getNewWorkspaceRunTarget(
 export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
   repos: readonly TRepo[],
   projectId: string | null,
-  localPlatform: NodeJS.Platform | null = null
+  localPlatform: NodeJS.Platform | null = null,
+  hostLabelById: ReadonlyMap<string, string> = new Map()
 ): NewWorkspaceRunTargetOption<TRepo>[] {
   if (!projectId) {
     return []
@@ -97,7 +95,7 @@ export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
     if (!options.has(hostId)) {
       options.set(hostId, {
         id: repo.id,
-        ...getNewWorkspaceRunTarget(repo, localPlatform),
+        ...getNewWorkspaceRunTarget(repo, localPlatform, hostLabelById),
         repo
       })
     }
