@@ -3,6 +3,7 @@ import { resolveAgentStatusIdentity } from './agent-status-identity'
 import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
+import { resolveObservedHookSource } from './agent-hook-observed-agent'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
@@ -20,6 +21,7 @@ import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
+import { isClaudeProcessExitSessionEndReason } from './agent-hook-listener/providers/claude-session-end'
 import {
   isOpenCodeSharedServerPost,
   resolveOpenCodeSharedServerEnvelope,
@@ -29,17 +31,10 @@ import {
 import { claudeRowHasUnlistedLiveWork } from './agent-hook-listener/providers/claude-pane-hold-evidence'
 import { readString } from './agent-hook-listener/tool-input-preview'
 import { readPaneProviderSession } from './agent-hook-listener/pane-provider-session'
-/** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
-const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
-  'prompt_input_exit',
-  'logout',
-  'other',
-  'bypass_permissions_disabled'
-])
 
 export function normalizeHookPayload(
   state: HookListenerState,
-  source: AgentHookSource,
+  routeSource: AgentHookSource,
   body: unknown,
   expectedEnv: string,
   options: {
@@ -53,7 +48,7 @@ export function normalizeHookPayload(
     ) => boolean | 'preserve-poster'
   } = {}
 ): AgentHookEventPayload | null {
-  const envelope = parseHookEnvelope(state, source, body, expectedEnv)
+  const envelope = parseHookEnvelope(state, routeSource, body, expectedEnv)
   if (!envelope) {
     return null
   }
@@ -65,6 +60,7 @@ export function normalizeHookPayload(
     worktreeId: stampedWorktreeId,
     launchToken: stampedLaunchToken
   } = envelope
+  const source = resolveObservedHookSource(routeSource, record)
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }
@@ -215,8 +211,7 @@ export function normalizeHookPayload(
     agentPresence &&
     !readString(hookPayloadRecord, 'agent_id') &&
     // Only known process-exit reasons prove session death; /clear, /resume and unknown reasons do not.
-    sessionEndReason !== undefined &&
-    CLAUDE_EXIT_SESSION_END_REASONS.has(sessionEndReason)
+    isClaudeProcessExitSessionEndReason(sessionEndReason)
   ) {
     const payload =
       previousStatus?.payload ??

@@ -1,6 +1,7 @@
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
   buildPosixHookPayloadCapture,
+  buildPosixHookObservedAgentLines,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
@@ -27,6 +28,7 @@ export function getManagedScript(
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
+    ...buildPosixHookObservedAgentLines(source),
     ...buildPosixHookSpoolLines(source),
     // Reload endpoint state so surviving PTYs keep reporting after restart.
     'load_hook_endpoint() {',

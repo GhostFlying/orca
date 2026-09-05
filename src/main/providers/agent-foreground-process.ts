@@ -1,4 +1,8 @@
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import {
+  recognizeAgentProcess,
+  recognizeAgentProcessFromCommandLine,
+  requiresAgentCommandLineVerification
+} from '../../shared/agent-process-recognition'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
@@ -125,8 +129,12 @@ export async function resolveAgentForegroundProcessWithAvailability(
   fallbackProcess: string | null,
   options: AgentForegroundResolutionOptions = {}
 ): Promise<AgentForegroundProcessResolution> {
+  const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
+  const unverifiedFallback = requiresAgentCommandLineVerification(fallbackRecognition)
+    ? null
+    : fallbackProcess
   if (!shellPid) {
-    return { available: false, processName: fallbackProcess }
+    return { available: false, processName: unverifiedFallback }
   }
 
   if (process.platform === 'win32') {
@@ -146,7 +154,8 @@ export async function resolveAgentForegroundProcessWithAvailability(
       // A forced scan that loses the recognized fallback proves exit during confirmation.
       processName:
         resolution.processName ??
-        (options.forceProcessScan && recognizeAgentProcessFromCommandLine(fallbackProcess)
+        ((options.forceProcessScan || requiresAgentCommandLineVerification(fallbackRecognition)) &&
+        recognizeAgentProcessFromCommandLine(fallbackProcess)
           ? null
           : fallbackProcess),
       // The anchor only travels with the name it proved, never with a fallback.
@@ -162,15 +171,20 @@ export async function resolveAgentForegroundProcessWithAvailability(
       ? await getFreshProcessTableSnapshot()
       : await getProcessTableSnapshot()
     if (options.fresh && !getProcessTableIndex(rows).byPid.has(shellPid)) {
-      return { available: false, processName: fallbackProcess }
+      return { available: false, processName: unverifiedFallback }
     }
+    const processName = resolveAgentForegroundProcessFromPs(rows, shellPid)
     return {
       available: true,
-      processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
+      processName:
+        processName ??
+        (requiresAgentCommandLineVerification(recognizeAgentProcess(fallbackProcess))
+          ? null
+          : fallbackProcess)
     }
   } catch {
     // Why: a failed scan cannot prove fallback ownership; callers retain the last recognized agent.
-    return { available: false, processName: fallbackProcess }
+    return { available: false, processName: unverifiedFallback }
   }
 }
 

@@ -3,6 +3,7 @@ import {
   isExpectedAgentProcess,
   recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine,
+  requiresAgentCommandLineVerification,
   type RecognizedAgentProcess
 } from '../../shared/agent-process-recognition'
 import {
@@ -49,6 +50,7 @@ export function shouldInspectWindowsAgentForeground(fallbackProcess: string): bo
   return (
     isAgentForegroundWrapperProcess(fallbackProcess) ||
     isShellProcess(fallbackProcess) ||
+    requiresAgentCommandLineVerification(recognized) ||
     (recognized !== null && shouldInspectOuterWrapperForegroundProcess(recognized))
   )
 }
@@ -109,11 +111,7 @@ function windowsCandidatesContainRecognizedAgent(
   }
   return candidates
     .filter((candidate) => windowsCandidateMatchesFallbackWrapper(candidate, fallbackProcess))
-    .some(
-      (candidate) =>
-        recognizeAgentProcessFromCommandLine(candidate.command) !== null ||
-        recognizeAgentProcessFromCommandLine(candidate.name) !== null
-    )
+    .some((candidate) => recognizeWindowsProcessCandidate(candidate) !== null)
 }
 
 export function resolveWindowsForegroundIdentity(
@@ -135,9 +133,7 @@ export function resolveWindowsForegroundIdentity(
     )
   }
   const [candidate] = wrapperCandidates
-  const recognized =
-    recognizeAgentProcessFromCommandLine(candidate.command) ??
-    recognizeAgentProcessFromCommandLine(candidate.name)
+  const recognized = recognizeWindowsProcessCandidate(candidate)
   if (recognized) {
     return resolveOuterWrapperForegroundIdentity(recognized, candidate, candidates)
   }
@@ -301,10 +297,11 @@ function commandLineContainsPath(haystack: string, contextPath: string): boolean
 function recognizeWindowsProcessCandidate(
   candidate: WindowsProcessRow
 ): RecognizedAgentProcess | null {
-  return (
-    recognizeAgentProcessFromCommandLine(candidate.command) ??
-    recognizeAgentProcessFromCommandLine(candidate.name)
-  )
+  if (candidate.commandReadable !== false) {
+    return recognizeAgentProcessFromCommandLine(candidate.command)
+  }
+  const nameRecognition = recognizeAgentProcessFromCommandLine(candidate.name)
+  return requiresAgentCommandLineVerification(nameRecognition) ? null : nameRecognition
 }
 
 function windowsCandidateMatchesFallbackWrapper(

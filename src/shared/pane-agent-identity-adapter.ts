@@ -7,7 +7,7 @@ import type {
   PaneAgentRunKey
 } from './pane-agent-identity-resolver'
 import type { PaneAgentEvidenceSource } from './pane-agent-evidence-sources'
-import type { TerminalAgent } from './terminal-agent'
+import type { ObservedAgent } from './observed-agent'
 import type { TuiAgent } from './tui-agent'
 
 /** All adapters delegate here so ranking, ambiguity and run eligibility cannot drift. */
@@ -18,7 +18,7 @@ export type PaneAgentCoverage = 'covered' | 'uncovered'
 /** Host proof uses an opaque PID+start-time incarnation, never just a process name. Missing/ambiguous start identity
  * means uncovered; raw platform tuples stay off the renderer/remote wire. */
 export type ForegroundProcessProof = {
-  agent: TerminalAgent
+  agent: ObservedAgent
   /** Opaque host-derived PID+start-time token. Compared for equality only, never decoded. */
   processIncarnation: string
   ptyIncarnationId?: string
@@ -50,33 +50,33 @@ export type PaneAgentIdentityEvidenceWire = {
 }
 
 export type CanonicalPaneAgentIdentityInput = {
-  hookAgent?: TerminalAgent | null
+  hookAgent?: ObservedAgent | null
   hookIsLive?: boolean
   hookRun?: PaneAgentRunKey
   /** Separate live/completed rows where available; hookAgent with hookIsLive:false retains single-slot compatibility. */
-  completedHookAgent?: TerminalAgent | null
+  completedHookAgent?: ObservedAgent | null
   completedHookRun?: PaneAgentRunKey
   launchAgent?: TuiAgent | null
   launchRun?: PaneAgentRunKey
   /** Foreground names alone are weak hints; only fresh processProof qualifies as covered process evidence. */
-  foregroundAgent?: TerminalAgent | null
+  foregroundAgent?: ObservedAgent | null
   processProof?: ForegroundProcessProof | null
-  sleepingSessionAgent?: TerminalAgent | null
+  sleepingSessionAgent?: TuiAgent | null
   sleepingRun?: PaneAgentRunKey
   /** Tab-level display fallback only; ignored unless `allowSibling` opts in. */
-  siblingAgent?: TerminalAgent | null
+  siblingAgent?: ObservedAgent | null
   /** Additional tab-level sibling observations retained for ambiguity checking. */
-  siblingAgents?: readonly TerminalAgent[]
+  siblingAgents?: readonly ObservedAgent[]
   allowSibling?: boolean
   title?: string | null
   currentRun?: PaneAgentRunKey
   minimumSource?: PaneAgentEvidenceSource
   /** Preserve the existing ladder while uncovered during migration; absent fallback uses title-only evidence, never a host-specific ranking. */
-  uncoveredFallback?: { agent: TerminalAgent | null; titleOnly?: boolean }
+  uncoveredFallback?: { agent: ObservedAgent | null; titleOnly?: boolean }
 }
 
 export type CanonicalPaneAgentIdentity = {
-  agent: TerminalAgent | null
+  agent: ObservedAgent | null
   source: PaneAgentEvidenceSource | null
   coverage: PaneAgentCoverage
   /** True when the answer was derived from a parsed title (the uncovered/title-only marking). */
@@ -114,7 +114,7 @@ function isPaneAgentRunEligible(
 }
 
 /** Shared evidence ranking primitive used by every pane-identity adapter. */
-export function resolveCanonicalPaneAgentEvidence<A extends string = TerminalAgent>(
+export function resolveCanonicalPaneAgentEvidence<A extends string = ObservedAgent>(
   input: PaneAgentIdentityInput<A>
 ): PaneAgentIdentity<A> {
   const superseded: PaneAgentEvidenceSource[] = []
@@ -161,7 +161,7 @@ export function isForegroundProcessProofFresh(proof: ForegroundProcessProof): bo
 /** A proof only carries identity for the agent it names; a name mismatch is no proof at all. */
 function processEvidenceFromProof(
   input: CanonicalPaneAgentIdentityInput
-): PaneAgentEvidence<TerminalAgent> | null {
+): PaneAgentEvidence<ObservedAgent> | null {
   const proof = input.processProof
   if (!proof || !isForegroundProcessProofFresh(proof)) {
     return null
@@ -236,7 +236,7 @@ export function resolveCanonicalPaneAgentIdentity(
       ...(input.siblingAgents?.map((agent) => ({ source: 'sibling' as const, agent })) ?? []),
       ...(titleAgent ? [{ source: 'title' as const, agent: titleAgent }] : [])
     ]
-    const siblingResolved = resolveCanonicalPaneAgentEvidence<TerminalAgent>({
+    const siblingResolved = resolveCanonicalPaneAgentEvidence<ObservedAgent>({
       evidence: siblingEvidence,
       allowSibling: input.allowSibling,
       minimumSource: input.minimumSource
@@ -251,7 +251,7 @@ export function resolveCanonicalPaneAgentIdentity(
     }
   }
 
-  const resolved = resolveCanonicalPaneAgentEvidence<TerminalAgent>({
+  const resolved = resolveCanonicalPaneAgentEvidence<ObservedAgent>({
     evidence: [
       ...(input.hookAgent
         ? [
