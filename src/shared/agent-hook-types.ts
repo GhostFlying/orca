@@ -11,6 +11,7 @@ export const AGENT_HOOK_TARGETS = [
   'qoder-cn',
   'qwen-code',
   'codebuddy',
+  'trae',
   'gemini',
   'antigravity',
   'amp',
