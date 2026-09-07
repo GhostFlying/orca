@@ -262,6 +262,12 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       this.promptSentDedupeByPaneKey.delete(previousOwnerPaneKey)
       this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
     }
+    const clearedStatusTiming = this.clearedStatusTimingByPaneKey.get(previousOwnerPaneKey)
+    this.clearedStatusTimingByPaneKey.delete(previousOwnerPaneKey)
+    this.clearedStatusTimingByPaneKey.delete(toPaneKey)
+    if (clearedStatusTiming !== undefined) {
+      this.clearedStatusTimingByPaneKey.set(toPaneKey, clearedStatusTiming)
+    }
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
     this.clearTranscriptPoll(previousOwnerPaneKey)
     // Detached processes keep posting the physical key; retain its mapping to the current owner.
