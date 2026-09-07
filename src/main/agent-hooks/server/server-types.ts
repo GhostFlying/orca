@@ -38,6 +38,27 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   programStatusOnly?: true
 }
 
+/** One-shot turn identity retained after a transient transport clear. */
+export type ClearedStatusTiming = Pick<
+  AgentHookEventPayload,
+  | 'source'
+  | 'launchToken'
+  | 'promptInteractionKey'
+  | 'providerPromptId'
+  | 'providerSession'
+  | 'toolUseId'
+> & {
+  connectionId: string
+  state: AgentHookEventPayload['payload']['state']
+  agentType: AgentHookEventPayload['payload']['agentType']
+  prompt: string
+  interrupted: AgentHookEventPayload['payload']['interrupted']
+  sessionBoundary: AgentHookEventPayload['payload']['sessionBoundary']
+  turnCompletedAt: AgentHookEventPayload['payload']['turnCompletedAt']
+  stateStartedAt: number
+  turnStartedAt?: number
+}
+
 // Persist non-agent work too: mainAgent cannot describe shell/cron/notification work that affects hydration.
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,

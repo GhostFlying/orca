@@ -18,6 +18,7 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 import { recordAgentExit } from './agent-exit-evidence'
 import { clearDisconnectedAgentState } from './server-disconnected-agent-state'
+import { recordClearedStatusTiming } from './server-cleared-status-timing'
 
 export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
   /** Resume identity survives teardown without claiming live work. */
@@ -262,6 +263,12 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       if (deleted) {
         statusChanged = true
         this.commitStatusRowMutation(deleted, undefined)
+        recordClearedStatusTiming(
+          this.clearedStatusTimingByPaneKey,
+          paneKey,
+          deleted,
+          normalizedConnectionId
+        )
         // A replacement remote process may reuse the pane; discard the lost owner state.
         clearDisconnectedAgentState(this.state, paneKey, deleted.payload.agentType)
       }
@@ -299,6 +306,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     if (!options?.preserveAuthority) {
       this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
       this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
+      this.clearedStatusTimingByPaneKey.delete(resolvedPaneKey)
     }
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.clearTranscriptPoll(resolvedPaneKey)
