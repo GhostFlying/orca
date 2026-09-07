@@ -27,6 +27,26 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   retainedForLiveness?: true
 }
 
+/** One-shot turn identity retained after a transient transport clear. */
+export type ClearedStatusTiming = Pick<
+  AgentHookEventPayload,
+  | 'source'
+  | 'launchToken'
+  | 'promptInteractionKey'
+  | 'providerPromptId'
+  | 'providerSession'
+  | 'toolUseId'
+> & {
+  connectionId: string
+  state: AgentHookEventPayload['payload']['state']
+  agentType: AgentHookEventPayload['payload']['agentType']
+  prompt: string
+  interrupted: AgentHookEventPayload['payload']['interrupted']
+  sessionBoundary: AgentHookEventPayload['payload']['sessionBoundary']
+  turnCompletedAt: AgentHookEventPayload['payload']['turnCompletedAt']
+  stateStartedAt: number
+}
+
 // `claudeRunningNonAgentTask` is persisted on purpose: it is the one child-work fact the row's
 // `mainAgent` cannot express (a shell beside the agents), and hydration reads it to decide whether a
 // settled main agent may be seeded. It replaced the derived `claudeLeadBoundaryChildOnly` flag.
