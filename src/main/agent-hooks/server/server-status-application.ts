@@ -14,7 +14,8 @@ import type {
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import type { AgentStatusState, ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
-import type { EnrichedAgentHookEventPayload } from './server-types'
+import type { ClearedStatusTiming, EnrichedAgentHookEventPayload } from './server-types'
+import { replayReclaimsClearedStatusTiming } from './server-cleared-status-timing'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
 import { AgentHookServerStatusDisposition } from './server-status-disposition'
 
@@ -57,6 +58,9 @@ function resolveTurnStartedAt(
 }
 
 export abstract class AgentHookServerStatusApplication extends AgentHookServerStatusDisposition {
+  // Why: a reconnect replay needs the turn identity deleted by its transient clear.
+  protected clearedStatusTimingByPaneKey = new Map<string, ClearedStatusTiming>()
+
   protected refreshTerminalStatusEvidence(
     previous: EnrichedAgentHookEventPayload,
     mutationBefore?: EnrichedAgentHookEventPayload,
@@ -153,11 +157,19 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         previousPromptInteractionKey: previous.promptInteractionKey,
         incomingPromptInteractionKey: payload.promptInteractionKey
       })
+    // Why: whichever accepted status arrives next either reclaims or supersedes the clear.
+    const cleared = this.clearedStatusTimingByPaneKey.get(payload.paneKey)
+    this.clearedStatusTimingByPaneKey.delete(payload.paneKey)
+    const reclaimedTiming =
+      previous === undefined && replayReclaimsClearedStatusTiming(cleared, payload)
+        ? cleared
+        : undefined
     const stateStartedAt =
       previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
         ? previous.stateStartedAt
-        : (observedAt ?? now)
-    const turnStartedAt = resolveTurnStartedAt(previous, payload, observedAt ?? now)
+        : (reclaimedTiming?.stateStartedAt ?? observedAt ?? now)
+    const turnStartedAt =
+      reclaimedTiming?.turnStartedAt ?? resolveTurnStartedAt(previous, payload, observedAt ?? now)
     // Why: a relay's row was minted on the relay, which saw the event; main only restates it.
     const { hostTurn, ...turnEnd } = reduceHostTurnEnd(
       previous,
