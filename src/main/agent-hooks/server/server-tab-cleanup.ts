@@ -120,6 +120,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       this.programStatusFacets.delete(paneKey)
       this.hookSilenceRechecks.cancel(paneKey)
       this.programStatusFacetRepublishes.cancel(paneKey)
+      this.clearedStatusTimingByPaneKey.delete(paneKey)
     }
     // Exits outlive their rows; match tab identity independently of cleared status keys.
     let exitsChanged = false
@@ -176,6 +177,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     this.currentAuthorityObservations.delete(resolvedPaneKey)
     this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     this.restartedStatusLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
+    this.clearedStatusTimingByPaneKey.delete(resolvedPaneKey)
     // A retired pane's evidence clock cannot belong to its successor.
     this.evidenceObservedAtByPaneKey.delete(resolvedPaneKey)
     this.programStatusFacets.delete(resolvedPaneKey)
@@ -192,6 +194,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
         this.currentAuthorityObservations.delete(legacyPaneKey)
         this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
         this.restartedStatusLaunchTokenHashByPaneKey.delete(legacyPaneKey)
+        this.clearedStatusTimingByPaneKey.delete(legacyPaneKey)
         this.evidenceObservedAtByPaneKey.delete(legacyPaneKey)
         this.programStatusFacets.delete(legacyPaneKey)
         clearedAlias = true
