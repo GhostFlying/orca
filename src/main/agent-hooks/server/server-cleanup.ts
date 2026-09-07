@@ -20,6 +20,7 @@ import {
 } from '../../../shared/agent-hook-listener/providers/codex-state'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
+import { recordClearedStatusTiming } from './server-cleared-status-timing'
 
 export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
   /** The resume-identity remnant of a dropped row: a `providerSessionOnly` entry carries no state
@@ -278,6 +279,12 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       if (deleted) {
         statusChanged = true
         this.commitStatusRowMutation(deleted, undefined)
+        recordClearedStatusTiming(
+          this.clearedStatusTimingByPaneKey,
+          paneKey,
+          deleted,
+          normalizedConnectionId
+        )
         if (isCodexCompatibleAgentType(deleted.payload.agentType)) {
           // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
           clearCodexCompatibleState(this.state, paneKey, deleted.payload.agentType)
@@ -325,6 +332,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     if (!options?.preserveAuthority) {
       this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
       this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
+      this.clearedStatusTimingByPaneKey.delete(resolvedPaneKey)
     }
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.clearTranscriptPoll(resolvedPaneKey)
