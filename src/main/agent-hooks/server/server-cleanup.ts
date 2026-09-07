@@ -16,6 +16,7 @@ import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { clearDisconnectedAgentState } from './server-disconnected-agent-state'
+import { recordClearedStatusTiming } from './server-cleared-status-timing'
 
 import { endedPresenceOf } from './agent-exit-evidence'
 
@@ -269,6 +270,12 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
       if (deleted) {
         statusChanged = true
         this.commitStatusRowMutation(deleted, undefined)
+        recordClearedStatusTiming(
+          this.clearedStatusTimingByPaneKey,
+          paneKey,
+          deleted,
+          normalizedConnectionId
+        )
         // A replacement remote process may reuse the pane; discard the lost owner state.
         clearDisconnectedAgentState(this.state, paneKey, deleted.payload.agentType)
       }
@@ -306,6 +313,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
     if (!options?.preserveAuthority) {
       this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
       this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
+      this.clearedStatusTimingByPaneKey.delete(resolvedPaneKey)
     }
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.clearTranscriptPoll(resolvedPaneKey)

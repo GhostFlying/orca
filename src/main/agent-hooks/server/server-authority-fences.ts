@@ -101,6 +101,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     for (const key of paneKeys) {
       this.clearTmuxInnerSubjects(key)
       this.clearPaneProcessState(key)
+      this.clearedStatusTimingByPaneKey.delete(key)
       clearPaneStatusCacheState(this.state, key)
     }
     for (const row of retiredRows) {
@@ -212,6 +213,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
       this.activeHookTurnCompletedAtByPaneKey.delete(legacyPaneKey)
       this.currentAuthorityObservations.delete(legacyPaneKey)
       this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
+      this.clearedStatusTimingByPaneKey.delete(legacyPaneKey)
       if (shouldClearStablePaneKey && this.state.lastStatusByPaneKey.has(entry.stablePaneKey)) {
         statusChanged = true
         clearedStatusPaneKeys.add(entry.stablePaneKey)
@@ -227,6 +229,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
         this.runtimeObservedStatusPaneKeys.delete(entry.stablePaneKey)
         this.currentAuthorityObservations.delete(entry.stablePaneKey)
         this.promptSentDedupeByPaneKey.delete(entry.stablePaneKey)
+        this.clearedStatusTimingByPaneKey.delete(entry.stablePaneKey)
       }
       aliasChanged = true
     }

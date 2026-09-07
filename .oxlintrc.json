@@ -333,7 +333,9 @@
         "src/main/agent-hooks/server/server-status-retries.ts",
         "src/shared/agent-hook-listener/normalization/normalize-hook-payload.ts",
         "src/main/runtime/construction/runtime-identity-state.ts",
-        "src/main/daemon/pty-subprocess/foreground-process-tracker.ts"
+        "src/main/daemon/pty-subprocess/foreground-process-tracker.ts",
+        "src/main/agent-hooks/server/server-status-application.ts",
+        "src/main/agent-hooks/server/server-tab-cleanup.ts"
       ],
       "rules": {
         "max-lines": ["error", { "max": 400, "skipBlankLines": true, "skipComments": true }]
