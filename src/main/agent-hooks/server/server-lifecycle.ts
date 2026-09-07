@@ -190,6 +190,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.restartedStatusLaunchTokenHashByPaneKey.clear()
     this.retiredPaneFencesByKey.clear()
     this.connectionTimestampWatermarkById.clear()
+    this.clearedStatusTimingByPaneKey.clear()
     this.legacyPaneKeyAliases.clear()
     // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
     clearAllListenerCaches(this.state)

@@ -26,6 +26,7 @@ import type {
   AgentHookProviderSessionIdentity,
   AgentHookStatusChangeEntry,
   AgentPromptSentDedupeEntry,
+  ClearedStatusTiming,
   EnrichedAgentHookEventPayload,
   NormalizedLocalHook,
   PaneKeyAliasEntry,
@@ -97,6 +98,8 @@ export abstract class AgentHookServerState {
   protected closedAgentStatusPaneKeys = new Set<string>()
   protected restartedStatusLaunchTokenHashByPaneKey = new Map<string, string>()
   protected connectionTimestampWatermarkById = new Map<string, number>()
+  // Why: a reconnect replay needs the turn identity deleted by its transient clear.
+  protected clearedStatusTimingByPaneKey = new Map<string, ClearedStatusTiming>()
   // Why: survives the row itself. A transport clear deletes the pane's status row on purpose
   // (absence, not completion), but the *age* of the evidence a later replay restates is not a
   // claim about the pane and must not be lost with it. Bounded like its sibling maps.
