@@ -5,6 +5,7 @@ import { track } from '../../telemetry/client'
 import { isCommandCodeNewTurnWhileWorking } from '../../../shared/command-code-turn-boundary'
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 import type {
   AgentStatusObservation,
   AgentStatusObservationOrigin
@@ -12,7 +13,7 @@ import type {
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import type { AgentStatusState, ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
-import type { EnrichedAgentHookEventPayload } from './server-types'
+import type { ClearedStatusTiming, EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
 import { AgentHookServerStatusDisposition } from './server-status-disposition'
 
@@ -52,6 +53,33 @@ function resolveTurnStartedAt(
     return undefined
   }
   return previous?.turnStartedAt
+}
+
+function replayReclaimsClearedTurn(
+  cleared: ClearedStatusTiming | undefined,
+  payload: AgentHookEventPayload
+): cleared is ClearedStatusTiming {
+  return (
+    cleared !== undefined &&
+    payload.isReplay === true &&
+    cleared.connectionId === payload.connectionId &&
+    cleared.source === payload.source &&
+    cleared.launchToken === payload.launchToken &&
+    cleared.state === payload.payload.state &&
+    cleared.agentType === payload.payload.agentType &&
+    cleared.prompt === payload.payload.prompt &&
+    cleared.promptInteractionKey === payload.promptInteractionKey &&
+    cleared.providerPromptId === payload.providerPromptId &&
+    agentProviderSessionsEqual(
+      payload.payload.agentType,
+      cleared.providerSession,
+      payload.providerSession
+    ) &&
+    cleared.toolUseId === payload.toolUseId &&
+    cleared.interrupted === payload.payload.interrupted &&
+    cleared.sessionBoundary === payload.payload.sessionBoundary &&
+    cleared.turnCompletedAt === payload.payload.turnCompletedAt
+  )
 }
 
 export abstract class AgentHookServerStatusApplication extends AgentHookServerStatusDisposition {
@@ -145,11 +173,17 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         previousPromptInteractionKey: previous.promptInteractionKey,
         incomingPromptInteractionKey: payload.promptInteractionKey
       })
+    // Why: whichever accepted status arrives next either reclaims or supersedes the clear.
+    const cleared = this.clearedStatusTimingByPaneKey.get(payload.paneKey)
+    this.clearedStatusTimingByPaneKey.delete(payload.paneKey)
+    const reclaimedTiming =
+      previous === undefined && replayReclaimsClearedTurn(cleared, payload) ? cleared : undefined
     const stateStartedAt =
       previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
         ? previous.stateStartedAt
-        : (observedAt ?? now)
-    const turnStartedAt = resolveTurnStartedAt(previous, payload, observedAt ?? now)
+        : (reclaimedTiming?.stateStartedAt ?? observedAt ?? now)
+    const turnStartedAt =
+      reclaimedTiming?.turnStartedAt ?? resolveTurnStartedAt(previous, payload, observedAt ?? now)
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
       ...payload,
