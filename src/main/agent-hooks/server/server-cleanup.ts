@@ -5,6 +5,7 @@ import {
   isCodexCompatibleAgentType
 } from '../../../shared/agent-hook-listener/providers/codex-state'
 import type { EnrichedAgentHookEventPayload } from './server-types'
+import { CLEARED_STATUS_TIMINGS_MAX } from './server-constants'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 
 export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
@@ -157,6 +158,30 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
       if (deleted) {
         statusChanged = true
+        this.clearedStatusTimingByPaneKey.delete(paneKey)
+        this.clearedStatusTimingByPaneKey.set(paneKey, {
+          connectionId: normalizedConnectionId,
+          source: deleted.source,
+          launchToken: deleted.launchToken,
+          state: deleted.payload.state,
+          agentType: deleted.payload.agentType,
+          prompt: deleted.payload.prompt,
+          promptInteractionKey: deleted.promptInteractionKey,
+          providerPromptId: deleted.providerPromptId,
+          providerSession: deleted.providerSession,
+          toolUseId: deleted.toolUseId,
+          interrupted: deleted.payload.interrupted,
+          sessionBoundary: deleted.payload.sessionBoundary,
+          turnCompletedAt: deleted.payload.turnCompletedAt,
+          stateStartedAt: deleted.stateStartedAt
+        })
+        while (this.clearedStatusTimingByPaneKey.size > CLEARED_STATUS_TIMINGS_MAX) {
+          const oldest = this.clearedStatusTimingByPaneKey.keys().next().value
+          if (typeof oldest !== 'string') {
+            break
+          }
+          this.clearedStatusTimingByPaneKey.delete(oldest)
+        }
         if (isCodexCompatibleAgentType(deleted.payload.agentType)) {
           // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
           clearCodexCompatibleState(this.state, paneKey, deleted.payload.agentType)
@@ -203,6 +228,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     if (!options?.preserveAuthority) {
       this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
       this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
+      this.clearedStatusTimingByPaneKey.delete(resolvedPaneKey)
     }
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.clearCodexSubagentPoll(resolvedPaneKey)
