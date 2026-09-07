@@ -37,4 +37,42 @@ describe('agent completion reconnect replay identity', () => {
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
+
+  it.each(['waiting', 'blocked'] as const)(
+    'deduplicates replayed %s attention while preserving a new turn',
+    (state) => {
+      const dispatchAttention = vi.fn()
+      const coordinator = createAgentCompletionCoordinator({
+        paneKey: 'tab-1:leaf-1',
+        getPtyId: () => 'pty-1',
+        getSettings: () => null,
+        inspectProcess: vi.fn(),
+        dispatchCompletion: vi.fn(),
+        dispatchAttention,
+        isLive: () => true
+      })
+      const attentionTurn = {
+        state,
+        prompt: 'approve the action',
+        agentType: 'claude' as const,
+        toolName: 'Bash',
+        toolInput: 'git status',
+        stateStartedAt: 1_800_000_000_000
+      }
+
+      coordinator.observeHookStatus(attentionTurn)
+      for (let reconnect = 1; reconnect <= 12; reconnect += 1) {
+        vi.advanceTimersByTime(5_000)
+        coordinator.observeHookStatus(attentionTurn)
+      }
+      expect(dispatchAttention).toHaveBeenCalledTimes(1)
+
+      coordinator.observeHookStatus({
+        ...attentionTurn,
+        stateStartedAt: 1_800_000_100_000
+      })
+
+      expect(dispatchAttention).toHaveBeenCalledTimes(2)
+    }
+  )
 })
