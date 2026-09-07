@@ -202,6 +202,12 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       this.promptSentDedupeByPaneKey.delete(previousOwnerPaneKey)
       this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
     }
+    const clearedStatusTiming = this.clearedStatusTimingByPaneKey.get(previousOwnerPaneKey)
+    this.clearedStatusTimingByPaneKey.delete(previousOwnerPaneKey)
+    this.clearedStatusTimingByPaneKey.delete(toPaneKey)
+    if (clearedStatusTiming !== undefined) {
+      this.clearedStatusTimingByPaneKey.set(toPaneKey, clearedStatusTiming)
+    }
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
     this.clearCodexSubagentPoll(previousOwnerPaneKey)
     // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
