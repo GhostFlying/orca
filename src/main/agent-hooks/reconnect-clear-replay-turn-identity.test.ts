@@ -104,6 +104,34 @@ describe('reconnect clear and relay replay turn identity', () => {
     expect(current(server).stateStartedAt).not.toBe(baselineStateStartedAt)
   })
 
+  it.each(['waiting', 'blocked'] as const)(
+    'gives a %s status first observed after disconnect a new identity',
+    (state) => {
+      server.ingestRemote(doneEnvelope(), CONNECTION)
+      const baselineStateStartedAt = current(server).stateStartedAt
+
+      vi.setSystemTime(T0 + 5_000)
+      server.clearStatusEntriesForConnection(CONNECTION)
+      server.ingestRemote(
+        doneEnvelope({
+          isReplay: true,
+          promptInteractionKey: 'turn-2',
+          providerPromptId: 'prompt-2',
+          toolUseId: 'tool-2',
+          payload: {
+            state,
+            prompt: 'approve the action',
+            agentType: 'claude'
+          }
+        }),
+        CONNECTION
+      )
+
+      expect(current(server)).toMatchObject({ state, stateStartedAt: T0 + 5_001 })
+      expect(current(server).stateStartedAt).not.toBe(baselineStateStartedAt)
+    }
+  )
+
   it.each([
     ['connection', doneEnvelope({ isReplay: true }), 'other-connection'],
     ['source', doneEnvelope({ isReplay: true, source: 'codex' }), CONNECTION],
