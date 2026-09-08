@@ -10,6 +10,10 @@ const buildText = readFileSync(
   new URL('../workflows/fork-release-build.yml', import.meta.url),
   'utf8'
 )
+const hotfixText = readFileSync(
+  new URL('../workflows/fork-hotfix-candidate.yml', import.meta.url),
+  'utf8'
+)
 const unsignedIosText = readFileSync(
   new URL('../../mobile/scripts/build-unsigned-ios.sh', import.meta.url),
   'utf8'
@@ -18,6 +22,7 @@ const agentsText = readFileSync(new URL('../../AGENTS.md', import.meta.url), 'ut
 const stateText = readFileSync(new URL('./fork-maintenance-state.mjs', import.meta.url), 'utf8')
 const sync = parse(syncText)
 const build = parse(buildText)
+const hotfix = parse(hotfixText)
 const expression = (value) => ['$', '{{ ', value, ' }}'].join('')
 
 function job(workflow, name) {
@@ -37,11 +42,21 @@ describe('fork release maintenance workflows', () => {
     expect(syncText).not.toContain('refs/remotes/upstream/main')
     expect(sync.env.ANCHOR_BRANCH).toBe('upstream-release')
     expect(sync.env.PREVIEW_BRANCH).toBe('sync/upstream-release')
-    expect(sync.env.PINNED_WORKTREE_SCAN_BRANCH).toBe('p/luchengxuan/worktree-scan-last-known-good')
-    expect(syncText).toContain('refs/remotes/origin/pinned-worktree-scan')
-    expect(sync.env.PINNED_TRAE_STATUS_SHA).toBe('1e5e90e127b5df8c6372485a2ae067a300880b39')
-    expect(sync.env.PINNED_MOBILE_TRAEX_CHAT_SHA).toBe('c16e7260035b67d4c88891ec7790a0a697eed34a')
-    expect(syncText).toContain('patchCount: 6')
+    expect(Object.keys(sync.env)).not.toContainEqual(expect.stringMatching(/^PINNED_/))
+    expect(syncText).not.toContain('refs/remotes/origin/pinned-')
+    expect(syncText).not.toContain('enforce-patch-contract')
+    expect(stateText).not.toContain('EXPECTED_FORK_PATCH')
+    expect(stateText).not.toContain(`['patch-id', '--stable']`)
+    expect(stateText).toContain('assertForkPatchPaths')
+    expect(syncText).toContain(`'.patchCommits[]'`)
+  })
+
+  it('fails closed when the production anchor is missing', () => {
+    const fetch = job(sync, 'prepare').steps.find(
+      (step) => step.name === 'Fetch transaction refs and release commit'
+    )
+    expect(fetch.run).toContain('$ANCHOR_BRANCH is missing; restore it explicitly before syncing.')
+    expect(fetch.run).not.toContain('anchor_sha=0000000000000000000000000000000000000000')
   })
 
   it('routes context-free agents to a preserved conflict runbook', () => {
@@ -67,7 +82,7 @@ describe('fork release maintenance workflows', () => {
   })
 
   it('starts the gated build from an exact preview push', () => {
-    expect(build.on.push.branches).toEqual(['sync/upstream-release'])
+    expect(build.on.push.branches).toEqual(['candidate/fork-hotfix', 'sync/upstream-release'])
     expect(build.concurrency).toEqual({
       group: 'fork-release-maintenance',
       'cancel-in-progress': false
@@ -77,6 +92,40 @@ describe('fork release maintenance workflows', () => {
     )
     expect(checkout?.with?.ref).toBe(expression('github.sha'))
     expect(checkout?.with?.['persist-credentials']).toBe(false)
+  })
+
+  it('intakes reviewed hotfixes without treating a fix branch as a release candidate', () => {
+    expect(hotfix.on.schedule).toBeUndefined()
+    expect(hotfix.on.workflow_dispatch.inputs.source_ref).toBeDefined()
+    expect(hotfix.concurrency).toEqual({
+      group: 'fork-release-maintenance',
+      'cancel-in-progress': false
+    })
+    expect(hotfix.env.HOTFIX_CANDIDATE_BRANCH).toBe('candidate/fork-hotfix')
+    const prepare = job(hotfix, 'prepare')
+    expect(prepare.if).toContain("github.ref == 'refs/heads/fork'")
+    expect(prepare.permissions).toEqual({ contents: 'read' })
+    expect(hotfixText).toContain('case "$SOURCE_REF" in')
+    expect(hotfixText).toContain('fix/*) ;;')
+    expect(hotfixText).toContain('test "$source_preview_sha" = "$source_fork_sha"')
+    expect(hotfixText).toContain('inspect-hotfix-source')
+    expect(hotfixText).toContain('verify-hotfix-candidate')
+    expect(hotfixText).toContain('Fork-Maintenance-Transaction: fork-hotfix-v1')
+    expect(hotfixText).toContain('Fork-Hotfix-Source-Commit: $HOTFIX_SOURCE_SHA')
+    expect(hotfixText).toContain('$CANDIDATE_SHA:refs/heads/$HOTFIX_CANDIDATE_BRANCH')
+    expect(hotfixText).not.toContain('$CANDIDATE_SHA:refs/heads/$FORK_BRANCH')
+    expect(hotfixText).not.toContain('$CANDIDATE_SHA:refs/heads/$PREVIEW_BRANCH')
+  })
+
+  it('selects and revalidates the canonical candidate ref by transaction kind', () => {
+    const refs = job(build, 'candidate').steps.find(
+      (step) => step.name === 'Verify current transaction refs'
+    )
+    expect(refs.run).toContain('test "$GITHUB_REF" = "refs/heads/$PREVIEW_BRANCH"')
+    expect(refs.run).toContain('test "$GITHUB_REF" = "refs/heads/$HOTFIX_CANDIDATE_BRANCH"')
+    expect(refs.run).toContain('test "$(remote_ref "$HOTFIX_SOURCE_REF")" = "$HOTFIX_SOURCE_SHA"')
+    expect(refs.run).toContain('verify-hotfix-candidate')
+    expect(refs.run).not.toContain('refs/heads/fix/')
   })
 
   it('keeps candidate validation and build jobs read-only', () => {
@@ -220,7 +269,10 @@ describe('fork release maintenance workflows', () => {
     expect(buildText).toContain('git push --atomic')
     expect(buildText).toContain('--force-with-lease="refs/heads/$FORK_BRANCH:$SOURCE_FORK_SHA"')
     expect(buildText).toContain('--force-with-lease="refs/heads/$ANCHOR_BRANCH:$SOURCE_ANCHOR_SHA"')
-    expect(buildText).toContain('--force-with-lease="refs/heads/$PREVIEW_BRANCH:$CANDIDATE_SHA"')
+    expect(buildText).toContain(
+      '--force-with-lease="refs/heads/$PREVIEW_BRANCH:$preview_lease_sha"'
+    )
+    expect(buildText).toContain('preview_lease_sha="$SOURCE_PREVIEW_SHA"')
     const promote = job(build, 'finalize').steps.find(
       (step) => step.name === 'Atomically promote candidate'
     )
@@ -261,6 +313,7 @@ describe('fork release maintenance workflows', () => {
     const policy = JSON.stringify(job(sync, 'workflow-policy'))
     for (const path of [
       'sync-upstream-release.yml',
+      'fork-hotfix-candidate.yml',
       'fork-release-build.yml',
       'pr.yml',
       'mobile.yml'

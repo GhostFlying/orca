@@ -4,19 +4,21 @@
 
 This is the complete operational runbook for `GhostFlying/orca` fork
 maintenance. It assumes no prior conversation or local context. Read this file
-before diagnosing a sync failure, resolving a replay conflict, changing either
+before diagnosing a sync failure, resolving a replay conflict, changing a
 maintenance workflow, moving a maintenance ref, or modifying a fork Release.
 
 The executable sources of truth are:
 
 - `.github/workflows/sync-upstream-release.yml`: Release discovery, transaction
   capture, anchor creation, patch replay, and candidate publication.
+- `.github/workflows/fork-hotfix-candidate.yml`: reviewed `fix/...` intake,
+  hotfix transaction capture, and isolated candidate publication.
 - `.github/workflows/fork-release-build.yml`: candidate validation, tests, all
   platform builds, Release asset verification, atomic promotion, and publish.
 - `.github/scripts/upstream-release.mjs`: eligible Release selection and Release
   commit validation.
 - `.github/scripts/fork-maintenance-state.mjs`: anchor, transaction metadata,
-  patch subjects, stable patch IDs, and maintenance snapshot validation.
+  source-range extraction, and maintenance snapshot validation.
 - `.github/scripts/fork-release-assets.mjs`: required asset set, checksums,
   metadata, and Release tag derivation.
 
@@ -34,31 +36,48 @@ The production fork is a linear patch stack over one published upstream desktop
 release:
 
 ```text
-upstream-release = generated safe anchor over upstream vX.Y.Z
-fork             = upstream-release + fork-only patches + maintenance snapshot
-sync/upstream-release = the current candidate, and equals fork after promotion
+upstream-release        = generated safe anchor over upstream vX.Y.Z
+fork                    = upstream-release + fork-only patches + maintenance snapshot
+sync/upstream-release   = upstream-sync candidate, and equals fork after promotion
+candidate/fork-hotfix   = isolated hotfix candidate; never a development branch
 ```
 
 Only published stable desktop releases matching `vX.Y.Z` are eligible. Drafts,
 prereleases, release candidates, and mobile-only releases are ignored. The
-upstream tag is dereferenced to its release commit, whose subject must be
-`release: vX.Y.Z` and whose `package.json` version must be `X.Y.Z`. Upstream
+upstream tag is dereferenced to its release commit, whose `package.json`
+version must be `X.Y.Z`. Commit subjects are not part of Release identity; for
+example, `v1.4.197` intentionally carries a longer release subject. Upstream
 release commits are detached version bumps and are not required to form a
 first-parent or fast-forward chain.
 
-The fork-only stack contains these changes in order:
+For each transaction, the complete ordered business patch stack is exactly the
+commit range captured from `upstream-release..fork`, excluding an optional final
+generated maintenance snapshot. There is no persistent list of commit SHAs,
+subjects, branch names, or stable patch IDs. Replayed commits naturally receive
+new SHAs when their parent changes.
+
+The stack audited while adopting `v1.4.197` contains these still-needed changes
+in order:
 
 1. `fix(mobile): honor pinned workspace display preference`
-2. `docs(mobile): document workspace settings loaders`
-3. `fix(mobile): show SSH labels in Run on picker`
-4. `fix(runtime): preserve worktree names across scan stalls`
-5. `fix(agents): complete Trae status integration`
-6. `feat(mobile): support existing TraeX chats`
+2. `fix(mobile): show host labels in Run on picker`
+3. `fix(runtime): preserve worktree names across scan stalls`
+4. `fix(agents): complete Trae status integration`
+5. `feat(agent): recognize TraeX sessions`
+6. `feat(native-chat): read TraeX transcripts`
+7. `feat(mobile): support existing TraeX chats`
+
+The former two-line workspace-loader documentation patch was folded into the
+workspace behavior patch. The host-label patch now reuses upstream's shared
+host-label state. The scan-stall patch keeps only last-successful metadata that
+upstream's failure fallback does not cover. Trae status and TraeX chat remain
+fork-only as of that Release. Repeat this semantic audit on every new upstream
+Release; a clean cherry-pick alone is not evidence that a patch remains useful.
 
 Generated maintenance snapshots are excluded from the business patch stack.
-Merge commits are forbidden. Empty patches are skipped during replay.
-Patch subjects and stable patch IDs are pinned so similarly named extra changes
-cannot enter the production stack.
+Merge commits are forbidden. Empty patches are skipped during replay. Business
+patches may not change maintenance paths; maintenance changes belong in the
+single optional final generated snapshot.
 
 ## Synchronization
 
@@ -66,8 +85,9 @@ cannot enter the production stack.
 supports a manually requested published stable tag. A run is a no-op when the
 highest eligible release is already anchored. Otherwise it:
 
-1. Pins the source `fork`, `upstream-release`, preview, upstream tag, and release
-   commit SHAs.
+1. Captures exact transaction leases for the source `fork`,
+   `upstream-release`, preview, upstream tag, and release commit. These guard
+   concurrent ref movement; they do not identify individual business patches.
 2. Creates a safe anchor over the release commit while restoring this trusted
    maintenance snapshot.
 3. Replays the fork-only stack and publishes `sync/upstream-release` with an
@@ -77,12 +97,56 @@ highest eligible release is already anchored. Otherwise it:
    unsigned, then signed in an isolated job with the fork release key.
 5. The candidate workflow creates or refreshes a draft GitHub prerelease and
    verifies every required artifact plus checksums and build metadata.
-6. Its finalizer revalidates all pinned refs, atomically promotes `fork`,
+6. Its finalizer revalidates all captured ref leases, atomically promotes `fork`,
    `upstream-release`, and `sync/upstream-release`, then publishes the draft.
 
 The workflow uses the release tag commit after upstream has updated
 `package.json`; it never follows the tip of upstream `main`. If polling skips
 multiple releases, only the highest eligible release is built.
+
+## Fork hotfixes
+
+A product hotfix starts as reviewable commits on a normal `fix/...` branch
+based on the current production `fork`. Never develop on, or manually push
+business commits to, `sync/upstream-release`, `candidate/fork-hotfix`, `fork`,
+or `upstream-release`. The hotfix intake is deliberately separate from upstream
+Release discovery:
+
+1. Push the reviewed `fix/...` branch without release credentials.
+2. Dispatch `fork-hotfix-candidate.yml` from the trusted production `fork`,
+   passing the exact `fix/...` source ref.
+3. The intake requires `fork == sync/upstream-release`, captures exact leases
+   for the source branch and all production refs, rejects merges and maintenance
+   path changes in the hotfix range, and constructs `candidate/fork-hotfix` as
+   `upstream-release + existing business patches + hotfix patches + one final
+   maintenance snapshot`.
+4. Only the leased `candidate/fork-hotfix` push starts the same full release
+   build and finalizer used by upstream sync. A direct dispatch at a `fix/...`
+   ref fails the canonical-candidate check.
+5. The finalizer revalidates the source branch and production leases, then
+   atomically advances `fork` and restores `sync/upstream-release` as its mirror.
+   `upstream-release` remains the same anchor for a hotfix transaction.
+
+The generated final snapshot carries
+`Fork-Maintenance-Transaction: fork-hotfix-v1`, the captured production leases,
+and `Fork-Hotfix-Source-Ref` / `Fork-Hotfix-Source-Commit`. Candidate validation
+requires the exact production patch prefix, the expected hotfix patch count, and
+product-tree equivalence with the reviewed source branch. Maintenance-only
+differences are expected because the snapshot is moved back to the tip.
+
+### One-time hotfix gate bootstrap
+
+If the current production `fork` predates `fork-hotfix-candidate.yml`, the
+intake workflow cannot create its own first candidate. Bootstrap it locally
+without changing the reviewed `fix/...` source: capture all production and
+source SHAs, remove the old final maintenance snapshot from the candidate base,
+replay the reviewed hotfix commits, restore the production maintenance paths,
+and add the new gate files in one final generated maintenance snapshot carrying
+the `fork-hotfix-v1` trailers above. Run `verify-hotfix-candidate` against the
+exact local source ref, then publish only `candidate/fork-hotfix` with an exact
+lease. Its newly added push trigger starts the full release gate. The finalizer,
+not the bootstrap operator, updates `fork` and its `sync/upstream-release`
+mirror.
 
 ## Release artifacts
 
@@ -126,6 +190,7 @@ Every moving ref uses an exact lease and promotion is atomic.
 Only these workflows are enabled in the fork:
 
 - `sync-upstream-release.yml`
+- `fork-hotfix-candidate.yml`
 - `fork-release-build.yml`
 - `pr.yml`
 - `mobile.yml`
@@ -134,18 +199,19 @@ The upstream `e2e.yml` definition remains in maintenance refs for source
 parity, but is disabled at the repository level along with all other workflows.
 This prevents its scheduled runs and notifications on the fork. The safe anchor
 takes the standard PR, Mobile Checks, and E2E workflow definitions from the
-selected upstream Release and the two maintenance workflows from the current
+selected upstream Release and the three maintenance workflows from the current
 production fork.
 
 ## Protected refs and bootstrap
 
-Bootstrap may rebuild only `fork`, `upstream-release`, and
-`sync/upstream-release`. It removes the superseded `upstream-main` and
-`sync/upstream-main` refs after the new flow succeeds. `main`, all PR/fix
-branches, `GhostFlying/large_worktree`, and
-`fix/workspace-changed-oversize-resync` must retain their original SHAs. The two
-source branches for the selected fork patches are read-only inputs and are not
-rewritten.
+The scheduled and manual sync workflow does not bootstrap a missing
+`upstream-release`. Absence of that ref is ambiguous and fails closed; restore it
+explicitly from a verified generated anchor before retrying. Normal maintenance
+may move only `fork`, `upstream-release`, and `sync/upstream-release` through the
+gated finalizer. The hotfix intake may move only `candidate/fork-hotfix` with an
+exact lease; that candidate ref is never a production or development ref.
+`main`, all PR/fix branches, `GhostFlying/large_worktree`, and
+`fix/workspace-changed-oversize-resync` must retain their original SHAs.
 
 ## Replay conflict recovery
 
@@ -165,8 +231,8 @@ without rewriting, the current remote values of:
 
 Confirm through the GitHub Releases API that the selected upstream Release is
 published, not draft or prerelease, and matches `vX.Y.Z`. Confirm the release
-commit subject is `release: vX.Y.Z` and `package.json` contains `X.Y.Z`. Do not
-infer eligibility from a tag alone and do not use upstream `main`.
+commit's `package.json` contains `X.Y.Z`. Do not infer eligibility from a tag
+alone, require a fixed commit-subject convention, or use upstream `main`.
 
 Use the real GitHub CLI and verify it with `gh --version` and `gh auth status`.
 On the maintainer's current Linux machine the CLI is `/usr/bin/gh`;
@@ -202,8 +268,7 @@ than guessing from branch names:
 node .github/scripts/fork-maintenance-state.mjs inspect \
   --anchor=<fetched-upstream-release-ref> \
   --fork=<fetched-fork-ref> \
-  --target=<release-commit> \
-  --enforce-patch-contract=true
+  --target=<release-commit>
 ```
 
 Replay the returned `patchCommits` in order. Skip a patch only when Git proves
@@ -215,16 +280,15 @@ it is empty because upstream absorbed it. For a real conflict:
    original subject and author remain intact.
 4. Run focused tests for the conflicted area before continuing.
 
-The candidate must remain linear, merge-free, and limited to the ordered
-approved patch subset. Never import the old worktree-timeout stack or another
+The candidate must remain linear and merge-free. Never add a commit that was
+not in the captured source range merely because it existed on an old feature or
 PR branch. Never use a blanket `ours`/`theirs` resolution.
 
-### 3. Update the patch contract when resolution changes a patch
+### 3. Record maintenance changes separately
 
-If semantic conflict resolution changes a patch's stable patch ID, update the
-corresponding ordered value in `EXPECTED_FORK_PATCH_IDS` in
-`.github/scripts/fork-maintenance-state.mjs`. Put that update, and no business
-code, in one final generated maintenance snapshot commit with trailer:
+If the runbook, workflows, or maintenance scripts need to change, put those
+changes, and no business code, in one final generated maintenance snapshot
+commit with trailer:
 
 ```text
 Fork-Maintenance-Generated: maintenance-snapshot-v1
@@ -232,8 +296,8 @@ Fork-Maintenance-Generated: maintenance-snapshot-v1
 
 The snapshot may change only paths recognized by `MAINTENANCE_PATHS`, must be
 the final candidate commit, and is excluded from the business patch stack. Do
-not weaken or remove subject, patch-ID, linear-history, or path validation to
-make a candidate pass.
+not weaken linear-history, generated-commit, path-boundary, Release-identity, or
+transaction-lease validation to make a candidate pass.
 
 ### 4. Validate and publish only the candidate
 
@@ -249,7 +313,7 @@ For a previously absent preview, use an empty expected value. Do not push
 
 The candidate push must start `fork-release-build.yml`. If the workflow is
 disabled, inspect repository workflow state, disable the superseded
-`fork-sync.yml`, enable both new maintenance workflows, and dispatch the build
+`fork-sync.yml`, enable all three maintenance workflows, and dispatch the build
 at the exact candidate ref. Do not re-enable unrelated upstream workflows.
 
 ### 5. Diagnose retries without bypassing the gate
@@ -278,3 +342,21 @@ Do not report success until all of the following are true:
 4. The fork tag resolves to the candidate SHA.
 5. Every protected PR/fix branch SHA equals the value captured before recovery.
 6. No unrelated workflow was enabled and the working tree is clean.
+
+## Why patches remain commits in this repository
+
+An external patch repository could make the queue independent from replayed
+commit SHAs and could store explicit per-upstream-version patch manifests. It
+would also add a second repository and revision to every transaction, require
+atomic coordination between patch data and maintenance code, make individual
+patches non-buildable until applied, and make rename/context drift plus binary
+changes harder to review and test.
+
+Keeping real commits in `upstream-release..fork` gives each patch a native diff,
+parent, author, tests, bisect point, and GitHub review history. Its cost is that
+every replay changes commit SHAs and conflict resolution still requires semantic
+review. The range-based model accepts that cost and deliberately does not treat
+those changing SHAs as durable identity. Reconsider an external patch repository
+only if the queue must be shared across several forks or maintained independently
+of a buildable Orca branch; if adopted, pin the patch repository revision as a
+transaction input, not each generated target commit.

@@ -5,10 +5,12 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
-  assertForkPatchContract,
+  assertForkPatchPaths,
   inspectForkCandidate,
+  inspectForkHotfixSource,
   inspectForkPatchStack,
-  isDirectExecution
+  isDirectExecution,
+  verifyForkHotfixCandidate
 } from './fork-maintenance-state.mjs'
 
 function git(root, ...args) {
@@ -53,20 +55,6 @@ function appendCommit(root, file, value, subject) {
   git(root, 'add', file)
   git(root, 'commit', '-m', subject)
   return git(root, 'rev-parse', 'HEAD')
-}
-
-function stablePatchId(root, commit) {
-  const patch = execFileSync('git', ['show', '--pretty=format:', commit], {
-    cwd: root,
-    encoding: 'utf8'
-  })
-  return execFileSync('git', ['patch-id', '--stable'], {
-    cwd: root,
-    encoding: 'utf8',
-    input: patch
-  })
-    .trim()
-    .split(' ')[0]
 }
 
 describe('inspectForkPatchStack', () => {
@@ -283,45 +271,17 @@ describe('CLI entrypoint', () => {
   })
 })
 
-describe('fork patch contract', () => {
-  it('accepts an ordered subset when an upstream release absorbs a patch', () => {
+describe('fork patch path boundary', () => {
+  it('accepts every business commit in source range without pinning identity or subject', () => {
     const root = createRepository()
     git(root, 'switch', '-c', 'fork')
-    const first = appendCommit(
-      root,
-      'mobile/first.ts',
-      'first\n',
-      'fix(mobile): honor pinned workspace display preference'
-    )
-    const third = appendCommit(
-      root,
-      'mobile/third.ts',
-      'third\n',
-      'fix(mobile): show SSH labels in Run on picker'
-    )
+    const first = appendCommit(root, 'mobile/first.ts', 'first\n', 'arbitrary first patch')
+    const second = appendCommit(root, 'mobile/second.ts', 'second\n', 'renamed replayed patch')
 
-    expect(
-      assertForkPatchContract(
-        [first, third],
-        root,
-        [
-          'fix(mobile): honor pinned workspace display preference',
-          'fix(mobile): show SSH labels in Run on picker'
-        ],
-        null
-      )
-    ).toEqual([
-      'fix(mobile): honor pinned workspace display preference',
-      'fix(mobile): show SSH labels in Run on picker'
-    ])
+    expect(() => assertForkPatchPaths([first, second], root)).not.toThrow()
   })
 
-  it('rejects extra patches and maintenance-path changes', () => {
-    const extraRoot = createRepository()
-    git(extraRoot, 'switch', '-c', 'fork')
-    const extra = appendCommit(extraRoot, 'mobile/extra.ts', 'extra\n', 'unapproved patch')
-    expect(() => assertForkPatchContract([extra], extraRoot)).toThrow('unexpected fork patch')
-
+  it('rejects business patches that change maintenance paths', () => {
     const maintenanceRoot = createRepository()
     git(maintenanceRoot, 'switch', '-c', 'fork')
     const maintenance = appendCommit(
@@ -330,13 +290,63 @@ describe('fork patch contract', () => {
       'name: changed\n',
       'fix(mobile): honor pinned workspace display preference'
     )
+    expect(() => assertForkPatchPaths([maintenance], maintenanceRoot)).toThrow(
+      'changes a maintenance path'
+    )
+  })
+})
+
+describe('fork hotfix source', () => {
+  it('accepts a linear product-only range based on the production fork', () => {
+    const root = createRepository()
+    git(root, 'switch', '-c', 'fork')
+    appendCommit(root, 'product.ts', 'production\n', 'production patch')
+    git(root, 'switch', '-c', 'fix/hotfix')
+    const first = appendCommit(root, 'product.ts', 'hotfix one\n', 'hotfix one')
+    const second = appendCommit(root, 'product.test.ts', 'test\n', 'hotfix test')
+
+    expect(
+      inspectForkHotfixSource({ forkRef: 'fork', sourceRef: 'fix/hotfix', cwd: root })
+    ).toMatchObject({
+      hotfixCommits: [first, second],
+      hotfixCommitCount: 2
+    })
+  })
+
+  it('rejects a source that is unrelated, merged, empty, or changes maintenance paths', () => {
+    const empty = createRepository()
+    git(empty, 'branch', 'fork')
     expect(() =>
-      assertForkPatchContract(
-        [maintenance],
-        maintenanceRoot,
-        ['fix(mobile): honor pinned workspace display preference'],
-        null
-      )
+      inspectForkHotfixSource({ forkRef: 'fork', sourceRef: 'HEAD', cwd: empty })
+    ).toThrow('contains no commits')
+
+    const unrelated = createRepository()
+    git(unrelated, 'branch', 'fork')
+    git(unrelated, 'switch', '--orphan', 'fix/unrelated')
+    appendCommit(unrelated, 'other.ts', 'other\n', 'unrelated')
+    expect(() =>
+      inspectForkHotfixSource({
+        forkRef: 'fork',
+        sourceRef: 'fix/unrelated',
+        cwd: unrelated
+      })
+    ).toThrow('not an ancestor')
+
+    const maintenance = createRepository()
+    git(maintenance, 'branch', 'fork')
+    git(maintenance, 'switch', '-c', 'fix/maintenance')
+    appendCommit(
+      maintenance,
+      '.github/workflows/fork-release-build.yml',
+      'name: changed\n',
+      'unsafe maintenance change'
+    )
+    expect(() =>
+      inspectForkHotfixSource({
+        forkRef: 'fork',
+        sourceRef: 'fix/maintenance',
+        cwd: maintenance
+      })
     ).toThrow('changes a maintenance path')
   })
 })
@@ -363,27 +373,110 @@ describe('candidate transaction metadata', () => {
       `Upstream-Release: v1.4.188\nUpstream-Commit: ${upstream}\nFork-Maintenance-Source-Fork: ${sourceFork}\nFork-Maintenance-Source-Anchor: ${sourceAnchor}\nFork-Maintenance-Source-Preview: ${sourcePreview}\nFork-Maintenance-Generated: upstream-anchor-v1`
     )
     const anchor = git(root, 'rev-parse', 'HEAD')
-    appendCommit(
+    const patch = appendCommit(
       root,
       'mobile/change.ts',
       'change\n',
       'fix(mobile): show SSH labels in Run on picker'
     )
 
-    expect(
-      inspectForkCandidate({
-        candidateRef: 'HEAD',
-        cwd: root,
-        expectedPatchIds: [null, null, stablePatchId(root, 'HEAD')]
-      })
-    ).toMatchObject({
+    expect(inspectForkCandidate({ candidateRef: 'HEAD', cwd: root })).toMatchObject({
       anchorSha: anchor,
       upstreamSha: upstream,
       upstreamTag: 'v1.4.188',
       sourceForkSha: sourceFork,
       sourceAnchorSha: sourceAnchor,
       sourcePreviewSha: sourcePreview,
-      patchSubjects: ['fix(mobile): show SSH labels in Run on picker']
+      patchCommits: [patch]
     })
+  })
+
+  it('validates a hotfix candidate against its exact reviewed source', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-fork-hotfix-candidate-'))
+    git(root, 'init')
+    git(root, 'checkout', '-b', 'release')
+    writeFileSync(join(root, 'base.txt'), 'release\n')
+    git(root, 'add', 'base.txt')
+    git(root, 'commit', '-m', 'release: v1.4.197')
+    const upstream = git(root, 'rev-parse', 'HEAD')
+    git(
+      root,
+      'commit',
+      '--allow-empty',
+      '-m',
+      'generated anchor',
+      '-m',
+      `Upstream-Release: v1.4.197\nUpstream-Commit: ${upstream}\nFork-Maintenance-Source-Fork: ${'1'.repeat(40)}\nFork-Maintenance-Source-Anchor: ${'2'.repeat(40)}\nFork-Maintenance-Source-Preview: ${'3'.repeat(40)}\nFork-Maintenance-Generated: upstream-anchor-v1`
+    )
+    const anchor = git(root, 'rev-parse', 'HEAD')
+    const productionPatch = appendCommit(root, 'product.ts', 'production\n', 'production patch')
+    appendCommit(
+      root,
+      '.github/fork-maintenance-plan.md',
+      'old maintenance\n',
+      'old snapshot\n\nFork-Maintenance-Generated: maintenance-snapshot-v1'
+    )
+    git(root, 'branch', 'fork')
+    git(root, 'switch', '-c', 'fix/hotfix')
+    const sourceHotfix = appendCommit(root, 'product.ts', 'hotfix\n', 'hotfix product')
+    const sourceFork = git(root, 'rev-parse', 'fork')
+
+    git(root, 'switch', '-c', 'candidate', productionPatch)
+    git(root, 'cherry-pick', sourceHotfix)
+    const candidateHotfix = git(root, 'rev-parse', 'HEAD')
+    appendCommit(
+      root,
+      '.github/fork-maintenance-plan.md',
+      'new maintenance\n',
+      `hotfix snapshot\n\nFork-Maintenance-Transaction: fork-hotfix-v1\nFork-Maintenance-Source-Fork: ${sourceFork}\nFork-Maintenance-Source-Anchor: ${anchor}\nFork-Maintenance-Source-Preview: ${sourceFork}\nFork-Hotfix-Source-Ref: fix/hotfix\nFork-Hotfix-Source-Commit: ${sourceHotfix}\nFork-Maintenance-Generated: maintenance-snapshot-v1`
+    )
+
+    expect(
+      verifyForkHotfixCandidate({
+        candidateRef: 'candidate',
+        sourceRef: 'fix/hotfix',
+        cwd: root
+      })
+    ).toMatchObject({
+      transactionKind: 'fork-hotfix',
+      sourceForkSha: sourceFork,
+      sourceAnchorSha: anchor,
+      sourcePreviewSha: sourceFork,
+      hotfixSourceRef: 'fix/hotfix',
+      hotfixSourceSha: sourceHotfix,
+      patchCommits: [productionPatch, candidateHotfix],
+      hotfixCommits: [sourceHotfix]
+    })
+
+    git(
+      root,
+      'commit',
+      '--amend',
+      '-m',
+      'hotfix snapshot',
+      '-m',
+      `Fork-Maintenance-Transaction: fork-hotfix-v1\nFork-Maintenance-Source-Fork: ${sourceFork}\nFork-Maintenance-Source-Anchor: ${anchor}\nFork-Maintenance-Source-Preview: ${'4'.repeat(40)}\nFork-Hotfix-Source-Ref: fix/hotfix\nFork-Hotfix-Source-Commit: ${sourceHotfix}\nFork-Maintenance-Generated: maintenance-snapshot-v1`
+    )
+    expect(() =>
+      verifyForkHotfixCandidate({ candidateRef: 'candidate', sourceRef: 'fix/hotfix', cwd: root })
+    ).toThrow('source preview is not the captured production fork mirror')
+
+    git(root, 'switch', '-c', 'candidate-tampered', candidateHotfix)
+    writeFileSync(join(root, 'product.ts'), 'tampered\n')
+    git(root, 'add', 'product.ts')
+    git(root, 'commit', '--amend', '--no-edit')
+    appendCommit(
+      root,
+      '.github/fork-maintenance-plan.md',
+      'new maintenance\n',
+      `hotfix snapshot\n\nFork-Maintenance-Transaction: fork-hotfix-v1\nFork-Maintenance-Source-Fork: ${sourceFork}\nFork-Maintenance-Source-Anchor: ${anchor}\nFork-Maintenance-Source-Preview: ${sourceFork}\nFork-Hotfix-Source-Ref: fix/hotfix\nFork-Hotfix-Source-Commit: ${sourceHotfix}\nFork-Maintenance-Generated: maintenance-snapshot-v1`
+    )
+    expect(() =>
+      verifyForkHotfixCandidate({
+        candidateRef: 'candidate-tampered',
+        sourceRef: 'fix/hotfix',
+        cwd: root
+      })
+    ).toThrow('differs from its source outside maintenance paths')
   })
 })

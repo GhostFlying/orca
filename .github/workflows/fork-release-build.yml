@@ -3,6 +3,7 @@ name: Fork Release Build
 on:
   push:
     branches:
+      - candidate/fork-hotfix
       - sync/upstream-release
   workflow_dispatch:
 
@@ -17,6 +18,7 @@ env:
   ANCHOR_BRANCH: upstream-release
   EXPO_DEBUG_CERTIFICATE_SHA256: fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c
   FORK_BRANCH: fork
+  HOTFIX_CANDIDATE_BRANCH: candidate/fork-hotfix
   PREVIEW_BRANCH: sync/upstream-release
 
 jobs:
@@ -30,7 +32,11 @@ jobs:
       candidate_sha: ${{ steps.inspect.outputs.candidate_sha }}
       source_anchor_sha: ${{ steps.inspect.outputs.source_anchor_sha }}
       source_fork_sha: ${{ steps.inspect.outputs.source_fork_sha }}
+      source_preview_sha: ${{ steps.inspect.outputs.source_preview_sha }}
       state: ${{ steps.refs.outputs.state }}
+      transaction_kind: ${{ steps.inspect.outputs.transaction_kind }}
+      hotfix_source_ref: ${{ steps.inspect.outputs.hotfix_source_ref }}
+      hotfix_source_sha: ${{ steps.inspect.outputs.hotfix_source_sha }}
       upstream_sha: ${{ steps.inspect.outputs.upstream_sha }}
       upstream_tag: ${{ steps.inspect.outputs.upstream_tag }}
     steps:
@@ -55,12 +61,15 @@ jobs:
             "candidate_sha=\(.candidateSha)",
             "source_anchor_sha=\(.sourceAnchorSha // "")",
             "source_fork_sha=\(.sourceForkSha)",
+            "source_preview_sha=\(.sourcePreviewSha // "")",
+            "transaction_kind=\(.transactionKind)",
+            "hotfix_source_ref=\(.hotfixSourceRef // "")",
+            "hotfix_source_sha=\(.hotfixSourceSha // "")",
             "upstream_sha=\(.upstreamSha)",
             "upstream_tag=\(.upstreamTag)"
           ' "$RUNNER_TEMP/fork-candidate.json" >>"$GITHUB_OUTPUT"
           upstream_sha="$(jq -r .upstreamSha "$RUNNER_TEMP/fork-candidate.json")"
           upstream_tag="$(jq -r .upstreamTag "$RUNNER_TEMP/fork-candidate.json")"
-          test "$(git show -s --format=%s "$upstream_sha")" = "release: $upstream_tag"
           test "v$(git show "$upstream_sha:package.json" | jq -r .version)" = "$upstream_tag"
       - name: Verify current transaction refs
         id: refs
@@ -69,16 +78,40 @@ jobs:
           CANDIDATE_SHA: ${{ steps.inspect.outputs.candidate_sha }}
           SOURCE_ANCHOR_SHA: ${{ steps.inspect.outputs.source_anchor_sha }}
           SOURCE_FORK_SHA: ${{ steps.inspect.outputs.source_fork_sha }}
+          SOURCE_PREVIEW_SHA: ${{ steps.inspect.outputs.source_preview_sha }}
+          TRANSACTION_KIND: ${{ steps.inspect.outputs.transaction_kind }}
+          HOTFIX_SOURCE_REF: ${{ steps.inspect.outputs.hotfix_source_ref }}
+          HOTFIX_SOURCE_SHA: ${{ steps.inspect.outputs.hotfix_source_sha }}
         run: |
           set -euo pipefail
           remote_ref() { git ls-remote origin "refs/heads/$1" | awk '{print $1}'; }
           current_anchor="$(remote_ref "$ANCHOR_BRANCH")"
           current_fork="$(remote_ref "$FORK_BRANCH")"
           current_preview="$(remote_ref "$PREVIEW_BRANCH")"
-          test "$current_preview" = "$CANDIDATE_SHA"
+          case "$TRANSACTION_KIND" in
+            upstream-release)
+              test "$GITHUB_REF" = "refs/heads/$PREVIEW_BRANCH"
+              test "$current_preview" = "$CANDIDATE_SHA"
+              ;;
+            fork-hotfix)
+              test "$GITHUB_REF" = "refs/heads/$HOTFIX_CANDIDATE_BRANCH"
+              test "$(remote_ref "$HOTFIX_CANDIDATE_BRANCH")" = "$CANDIDATE_SHA"
+              test "$(remote_ref "$HOTFIX_SOURCE_REF")" = "$HOTFIX_SOURCE_SHA"
+              git fetch --no-tags origin \
+                "+refs/heads/$HOTFIX_SOURCE_REF:refs/remotes/origin/hotfix-source"
+              node .github/scripts/fork-maintenance-state.mjs verify-hotfix-candidate \
+                --candidate=HEAD --source=refs/remotes/origin/hotfix-source
+              ;;
+            *) echo "::error::Unsupported transaction kind: $TRANSACTION_KIND"; exit 1 ;;
+          esac
           if [[ "$current_fork" = "$SOURCE_FORK_SHA" && "$current_anchor" = "$SOURCE_ANCHOR_SHA" ]]; then
+            if [[ "$TRANSACTION_KIND" = fork-hotfix ]]; then
+              test "$current_preview" = "$SOURCE_PREVIEW_SHA"
+              test "$current_preview" = "$SOURCE_FORK_SHA"
+            fi
             echo "state=pending" >>"$GITHUB_OUTPUT"
           elif [[ "$current_fork" = "$CANDIDATE_SHA" && "$current_anchor" = "$ANCHOR_SHA" ]]; then
+            test "$current_preview" = "$CANDIDATE_SHA"
             echo "state=promoted" >>"$GITHUB_OUTPUT"
           else
             echo "::error::Candidate source leases no longer match the remote refs."
@@ -652,16 +685,33 @@ jobs:
           CANDIDATE_SHA: ${{ needs.candidate.outputs.candidate_sha }}
           SOURCE_ANCHOR_SHA: ${{ needs.candidate.outputs.source_anchor_sha }}
           SOURCE_FORK_SHA: ${{ needs.candidate.outputs.source_fork_sha }}
+          SOURCE_PREVIEW_SHA: ${{ needs.candidate.outputs.source_preview_sha }}
+          TRANSACTION_KIND: ${{ needs.candidate.outputs.transaction_kind }}
+          HOTFIX_SOURCE_REF: ${{ needs.candidate.outputs.hotfix_source_ref }}
+          HOTFIX_SOURCE_SHA: ${{ needs.candidate.outputs.hotfix_source_sha }}
         run: |
           set -euo pipefail
           remote_ref() { git ls-remote origin "refs/heads/$1" | awk '{print $1}'; }
           current_anchor="$(remote_ref "$ANCHOR_BRANCH")"
           current_fork="$(remote_ref "$FORK_BRANCH")"
           current_preview="$(remote_ref "$PREVIEW_BRANCH")"
-          test "$current_preview" = "$CANDIDATE_SHA"
+          if [[ "$TRANSACTION_KIND" = upstream-release ]]; then
+            test "$current_preview" = "$CANDIDATE_SHA"
+          elif [[ "$TRANSACTION_KIND" = fork-hotfix ]]; then
+            test "$(remote_ref "$HOTFIX_CANDIDATE_BRANCH")" = "$CANDIDATE_SHA"
+            test "$(remote_ref "$HOTFIX_SOURCE_REF")" = "$HOTFIX_SOURCE_SHA"
+          else
+            echo "::error::Unsupported transaction kind: $TRANSACTION_KIND"
+            exit 1
+          fi
           if [[ "$current_fork" = "$SOURCE_FORK_SHA" && "$current_anchor" = "$SOURCE_ANCHOR_SHA" ]]; then
+            if [[ "$TRANSACTION_KIND" = fork-hotfix ]]; then
+              test "$current_preview" = "$SOURCE_PREVIEW_SHA"
+              test "$current_preview" = "$SOURCE_FORK_SHA"
+            fi
             echo "state=pending" >>"$GITHUB_OUTPUT"
           elif [[ "$current_fork" = "$CANDIDATE_SHA" && "$current_anchor" = "$ANCHOR_SHA" ]]; then
+            test "$current_preview" = "$CANDIDATE_SHA"
             echo "state=promoted" >>"$GITHUB_OUTPUT"
           else
             echo "::error::Production refs changed while the candidate was building."
@@ -759,9 +809,19 @@ jobs:
           FORK_MAINTENANCE_SSH_KEY: ${{ secrets.FORK_MAINTENANCE_SSH_KEY }}
           SOURCE_ANCHOR_SHA: ${{ needs.candidate.outputs.source_anchor_sha }}
           SOURCE_FORK_SHA: ${{ needs.candidate.outputs.source_fork_sha }}
+          SOURCE_PREVIEW_SHA: ${{ needs.candidate.outputs.source_preview_sha }}
+          TRANSACTION_KIND: ${{ needs.candidate.outputs.transaction_kind }}
         run: |
           set -euo pipefail
           test -n "$FORK_MAINTENANCE_SSH_KEY"
+          if [[ "$TRANSACTION_KIND" = upstream-release ]]; then
+            preview_lease_sha="$CANDIDATE_SHA"
+          elif [[ "$TRANSACTION_KIND" = fork-hotfix ]]; then
+            preview_lease_sha="$SOURCE_PREVIEW_SHA"
+          else
+            echo "::error::Unsupported transaction kind: $TRANSACTION_KIND"
+            exit 1
+          fi
           key_path="$RUNNER_TEMP/fork-maintenance-key"
           known_hosts_path="$RUNNER_TEMP/fork-maintenance-known-hosts"
           printf '%s\n' "$FORK_MAINTENANCE_SSH_KEY" >"$key_path"
@@ -773,7 +833,7 @@ jobs:
             git push --atomic \
               --force-with-lease="refs/heads/$FORK_BRANCH:$SOURCE_FORK_SHA" \
               --force-with-lease="refs/heads/$ANCHOR_BRANCH:$SOURCE_ANCHOR_SHA" \
-              --force-with-lease="refs/heads/$PREVIEW_BRANCH:$CANDIDATE_SHA" \
+              --force-with-lease="refs/heads/$PREVIEW_BRANCH:$preview_lease_sha" \
               "git@github.com:$GITHUB_REPOSITORY.git" \
               "$CANDIDATE_SHA:refs/heads/$FORK_BRANCH" \
               "$ANCHOR_SHA:refs/heads/$ANCHOR_BRANCH" \
