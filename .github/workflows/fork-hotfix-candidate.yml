@@ -1,0 +1,170 @@
+name: Fork Hotfix Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Reviewed fix/... branch based on the current production fork
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: fork-release-maintenance
+  cancel-in-progress: false
+
+env:
+  ANCHOR_BRANCH: upstream-release
+  FORK_BRANCH: fork
+  HOTFIX_CANDIDATE_BRANCH: candidate/fork-hotfix
+  PREVIEW_BRANCH: sync/upstream-release
+  FORK_COMMITTER_NAME: GhostFlying
+  FORK_COMMITTER_EMAIL: 4019569+GhostFlying@users.noreply.github.com
+
+jobs:
+  prepare:
+    if: github.repository == 'GhostFlying/orca' && github.ref == 'refs/heads/fork'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout trusted production fork
+        uses: actions/checkout@v6
+        with:
+          ref: fork
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure Git
+        run: |
+          git config user.name "$FORK_COMMITTER_NAME"
+          git config user.email "$FORK_COMMITTER_EMAIL"
+          git config commit.gpgsign false
+      - name: Capture exact hotfix transaction refs
+        id: refs
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          set -euo pipefail
+          case "$SOURCE_REF" in
+            fix/*) ;;
+            *) echo '::error::Hotfix source must be a fix/... branch.'; exit 1 ;;
+          esac
+          git check-ref-format --branch "$SOURCE_REF" >/dev/null
+          remote_ref() { git ls-remote origin "refs/heads/$1" | awk '{print $1}'; }
+          source_fork_sha="$(remote_ref "$FORK_BRANCH")"
+          source_anchor_sha="$(remote_ref "$ANCHOR_BRANCH")"
+          source_preview_sha="$(remote_ref "$PREVIEW_BRANCH")"
+          hotfix_source_sha="$(remote_ref "$SOURCE_REF")"
+          candidate_lease_sha="$(remote_ref "$HOTFIX_CANDIDATE_BRANCH")"
+          test -n "$source_fork_sha"
+          test -n "$source_anchor_sha"
+          test "$source_preview_sha" = "$source_fork_sha"
+          test -n "$hotfix_source_sha"
+          git fetch --no-tags origin \
+            "+refs/heads/$FORK_BRANCH:refs/remotes/origin/$FORK_BRANCH" \
+            "+refs/heads/$ANCHOR_BRANCH:refs/remotes/origin/$ANCHOR_BRANCH" \
+            "+refs/heads/$SOURCE_REF:refs/remotes/origin/hotfix-source"
+          test "$(git rev-parse "refs/remotes/origin/$FORK_BRANCH^{commit}")" = "$source_fork_sha"
+          test "$(git rev-parse "refs/remotes/origin/$ANCHOR_BRANCH^{commit}")" = "$source_anchor_sha"
+          test "$(git rev-parse 'refs/remotes/origin/hotfix-source^{commit}')" = "$hotfix_source_sha"
+          echo "source_ref=$SOURCE_REF" >>"$GITHUB_OUTPUT"
+          echo "source_fork_sha=$source_fork_sha" >>"$GITHUB_OUTPUT"
+          echo "source_anchor_sha=$source_anchor_sha" >>"$GITHUB_OUTPUT"
+          echo "source_preview_sha=$source_preview_sha" >>"$GITHUB_OUTPUT"
+          echo "hotfix_source_sha=$hotfix_source_sha" >>"$GITHUB_OUTPUT"
+          echo "candidate_lease_sha=$candidate_lease_sha" >>"$GITHUB_OUTPUT"
+      - name: Inspect production stack and hotfix source
+        run: |
+          set -euo pipefail
+          node .github/scripts/fork-maintenance-state.mjs inspect \
+            --anchor="refs/remotes/origin/$ANCHOR_BRANCH" \
+            --fork="refs/remotes/origin/$FORK_BRANCH" \
+            --target="refs/remotes/origin/$ANCHOR_BRANCH^" \
+            >"$RUNNER_TEMP/fork-production-state.json"
+          node .github/scripts/fork-maintenance-state.mjs inspect-hotfix-source \
+            --fork="refs/remotes/origin/$FORK_BRANCH" \
+            --source=refs/remotes/origin/hotfix-source \
+            >"$RUNNER_TEMP/fork-hotfix-source.json"
+          jq . "$RUNNER_TEMP/fork-production-state.json"
+          jq . "$RUNNER_TEMP/fork-hotfix-source.json"
+      - name: Build hotfix candidate
+        env:
+          SOURCE_REF: ${{ steps.refs.outputs.source_ref }}
+          SOURCE_FORK_SHA: ${{ steps.refs.outputs.source_fork_sha }}
+          SOURCE_ANCHOR_SHA: ${{ steps.refs.outputs.source_anchor_sha }}
+          SOURCE_PREVIEW_SHA: ${{ steps.refs.outputs.source_preview_sha }}
+          HOTFIX_SOURCE_SHA: ${{ steps.refs.outputs.hotfix_source_sha }}
+        run: |
+          set -euo pipefail
+          maintenance_paths=(
+            AGENTS.md
+            .github/fork-maintenance-plan.md
+            .github/fork-maintenance-v1.4.197-implementation-plan.md
+            .github/scripts/fork-maintenance-state.mjs
+            .github/scripts/fork-maintenance-state.test.mjs
+            .github/scripts/fork-maintenance-workflow.test.mjs
+            .github/scripts/fork-release-assets.mjs
+            .github/scripts/fork-release-assets.test.mjs
+            .github/scripts/upstream-release.mjs
+            .github/scripts/upstream-release.test.mjs
+            .github/scripts/vitest.config.mjs
+            .github/workflows
+            config/scripts/fork-electron-builder-config.cjs
+            config/scripts/fork-electron-builder-config.test.mjs
+            mobile/scripts/build-unsigned-ios.sh
+          )
+          generated_snapshot="$(jq -r '.generatedMaintenanceSnapshotSha // empty' "$RUNNER_TEMP/fork-production-state.json")"
+          candidate_base="$SOURCE_FORK_SHA"
+          if [[ -n "$generated_snapshot" ]]; then
+            test "$generated_snapshot" = "$SOURCE_FORK_SHA"
+            candidate_base="$generated_snapshot^"
+          fi
+          git checkout -B "$HOTFIX_CANDIDATE_BRANCH" "$candidate_base"
+          while IFS= read -r commit; do
+            [[ -n "$commit" ]] || continue
+            committer_date="$(git show -s --format=%cI "$commit")"
+            GIT_COMMITTER_DATE="$committer_date" \
+              git -c core.hooksPath=/dev/null cherry-pick "$commit"
+          done < <(jq -r '.hotfixCommits[]' "$RUNNER_TEMP/fork-hotfix-source.json")
+          git rm -r --ignore-unmatch -- "${maintenance_paths[@]}"
+          git checkout "$SOURCE_FORK_SHA" -- "${maintenance_paths[@]}"
+          git add -- "${maintenance_paths[@]}"
+          hotfix_date="$(git show -s --format=%cI "$HOTFIX_SOURCE_SHA")"
+          GIT_AUTHOR_DATE="$hotfix_date" GIT_COMMITTER_DATE="$hotfix_date" \
+            git -c core.hooksPath=/dev/null commit --allow-empty \
+              -m 'chore(fork): prepare hotfix release candidate' \
+              -m 'Fork-Maintenance-Transaction: fork-hotfix-v1' \
+              -m "Fork-Maintenance-Source-Fork: $SOURCE_FORK_SHA" \
+              -m "Fork-Maintenance-Source-Anchor: $SOURCE_ANCHOR_SHA" \
+              -m "Fork-Maintenance-Source-Preview: $SOURCE_PREVIEW_SHA" \
+              -m "Fork-Hotfix-Source-Ref: $SOURCE_REF" \
+              -m "Fork-Hotfix-Source-Commit: $HOTFIX_SOURCE_SHA" \
+              -m 'Fork-Maintenance-Generated: maintenance-snapshot-v1'
+          node .github/scripts/fork-maintenance-state.mjs verify-hotfix-candidate \
+            --candidate=HEAD --source=refs/remotes/origin/hotfix-source
+          echo "candidate_sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+        id: candidate
+      - name: Publish leased hotfix candidate
+        env:
+          CANDIDATE_LEASE_SHA: ${{ steps.refs.outputs.candidate_lease_sha }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          FORK_MAINTENANCE_SSH_KEY: ${{ secrets.FORK_MAINTENANCE_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$FORK_MAINTENANCE_SSH_KEY"
+          key_path="$RUNNER_TEMP/fork-maintenance-key"
+          known_hosts_path="$RUNNER_TEMP/fork-maintenance-known-hosts"
+          printf '%s\n' "$FORK_MAINTENANCE_SSH_KEY" >"$key_path"
+          chmod 600 "$key_path"
+          ssh-keyscan -t ed25519 github.com >"$known_hosts_path" 2>/dev/null
+          test "$(ssh-keygen -lf "$known_hosts_path" -E sha256 | awk '{print $2}')" = \
+            'SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU'
+          if [[ -n "$CANDIDATE_LEASE_SHA" ]]; then
+            candidate_lease="--force-with-lease=refs/heads/$HOTFIX_CANDIDATE_BRANCH:$CANDIDATE_LEASE_SHA"
+          else
+            candidate_lease="--force-with-lease=refs/heads/$HOTFIX_CANDIDATE_BRANCH:"
+          fi
+          GIT_SSH_COMMAND="ssh -i $key_path -o IdentitiesOnly=yes -o UserKnownHostsFile=$known_hosts_path" \
+            git push "$candidate_lease" "git@github.com:$GITHUB_REPOSITORY.git" \
+              "$CANDIDATE_SHA:refs/heads/$HOTFIX_CANDIDATE_BRANCH"
