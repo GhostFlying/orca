@@ -144,9 +144,56 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ needs.candidate.outputs.candidate_sha }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
-      - run: pnpm lint
+      - name: Repair v1.4.199 localization fixture
+        if: needs.candidate.outputs.upstream_sha == '28957d6004dd191b6f0baff493a9fd3d37405d9d'
+        env:
+          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          catalog=src/renderer/src/i18n/en-runtime-required.json
+          test "$(git rev-parse "$UPSTREAM_SHA:$catalog")" = \
+            47024572e8c7bcb5863942ff8d7d6a6d0df411fb
+          test "$(git hash-object "$catalog")" = \
+            47024572e8c7bcb5863942ff8d7d6a6d0df411fb
+          pnpm run sync:localization-runtime-catalog
+          test "$(git hash-object "$catalog")" = \
+            a1c33b790bc6f75e7ef0b4a897575c605c959dea
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: pnpm install --frozen-lockfile
+      - name: Lint full candidate correctness
+        run: pnpm exec oxlint --format github
+      - name: Enforce fork patch code quality
+        env:
+          FORK_PATCH_BASE: ${{ needs.candidate.outputs.anchor_sha }}
+        run: |
+          fork_files=()
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              *.js|*.jsx|*.mjs|*.cjs|*.ts|*.tsx|*.mts|*.cts) fork_files+=("$file") ;;
+            esac
+          done < <(git diff --name-only -z --diff-filter=ACMRTUB "$FORK_PATCH_BASE"...HEAD -- src config tests mobile)
+          if (( ${#fork_files[@]} > 0 )); then
+            pnpm exec oxlint --config config/oxlint-code-quality-native-plugins.json \
+              --deny-warnings "${fork_files[@]}"
+          fi
+          pnpm run check:code-quality:changed -- "$FORK_PATCH_BASE"
+          pnpm run check:react-doctor:changed -- "$FORK_PATCH_BASE"
+      - name: Verify repository-wide quality contracts
+        run: |
+          pnpm run check:reliability-gates
+          pnpm run check:max-lines-ratchet
+          pnpm run check:ts-nocheck-ratchet
+          pnpm run check:runtime-electron-ratchet
+          pnpm run verify:bundled-skill-guides
+          pnpm run verify:skill-bundle-manifest
+          pnpm run verify:localization-catalog
+          pnpm run verify:localization-runtime-catalog
+          pnpm run verify:localization-extraction
+          pnpm run verify:localization-coverage
 
   typecheck:
     needs: candidate
@@ -190,6 +237,20 @@ jobs:
           git checkout "$UPSTREAM_SHA" -- \
             .github/workflows \
             config/scripts/windows-signing-workflow-contract.test.mjs
+      - name: Repair v1.4.199 localization fixture
+        if: needs.candidate.outputs.upstream_sha == '28957d6004dd191b6f0baff493a9fd3d37405d9d'
+        env:
+          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          catalog=src/renderer/src/i18n/en-runtime-required.json
+          test "$(git rev-parse "$UPSTREAM_SHA:$catalog")" = \
+            47024572e8c7bcb5863942ff8d7d6a6d0df411fb
+          test "$(git hash-object "$catalog")" = \
+            47024572e8c7bcb5863942ff8d7d6a6d0df411fb
+          pnpm run sync:localization-runtime-catalog
+          test "$(git hash-object "$catalog")" = \
+            a1c33b790bc6f75e7ef0b4a897575c605c959dea
       - name: Repair v1.4.196 signing contract fixture
         if: needs.candidate.outputs.upstream_sha == 'aad4ae42ea5e555f25fdec679ebbcd18cc1e8911'
         env:

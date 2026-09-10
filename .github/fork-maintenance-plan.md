@@ -30,6 +30,12 @@ pnpm exec oxlint .github/scripts config/scripts/fork-electron-builder-config.cjs
 git diff --check
 ```
 
+The release lint gate runs whole-tree correctness checks and repository-wide
+ratchets, while debt-sensitive code-quality and React Doctor checks compare the
+fork patch stack against its generated upstream anchor. A newly adopted Release
+must not be blocked only because its unchanged upstream tree already carries a
+warning that upstream's own PR gate treats as baseline debt.
+
 ## Invariants
 
 The production fork is a linear patch stack over one published upstream desktop

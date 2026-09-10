@@ -169,6 +169,32 @@ describe('fork release maintenance workflows', () => {
     }
   })
 
+  it('checks fork code quality against the generated upstream anchor', () => {
+    const lint = job(build, 'lint')
+    const checkout = lint.steps.find((step) => step.uses === 'actions/checkout@v6')
+    const repair = lint.steps.find((step) => step.name === 'Repair v1.4.199 localization fixture')
+    const patchQuality = lint.steps.find((step) => step.name === 'Enforce fork patch code quality')
+    const repositoryQuality = lint.steps.find(
+      (step) => step.name === 'Verify repository-wide quality contracts'
+    )
+
+    expect(checkout.with['fetch-depth']).toBe(0)
+    expect(repair.if).toBe(
+      "needs.candidate.outputs.upstream_sha == '28957d6004dd191b6f0baff493a9fd3d37405d9d'"
+    )
+    expect(repair.run).toContain('47024572e8c7bcb5863942ff8d7d6a6d0df411fb')
+    expect(repair.run).toContain('a1c33b790bc6f75e7ef0b4a897575c605c959dea')
+    expect(JSON.stringify(lint)).not.toContain('pnpm lint')
+    expect(JSON.stringify(lint)).toContain('pnpm exec oxlint --format github')
+    expect(patchQuality.env.FORK_PATCH_BASE).toBe(expression('needs.candidate.outputs.anchor_sha'))
+    expect(patchQuality.run).toContain('oxlint-code-quality-native-plugins.json')
+    expect(patchQuality.run).toContain('--deny-warnings "${fork_files[@]}"')
+    expect(patchQuality.run).toContain('check:code-quality:changed -- "$FORK_PATCH_BASE"')
+    expect(patchQuality.run).toContain('check:react-doctor:changed -- "$FORK_PATCH_BASE"')
+    expect(repositoryQuality.run).toContain('check:reliability-gates')
+    expect(repositoryQuality.run).toContain('verify:localization-coverage')
+  })
+
   it('fetches and verifies every upstream Release used by cross-version tests', () => {
     const crossVersion = job(build, 'cross-version-wire')
     const fetchBaseline = crossVersion.steps.find(
@@ -201,11 +227,19 @@ describe('fork release maintenance workflows', () => {
     const repair = testJob.steps.find(
       (step) => step.name === 'Repair v1.4.196 signing contract fixture'
     )
+    const localizationRepair = testJob.steps.find(
+      (step) => step.name === 'Repair v1.4.199 localization fixture'
+    )
     expect(checkout.with['fetch-depth']).toBe(0)
     expect(restore.env.UPSTREAM_SHA).toBe(expression('needs.candidate.outputs.upstream_sha'))
     expect(restore.run).toContain('git checkout "$UPSTREAM_SHA" --')
     expect(restore.run).toContain('.github/workflows')
     expect(restore.run).toContain('config/scripts/windows-signing-workflow-contract.test.mjs')
+    expect(localizationRepair.if).toBe(
+      "needs.candidate.outputs.upstream_sha == '28957d6004dd191b6f0baff493a9fd3d37405d9d'"
+    )
+    expect(localizationRepair.run).toContain('47024572e8c7bcb5863942ff8d7d6a6d0df411fb')
+    expect(localizationRepair.run).toContain('a1c33b790bc6f75e7ef0b4a897575c605c959dea')
     expect(repair.if).toBe(
       "needs.candidate.outputs.upstream_sha == 'aad4ae42ea5e555f25fdec679ebbcd18cc1e8911'"
     )
@@ -215,6 +249,7 @@ describe('fork release maintenance workflows', () => {
       "it('verifies Windows inner binary signatures fail-open before publishing'"
     )
     expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(repair))
+    expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(localizationRepair))
     expect(testJob.steps.indexOf(repair)).toBeLessThan(
       testJob.steps.findIndex((step) => step.name === 'Test shard')
     )
