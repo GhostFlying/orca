@@ -223,6 +223,9 @@ describe('fork release maintenance workflows', () => {
   it('restores upstream workflow fixtures before running the upstream test suite', () => {
     const testJob = job(build, 'test')
     const checkout = testJob.steps.find((step) => step.uses === 'actions/checkout@v6')
+    const relayDependencies = testJob.steps.find(
+      (step) => step.name === 'Install relay integration dependencies'
+    )
     const restore = testJob.steps.find((step) => step.name === 'Restore upstream workflow fixtures')
     const repair = testJob.steps.find(
       (step) => step.name === 'Repair v1.4.196 signing contract fixture'
@@ -231,6 +234,13 @@ describe('fork release maintenance workflows', () => {
       (step) => step.name === 'Repair v1.4.199 localization fixture'
     )
     expect(checkout.with['fetch-depth']).toBe(0)
+    expect(relayDependencies['working-directory']).toBe('cloud')
+    expect(relayDependencies.run).toContain(
+      "pnpm@10.24.0 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts"
+    )
+    expect(relayDependencies.run).toContain(
+      "pnpm@10.24.0 --filter '@orca-cloud/relay^...' build"
+    )
     expect(restore.env.UPSTREAM_SHA).toBe(expression('needs.candidate.outputs.upstream_sha'))
     expect(restore.run).toContain('git checkout "$UPSTREAM_SHA" --')
     expect(restore.run).toContain('.github/workflows')
@@ -264,6 +274,15 @@ describe('fork release maintenance workflows', () => {
     expect(unsignedIosText).toContain('CODE_SIGNING_ALLOWED=NO')
     expect(buildText).toContain('assembleRelease')
     expect(buildText).not.toContain('TestFlight')
+  })
+
+  it('installs both macOS CPU variants before packaging both clients', () => {
+    const desktop = job(build, 'desktop')
+    const macInstall = desktop.steps.find(
+      (step) => step.name === 'Install macOS release dependencies'
+    )
+    expect(macInstall.if).toBe("matrix.platform == 'macos'")
+    expect(macInstall.with.command).toBe('pnpm install:release')
   })
 
   it('signs Android releases with the fork key in an isolated job', () => {
