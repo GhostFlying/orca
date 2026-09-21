@@ -39,6 +39,10 @@ import {
   _resetRemoteWorkspaceStaleResyncForTests,
   resyncStaleRemoteWorkspace
 } from './remote-workspace-stale-resync'
+import {
+  clearPendingLocalRemoteWorkspacePatches,
+  getPendingLocalRemoteWorkspacePatchCount
+} from './remote-workspace-local-patch-fence'
 
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
 let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
@@ -46,16 +50,19 @@ let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
 export function _resetRemoteWorkspaceCachesForTests(): void {
   clearRemoteWorkspaceSnapshotCache()
   clearRemoteWorkspacePatchTails()
+  clearPendingLocalRemoteWorkspacePatches()
   _resetRemoteWorkspaceStaleResyncForTests()
 }
 
 export function _getRemoteWorkspaceCacheSizesForTests(): {
   snapshots: number
   patchTails: number
+  pendingLocalPatches: number
 } {
   return {
     snapshots: getRemoteWorkspaceSnapshotCacheSize(),
-    patchTails: getRemoteWorkspacePatchTailCount()
+    patchTails: getRemoteWorkspacePatchTailCount(),
+    pendingLocalPatches: getPendingLocalRemoteWorkspacePatchCount()
   }
 }
 
