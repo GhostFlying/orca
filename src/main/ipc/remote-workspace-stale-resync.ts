@@ -1,8 +1,13 @@
 import type { RemoteWorkspaceObservedSnapshot } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
-import { getRemoteSnapshot } from './remote-workspace-relay-sync'
-import { getCachedRemoteWorkspaceSnapshot } from './remote-workspace-snapshot-cache'
+import { fetchRemoteSnapshot } from './remote-workspace-relay-sync'
+import {
+  getCachedRemoteWorkspaceSnapshot,
+  rememberLocallyPatchedRemoteWorkspaceSnapshot,
+  rememberRemoteWorkspaceSnapshot
+} from './remote-workspace-snapshot-cache'
 import { remoteWorkspaceSessionMatchesSnapshot } from './remote-workspace-snapshot-normalization'
+import { snapshotMatchesPendingLocalRemoteWorkspacePatch } from './remote-workspace-local-patch-fence'
 
 type PendingResync = { promise: Promise<void>; requeued: boolean }
 
@@ -39,14 +44,19 @@ export function resyncStaleRemoteWorkspace(
     try {
       do {
         pending.requeued = false
-        const previous = getCachedRemoteWorkspaceSnapshot(target.id)
-        const snapshot = await getRemoteSnapshot(target)
-        if (!snapshot) {
+        const rawSnapshot = await fetchRemoteSnapshot(target)
+        if (!rawSnapshot) {
           return
         }
+        const current = getCachedRemoteWorkspaceSnapshot(target.id)
+        if (snapshotMatchesPendingLocalRemoteWorkspacePatch(target.id, rawSnapshot)) {
+          rememberLocallyPatchedRemoteWorkspaceSnapshot(target.id, rawSnapshot)
+          continue
+        }
+        const snapshot = rememberRemoteWorkspaceSnapshot(target.id, rawSnapshot)
         // Suppress the echo: our own patch response already cached this session, and re-publishing it
         // makes the renderer rehydrate a state it authored.
-        if (remoteWorkspaceSessionMatchesSnapshot(previous, snapshot.session)) {
+        if (remoteWorkspaceSessionMatchesSnapshot(current, snapshot.session)) {
           continue
         }
         deliver(snapshot)
