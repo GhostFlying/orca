@@ -229,6 +229,11 @@ jobs:
         with:
           native-runtime: node
       - run: node config/scripts/install-electron-package-binary.mjs
+      - name: Install relay integration dependencies
+        working-directory: cloud
+        run: |
+          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
+          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay^...' build
       - name: Restore upstream workflow fixtures
         env:
           UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
@@ -403,12 +408,21 @@ jobs:
           node-version-file: package.json
           cache: pnpm
       - name: Install dependencies
+        if: matrix.platform != 'macos'
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
+      - name: Install macOS release dependencies
+        if: matrix.platform == 'macos'
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install:release
       - name: Install Linux packaging dependencies
         if: runner.os == 'Linux'
         run: |
