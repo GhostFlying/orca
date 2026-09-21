@@ -2,7 +2,8 @@ import type {
   RemoteWorkspaceObservedPatchResult,
   RemoteWorkspaceObservedSnapshot,
   RemoteWorkspacePatchResult,
-  RemoteWorkspaceSession
+  RemoteWorkspaceSession,
+  RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { getActiveMultiplexer } from './ssh'
@@ -17,10 +18,14 @@ import {
   normalizeSnapshot,
   remoteWorkspaceSessionMatchesSnapshot
 } from './remote-workspace-snapshot-normalization'
+import {
+  beginPendingLocalRemoteWorkspacePatch,
+  endPendingLocalRemoteWorkspacePatch
+} from './remote-workspace-local-patch-fence'
 
-export async function getRemoteSnapshot(
+export async function fetchRemoteSnapshot(
   target: SshTarget
-): Promise<RemoteWorkspaceObservedSnapshot | null> {
+): Promise<RemoteWorkspaceSnapshot | null> {
   const mux = getActiveMultiplexer(target.id)
   if (!mux) {
     return null
@@ -28,14 +33,20 @@ export async function getRemoteSnapshot(
   const namespace = getRemoteWorkspaceNamespace(target)
   try {
     const raw = await mux.request('workspace.get', { namespace })
-    const snapshot = normalizeSnapshot(raw, namespace)
-    return rememberRemoteWorkspaceSnapshot(target.id, snapshot)
+    return normalizeSnapshot(raw, namespace)
   } catch (err) {
     if ((err as { code?: unknown })?.code === -32601) {
       return null
     }
     throw err
   }
+}
+
+export async function getRemoteSnapshot(
+  target: SshTarget
+): Promise<RemoteWorkspaceObservedSnapshot | null> {
+  const snapshot = await fetchRemoteSnapshot(target)
+  return snapshot ? rememberRemoteWorkspaceSnapshot(target.id, snapshot) : null
 }
 
 function observePatchResult(
@@ -61,6 +72,40 @@ function observePatchResult(
     : failure
 }
 
+function normalizePatchResult(raw: unknown, namespace: string): RemoteWorkspacePatchResult {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !('ok' in raw)) {
+    return { ok: false, reason: 'unavailable', message: 'Invalid remote workspace patch response' }
+  }
+  if (
+    raw.ok === true &&
+    'snapshot' in raw &&
+    raw.snapshot !== null &&
+    typeof raw.snapshot === 'object' &&
+    !Array.isArray(raw.snapshot)
+  ) {
+    return { ok: true, snapshot: normalizeSnapshot(raw.snapshot, namespace) }
+  }
+  if (raw.ok !== false) {
+    return { ok: false, reason: 'unavailable', message: 'Invalid remote workspace patch response' }
+  }
+  const reason =
+    'reason' in raw && raw.reason === 'stale-revision' ? 'stale-revision' : 'unavailable'
+  const message = 'message' in raw && typeof raw.message === 'string' ? raw.message : undefined
+  const snapshot =
+    'snapshot' in raw &&
+    raw.snapshot !== null &&
+    typeof raw.snapshot === 'object' &&
+    !Array.isArray(raw.snapshot)
+      ? normalizeSnapshot(raw.snapshot, namespace)
+      : undefined
+  return {
+    ok: false,
+    reason,
+    ...(message !== undefined ? { message } : {}),
+    ...(snapshot !== undefined ? { snapshot } : {})
+  }
+}
+
 export async function patchRemoteWorkspaceSession(
   target: SshTarget,
   session: RemoteWorkspaceSession
@@ -81,14 +126,23 @@ export async function patchRemoteWorkspaceSession(
 
   const requestPatch = async (
     baseRevision: number | undefined
-  ): Promise<RemoteWorkspacePatchResult> => {
+  ): Promise<RemoteWorkspaceObservedPatchResult> => {
+    const resolvedBaseRevision = baseRevision ?? 0
+    const pending = beginPendingLocalRemoteWorkspacePatch({
+      targetId: target.id,
+      namespace,
+      baseRevision: resolvedBaseRevision,
+      session
+    })
     try {
-      return (await mux.request('workspace.patch', {
+      const rawResult = await mux.request('workspace.patch', {
         namespace,
-        baseRevision: baseRevision ?? 0,
+        baseRevision: resolvedBaseRevision,
         clientId: CLIENT_ID,
         patch: { kind: 'replace-session', session }
-      })) as RemoteWorkspacePatchResult
+      })
+      const result = normalizePatchResult(rawResult, namespace)
+      return observePatchResult(target.id, result)
     } catch (err) {
       return (err as { code?: unknown })?.code === -32601
         ? {
@@ -101,10 +155,12 @@ export async function patchRemoteWorkspaceSession(
             reason: 'unavailable',
             message: err instanceof Error ? err.message : 'Remote workspace sync failed'
           }
+    } finally {
+      endPendingLocalRemoteWorkspacePatch(pending)
     }
   }
 
-  const result = observePatchResult(target.id, await requestPatch(current?.revision))
+  const result = await requestPatch(current?.revision)
   if (result.ok) {
     return result
   }
@@ -122,7 +178,7 @@ export async function patchRemoteWorkspaceSession(
     // backwards while this process still has the old cached revision. Retrying
     // only for backwards revisions restores the blank-slate target without
     // overwriting a newer snapshot from another device.
-    return observePatchResult(target.id, await requestPatch(result.snapshot.revision))
+    return requestPatch(result.snapshot.revision)
   }
 
   return result

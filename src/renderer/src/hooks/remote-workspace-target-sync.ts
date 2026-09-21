@@ -10,6 +10,8 @@ import { buildDirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordin
 import { resolveExactDirectSshTargetWorktreeIds } from './remote-workspace-snapshot-placement'
 import { applyDirectSshRemoteWorkspaceSnapshot } from './remote-workspace-snapshot-apply'
 import { createRemoteWorkspaceSnapshotArrivalCoordinator } from './remote-workspace-snapshot-arrival-coordinator'
+import { captureRemoteWorkspaceNavigation } from './remote-workspace-navigation-fence'
+import type { RemoteWorkspaceNavigationSnapshot } from './remote-workspace-navigation-fence'
 import { createDeferredSnapshotPlacementRetries } from './remote-workspace-deferred-placement-retry'
 import { applyRemoteWorkspacePushStatus } from './remote-workspace-push-status'
 import { waitForRemoteWorkspaceSessionReady } from './remote-workspace-session-readiness'
@@ -62,7 +64,8 @@ export function createRemoteWorkspaceTargetSync(
     snapshot: RemoteWorkspaceObservedSnapshot,
     arrival: number,
     arrivalSignal: AbortSignal,
-    initialToken: DirectSshSnapshotApplyToken
+    initialToken: DirectSshSnapshotApplyToken,
+    navigationSnapshot: RemoteWorkspaceNavigationSnapshot
   ): Promise<void> => {
     let applyToken = initialToken
     for (let attempt = 0; attempt < MAX_SNAPSHOT_APPLY_ATTEMPTS; attempt += 1) {
@@ -78,6 +81,7 @@ export function createRemoteWorkspaceTargetSync(
         waitForWorkspaceSessionReady: (signal) =>
           waitForRemoteWorkspaceSessionReady(deps.store, signal),
         finalizeHydratedTerminals: deps.finalizeHydratedTerminals,
+        navigationSnapshot,
         onUnplacedTabWorktreePaths: (worktreePaths) => {
           unplacedTabWorktreePaths = worktreePaths
         }
@@ -125,6 +129,10 @@ export function createRemoteWorkspaceTargetSync(
     arrivalSignal: AbortSignal
   ): Promise<void> => {
     const { authority } = token
+    const navigationSnapshot = captureRemoteWorkspaceNavigation(
+      deps.store.getState(),
+      resolveExactDirectSshTargetWorktreeIds(deps.store.getState(), authority)
+    )
     const workspaceReady = await waitForRemoteWorkspaceSessionReady(deps.store, arrivalSignal)
     if (!isArrivalCurrent(authority.targetId, arrival) || !deps.isPreparationTokenCurrent(token)) {
       return
@@ -172,7 +180,8 @@ export function createRemoteWorkspaceTargetSync(
           snapshot,
           arrival,
           arrivalSignal,
-          applyToken
+          applyToken,
+          navigationSnapshot
         )
       }
       return
@@ -222,6 +231,10 @@ export function createRemoteWorkspaceTargetSync(
       return
     }
     const state = deps.store.getState()
+    const navigationSnapshot = captureRemoteWorkspaceNavigation(
+      state,
+      resolveExactDirectSshTargetWorktreeIds(state, authority)
+    )
     state.clearRemoteWorkspaceHydrated(authority.targetId)
     state.setRemoteWorkspaceSyncStatus(authority.targetId, {
       phase: 'pulling',
@@ -260,7 +273,8 @@ export function createRemoteWorkspaceTargetSync(
       snapshot,
       arrival,
       arrivalSignal,
-      applyToken
+      applyToken,
+      navigationSnapshot
     )
   }
 
