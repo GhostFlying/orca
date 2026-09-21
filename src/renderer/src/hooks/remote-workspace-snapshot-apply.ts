@@ -20,6 +20,11 @@ import {
   waitForSnapshotWorktreePlacement,
   type RemoteWorkspaceSnapshotPlacementStore
 } from './remote-workspace-snapshot-placement'
+import {
+  captureRemoteWorkspaceNavigation,
+  preserveRemoteWorkspaceNavigationIfChanged,
+  type RemoteWorkspaceNavigationSnapshot
+} from './remote-workspace-navigation-fence'
 
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1_000
 const SNAPSHOT_TERMINAL_RECONNECT_TIMEOUT_MS = 30_000
@@ -79,6 +84,7 @@ type RemoteWorkspaceSnapshotApplyInput = {
   isPreparationTokenCurrent: (token: DirectSshPreparationToken) => boolean
   waitForWorkspaceSessionReady: (signal?: AbortSignal) => Promise<boolean>
   finalizeHydratedTerminals: (authority: DirectSshAuthority) => number
+  navigationSnapshot?: RemoteWorkspaceNavigationSnapshot
   /**
    * Host paths still carrying terminal tabs when this apply gave up placing them. `unverifiable`,
    * never proof the rows are not ours, so the caller owns getting back to a placed picture — this
@@ -122,9 +128,16 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   isPreparationTokenCurrent,
   waitForWorkspaceSessionReady,
   finalizeHydratedTerminals,
+  navigationSnapshot,
   onUnplacedTabWorktreePaths
 }: RemoteWorkspaceSnapshotApplyInput): Promise<RemoteWorkspaceSnapshotApplyResult> {
   const { authority } = token
+  const initialNavigationSnapshot =
+    navigationSnapshot ??
+    captureRemoteWorkspaceNavigation(
+      store.getState(),
+      resolveDirectSshSnapshotWorktreeIds(store.getState(), authority)
+    )
   if (!isArrivalCurrent(authority.targetId, arrival)) {
     return 'stale'
   }
@@ -175,14 +188,19 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
       onUnplacedTerminalTabs: (worktreePath) => unplacedTabWorktreePaths.push(worktreePath)
     })
   }
-  const merged = mergeDirectSshRemoteWorkspaceSession(
-    buildWorkspaceSessionPayload(state),
-    remoteSession,
-    worktreeIds,
-    state.tabsByWorktree,
-    currentRecoveryTabIds(state, authority, worktreeIds),
-    toSshExecutionHostId(authority.targetId),
-    snapshot.revision
+  const merged = preserveRemoteWorkspaceNavigationIfChanged(
+    mergeDirectSshRemoteWorkspaceSession(
+      buildWorkspaceSessionPayload(state),
+      remoteSession,
+      worktreeIds,
+      state.tabsByWorktree,
+      currentRecoveryTabIds(state, authority, worktreeIds),
+      toSshExecutionHostId(authority.targetId),
+      snapshot.revision
+    ),
+    state,
+    initialNavigationSnapshot,
+    worktreeIds
   )
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return 'stale'
