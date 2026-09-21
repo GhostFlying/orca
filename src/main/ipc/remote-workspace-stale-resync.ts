@@ -4,9 +4,11 @@ import { readRemoteSnapshot } from './remote-workspace-relay-sync'
 import {
   getCachedRemoteWorkspaceSnapshot,
   remoteWorkspaceSnapshotsAreIdentical,
+  rememberLocallyPatchedRemoteWorkspaceSnapshot,
   rememberRemoteWorkspaceSnapshot
 } from './remote-workspace-snapshot-cache'
 import { remoteWorkspaceSessionMatchesSnapshot } from './remote-workspace-snapshot-normalization'
+import { snapshotMatchesPendingLocalRemoteWorkspacePatch } from './remote-workspace-local-patch-fence'
 
 type PendingResync = { promise: Promise<void>; requeued: boolean }
 
@@ -45,6 +47,10 @@ export function resyncStaleRemoteWorkspace(
         pending.requeued = false
         const cachedBeforeRead = getCachedRemoteWorkspaceSnapshot(target.id)
         const observation = await readRemoteSnapshot(target, (snapshot) => {
+          if (snapshotMatchesPendingLocalRemoteWorkspacePatch(target.id, snapshot)) {
+            rememberLocallyPatchedRemoteWorkspaceSnapshot(target.id, snapshot)
+            return null
+          }
           // An own patch reply can update the cache while this read is pending.
           const previous = getCachedRemoteWorkspaceSnapshot(target.id)
           const changedDuringRead = cachedBeforeRead
