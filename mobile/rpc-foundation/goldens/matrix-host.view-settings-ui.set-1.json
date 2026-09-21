@@ -3,7 +3,7 @@
   "family": "host.view-settings",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
+  "baseline": "3f13a7894a606e437fa880870f7dbd0bd6c3238f",
   "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "a9e0780298a1443664e7ae02056168aa34d67556c9c056d51a82c7b4a73ad35b",
@@ -13,115 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0078bce46c03": {
-      "name": "ui.set#1",
-      "ordinal": 14,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"sortBy\":\"name\"}}"
+    "060920401781": {
+      "name": "workspaceStatuses",
+      "ordinal": 7,
+      "value": []
     },
-    "08d08fa034ac": {
+    "0890921e520c": {
       "name": "ui.set#1",
-      "ordinal": 13,
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "sortBy": "name"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "20aea3e7b7fb": {
-      "name": "ui.set#1",
-      "ordinal": 13,
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "sortBy": "name"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "3ce471a4a211": {
-      "name": "ui.set#1",
-      "ordinal": 13,
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "sortBy": "name"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
-    "47d34456855a": {
-      "name": "ui.set#1",
-      "ordinal": 13,
+      "ordinal": 10,
       "args": [
         {
           "name": "method",
@@ -149,19 +48,24 @@
             "code": "refused",
             "message": ""
           },
-          "id": "frame-2",
+          "id": "frame-3",
           "ok": false
         }
       }
     },
-    "49b07092d960": {
+    "1c2564f1daca": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "33cef55eaaae": {
       "name": "sortMode",
-      "ordinal": 9,
+      "ordinal": 13,
       "value": "name"
     },
-    "4c8dbecc905b": {
+    "3b93ba98c00c": {
       "name": "ui.set#1",
-      "ordinal": 13,
+      "ordinal": 10,
       "args": [
         {
           "name": "method",
@@ -185,7 +89,57 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "460e7d939d77": {
+      "name": "filters",
+      "ordinal": 9,
+      "value": {
+        "alwaysShowDefaultBranch": true,
+        "filterRepoIds": [],
+        "hideDefaultBranch": false,
+        "hideSleeping": false
+      }
+    },
+    "47b14215d780": {
+      "name": "ui.set#1",
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"sortBy\":\"name\"}}"
+    },
+    "4edd6fd4bc27": {
+      "name": "ui.set#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "sortBy": "name"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
           "ok": true,
           "result": {
             "ok": true
@@ -193,23 +147,18 @@
         }
       }
     },
-    "502a83a190c2": {
-      "name": "workspaceStatuses",
-      "ordinal": 10,
-      "value": []
-    },
-    "53857dedce44": {
-      "name": "ui.set#1",
-      "ordinal": 13,
+    "51d4cb56be85": {
+      "name": "settings.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
-          "value": "ui.set"
+          "value": "settings.get"
         },
         {
           "name": "params",
           "value": {
-            "sortBy": "name"
+            "$rpc": "absent"
           }
         },
         {
@@ -220,24 +169,14 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "582477c8e0af": {
-      "name": "ui.get#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
-    },
-    "641f71cd84d7": {
-      "name": "collapsedGroups",
-      "ordinal": 6,
-      "value": []
+    "576a78b4cbda": {
+      "name": "groupMode",
+      "ordinal": 5,
+      "value": "none"
     },
     "651e8014c9ff": {
       "name": "ui.get#1",
@@ -277,9 +216,14 @@
         }
       }
     },
-    "6f0eda30a103": {
+    "68106690cec8": {
+      "name": "sortMode",
+      "ordinal": 6,
+      "value": "name"
+    },
+    "6d8f913f765e": {
       "name": "ui.set#1",
-      "ordinal": 13,
+      "ordinal": 10,
       "args": [
         {
           "name": "method",
@@ -303,45 +247,17 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
+          "id": "frame-3",
           "ok": true,
           "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
+            "error": "refused"
           }
         }
       }
     },
-    "77222aa7cc3b": {
-      "name": "filters",
-      "ordinal": 7,
-      "value": {
-        "alwaysShowDefaultBranch": true,
-        "filterRepoIds": [],
-        "hideDefaultBranch": false,
-        "hideSleeping": true
-      }
-    },
-    "840c5f323f3d": {
-      "name": "groupMode",
-      "ordinal": 3,
-      "value": "repo"
-    },
-    "8935c6303d20": {
-      "name": "filters",
-      "ordinal": 12,
-      "value": {
-        "alwaysShowDefaultBranch": true,
-        "filterRepoIds": [],
-        "hideDefaultBranch": false,
-        "hideSleeping": true
-      }
-    },
-    "8b0dc637f6e7": {
+    "8cc921740c3f": {
       "name": "ui.set#1",
-      "ordinal": 13,
+      "ordinal": 10,
       "args": [
         {
           "name": "method",
@@ -361,22 +277,23 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-2",
-          "ok": false
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "8d4384daefd2": {
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "980710aab552": {
       "name": "ui.set#1",
-      "ordinal": 13,
+      "ordinal": 10,
       "args": [
         {
           "name": "method",
@@ -406,10 +323,6 @@
         }
       }
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
     "985caf5772e9": {
       "name": "ui.get#1",
       "ordinal": 1,
@@ -436,24 +349,9 @@
         "startedAt": 0
       }
     },
-    "a8806d0780bb": {
-      "name": "sortMode",
-      "ordinal": 4,
-      "value": "name"
-    },
-    "b6d257a61780": {
-      "name": "groupMode",
-      "ordinal": 8,
-      "value": "repo"
-    },
-    "b7731124942f": {
-      "name": "collapsedGroups",
-      "ordinal": 11,
-      "value": []
-    },
-    "b90c1c3db8d2": {
+    "9863d8987eb4": {
       "name": "ui.set#1",
-      "ordinal": 13,
+      "ordinal": 10,
       "args": [
         {
           "name": "method",
@@ -477,7 +375,42 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "9bbfc8aedffe": {
+      "name": "ui.set#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "sortBy": "name"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
           "ok": true,
           "result": {
             "$rpc": "null"
@@ -485,17 +418,90 @@
         }
       }
     },
-    "ba2035345a68": {
+    "9d2d4e824476": {
       "collapsed": [],
       "filters": {
         "alwaysShowDefaultBranch": true,
         "filterRepoIds": [],
         "hideDefaultBranch": false,
-        "hideSleeping": true
+        "hideSleeping": false
       },
-      "groupMode": "repo",
+      "groupMode": "none",
       "sortMode": "name",
       "statuses": []
+    },
+    "a0c6b1d69541": {
+      "name": "ui.set#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "sortBy": "name"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "a17c8a2d172f": {
+      "name": "workspaceStatuses",
+      "ordinal": 14,
+      "value": []
+    },
+    "abed8de8bb91": {
+      "name": "ui.set#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "sortBy": "name"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true
+        }
+      }
+    },
+    "b87674312305": {
+      "name": "collapsedGroups",
+      "ordinal": 15,
+      "value": []
     },
     "bbdab1a7d122": {
       "collapsed": [],
@@ -509,9 +515,9 @@
       "sortMode": "recent",
       "statuses": []
     },
-    "bedafb0a20b3": {
+    "c07bc2bf7ebb": {
       "name": "ui.set#1",
-      "ordinal": 13,
+      "ordinal": 10,
       "args": [
         {
           "name": "method",
@@ -535,13 +541,102 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "c62091867bb2": {
+      "name": "groupMode",
+      "ordinal": 12,
+      "value": "repo"
+    },
+    "cd846ecef9a2": {
+      "name": "ui.set#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "sortBy": "name"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
           "ok": true,
           "result": {
-            "error": "inner refused",
+            "error": {
+              "message": "inner refused"
+            },
             "ok": false
           }
         }
+      }
+    },
+    "dc0e0f9e2e34": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "df14917ac077": {
+      "name": "collapsedGroups",
+      "ordinal": 8,
+      "value": []
+    },
+    "e46028012af2": {
+      "name": "filters",
+      "ordinal": 16,
+      "value": {
+        "alwaysShowDefaultBranch": true,
+        "filterRepoIds": [],
+        "hideDefaultBranch": false,
+        "hideSleeping": true
       }
     },
     "eb79a9b3682a": {
@@ -552,10 +647,10 @@
         "$rpc": "undefined"
       }
     },
-    "fa699d780625": {
-      "name": "workspaceStatuses",
-      "ordinal": 5,
-      "value": []
+    "ec336f23ef91": {
+      "name": "ui.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
     }
   },
   "recording": {
@@ -564,8 +659,8 @@
       {
         "id": "host-view-settings-sync.prelude:ui-pending",
         "observation": {
-          "sender": ["985caf5772e9"],
-          "payloads": ["582477c8e0af"],
+          "sender": ["985caf5772e9", "51d4cb56be85"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "9270aeb7d9c6"
@@ -575,277 +670,522 @@
         }
       },
       {
-        "id": "host-view-settings-sync.normal:settled",
+        "id": "host-view-settings-sync.prelude:cleanup",
         "observation": {
-          "sender": ["651e8014c9ff", "4c8dbecc905b"],
-          "payloads": ["582477c8e0af", "0078bce46c03"],
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "a0c6b1d69541"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
             "sort": "eb79a9b3682a"
           },
-          "state": "ba2035345a68",
+          "state": "9d2d4e824476",
           "effects": [
-            "840c5f323f3d",
-            "a8806d0780bb",
-            "fa699d780625",
-            "641f71cd84d7",
-            "77222aa7cc3b",
-            "b6d257a61780",
-            "49b07092d960",
-            "502a83a190c2",
-            "b7731124942f",
-            "8935c6303d20"
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.normal:settled",
+        "observation": {
+          "sender": ["651e8014c9ff", "51d4cb56be85", "4edd6fd4bc27"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.normal:cleanup",
+        "observation": {
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "4edd6fd4bc27"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "eb79a9b3682a",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
           ]
         }
       },
       {
         "id": "host-view-settings-sync.result-absent:settled",
         "observation": {
-          "sender": ["651e8014c9ff", "53857dedce44"],
-          "payloads": ["582477c8e0af", "0078bce46c03"],
+          "sender": ["651e8014c9ff", "51d4cb56be85", "abed8de8bb91"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.result-absent:cleanup",
+        "observation": {
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "abed8de8bb91"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
             "sort": "eb79a9b3682a"
           },
-          "state": "ba2035345a68",
+          "state": "9d2d4e824476",
           "effects": [
-            "840c5f323f3d",
-            "a8806d0780bb",
-            "fa699d780625",
-            "641f71cd84d7",
-            "77222aa7cc3b",
-            "b6d257a61780",
-            "49b07092d960",
-            "502a83a190c2",
-            "b7731124942f",
-            "8935c6303d20"
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
           ]
         }
       },
       {
         "id": "host-view-settings-sync.result-null:settled",
         "observation": {
-          "sender": ["651e8014c9ff", "b90c1c3db8d2"],
-          "payloads": ["582477c8e0af", "0078bce46c03"],
+          "sender": ["651e8014c9ff", "51d4cb56be85", "9bbfc8aedffe"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.result-null:cleanup",
+        "observation": {
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "9bbfc8aedffe"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
             "sort": "eb79a9b3682a"
           },
-          "state": "ba2035345a68",
+          "state": "9d2d4e824476",
           "effects": [
-            "840c5f323f3d",
-            "a8806d0780bb",
-            "fa699d780625",
-            "641f71cd84d7",
-            "77222aa7cc3b",
-            "b6d257a61780",
-            "49b07092d960",
-            "502a83a190c2",
-            "b7731124942f",
-            "8935c6303d20"
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
           ]
         }
       },
       {
         "id": "host-view-settings-sync.inner-ok-missing:settled",
         "observation": {
-          "sender": ["651e8014c9ff", "08d08fa034ac"],
-          "payloads": ["582477c8e0af", "0078bce46c03"],
+          "sender": ["651e8014c9ff", "51d4cb56be85", "6d8f913f765e"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.inner-ok-missing:cleanup",
+        "observation": {
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "6d8f913f765e"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
             "sort": "eb79a9b3682a"
           },
-          "state": "ba2035345a68",
+          "state": "9d2d4e824476",
           "effects": [
-            "840c5f323f3d",
-            "a8806d0780bb",
-            "fa699d780625",
-            "641f71cd84d7",
-            "77222aa7cc3b",
-            "b6d257a61780",
-            "49b07092d960",
-            "502a83a190c2",
-            "b7731124942f",
-            "8935c6303d20"
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
           ]
         }
       },
       {
         "id": "host-view-settings-sync.inner-false-string-error:settled",
         "observation": {
-          "sender": ["651e8014c9ff", "bedafb0a20b3"],
-          "payloads": ["582477c8e0af", "0078bce46c03"],
+          "sender": ["651e8014c9ff", "51d4cb56be85", "9863d8987eb4"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.inner-false-string-error:cleanup",
+        "observation": {
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "9863d8987eb4"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
             "sort": "eb79a9b3682a"
           },
-          "state": "ba2035345a68",
+          "state": "9d2d4e824476",
           "effects": [
-            "840c5f323f3d",
-            "a8806d0780bb",
-            "fa699d780625",
-            "641f71cd84d7",
-            "77222aa7cc3b",
-            "b6d257a61780",
-            "49b07092d960",
-            "502a83a190c2",
-            "b7731124942f",
-            "8935c6303d20"
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
           ]
         }
       },
       {
         "id": "host-view-settings-sync.inner-false-object-error:settled",
         "observation": {
-          "sender": ["651e8014c9ff", "6f0eda30a103"],
-          "payloads": ["582477c8e0af", "0078bce46c03"],
+          "sender": ["651e8014c9ff", "51d4cb56be85", "cd846ecef9a2"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.inner-false-object-error:cleanup",
+        "observation": {
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "cd846ecef9a2"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
             "sort": "eb79a9b3682a"
           },
-          "state": "ba2035345a68",
+          "state": "9d2d4e824476",
           "effects": [
-            "840c5f323f3d",
-            "a8806d0780bb",
-            "fa699d780625",
-            "641f71cd84d7",
-            "77222aa7cc3b",
-            "b6d257a61780",
-            "49b07092d960",
-            "502a83a190c2",
-            "b7731124942f",
-            "8935c6303d20"
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
           ]
         }
       },
       {
         "id": "host-view-settings-sync.outer-refused:settled",
         "observation": {
-          "sender": ["651e8014c9ff", "3ce471a4a211"],
-          "payloads": ["582477c8e0af", "0078bce46c03"],
+          "sender": ["651e8014c9ff", "51d4cb56be85", "c07bc2bf7ebb"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.outer-refused:cleanup",
+        "observation": {
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "c07bc2bf7ebb"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
             "sort": "eb79a9b3682a"
           },
-          "state": "ba2035345a68",
+          "state": "9d2d4e824476",
           "effects": [
-            "840c5f323f3d",
-            "a8806d0780bb",
-            "fa699d780625",
-            "641f71cd84d7",
-            "77222aa7cc3b",
-            "b6d257a61780",
-            "49b07092d960",
-            "502a83a190c2",
-            "b7731124942f",
-            "8935c6303d20"
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
           ]
         }
       },
       {
         "id": "host-view-settings-sync.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["651e8014c9ff", "47d34456855a"],
-          "payloads": ["582477c8e0af", "0078bce46c03"],
+          "sender": ["651e8014c9ff", "51d4cb56be85", "0890921e520c"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.outer-refused-no-message:cleanup",
+        "observation": {
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "0890921e520c"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
             "sort": "eb79a9b3682a"
           },
-          "state": "ba2035345a68",
+          "state": "9d2d4e824476",
           "effects": [
-            "840c5f323f3d",
-            "a8806d0780bb",
-            "fa699d780625",
-            "641f71cd84d7",
-            "77222aa7cc3b",
-            "b6d257a61780",
-            "49b07092d960",
-            "502a83a190c2",
-            "b7731124942f",
-            "8935c6303d20"
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
           ]
         }
       },
       {
         "id": "host-view-settings-sync.method-not-found:settled",
         "observation": {
-          "sender": ["651e8014c9ff", "8b0dc637f6e7"],
-          "payloads": ["582477c8e0af", "0078bce46c03"],
+          "sender": ["651e8014c9ff", "51d4cb56be85", "3b93ba98c00c"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.method-not-found:cleanup",
+        "observation": {
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "3b93ba98c00c"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
             "sort": "eb79a9b3682a"
           },
-          "state": "ba2035345a68",
+          "state": "9d2d4e824476",
           "effects": [
-            "840c5f323f3d",
-            "a8806d0780bb",
-            "fa699d780625",
-            "641f71cd84d7",
-            "77222aa7cc3b",
-            "b6d257a61780",
-            "49b07092d960",
-            "502a83a190c2",
-            "b7731124942f",
-            "8935c6303d20"
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
           ]
         }
       },
       {
         "id": "host-view-settings-sync.transport-rejection:settled",
         "observation": {
-          "sender": ["651e8014c9ff", "20aea3e7b7fb"],
-          "payloads": ["582477c8e0af", "0078bce46c03"],
+          "sender": ["651e8014c9ff", "51d4cb56be85", "8cc921740c3f"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.transport-rejection:cleanup",
+        "observation": {
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "8cc921740c3f"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
             "sort": "eb79a9b3682a"
           },
-          "state": "ba2035345a68",
+          "state": "9d2d4e824476",
           "effects": [
-            "840c5f323f3d",
-            "a8806d0780bb",
-            "fa699d780625",
-            "641f71cd84d7",
-            "77222aa7cc3b",
-            "b6d257a61780",
-            "49b07092d960",
-            "502a83a190c2",
-            "b7731124942f",
-            "8935c6303d20"
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
           ]
         }
       },
       {
         "id": "host-view-settings-sync.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["651e8014c9ff", "8d4384daefd2"],
-          "payloads": ["582477c8e0af", "0078bce46c03"],
+          "sender": ["651e8014c9ff", "51d4cb56be85", "980710aab552"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "sync": "9270aeb7d9c6",
+            "sort": "eb79a9b3682a"
+          },
+          "state": "9d2d4e824476",
+          "effects": [
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77"
+          ]
+        }
+      },
+      {
+        "id": "host-view-settings-sync.transport-rejection-no-message:cleanup",
+        "observation": {
+          "sender": ["651e8014c9ff", "dc0e0f9e2e34", "980710aab552"],
+          "payloads": ["ec336f23ef91", "1c2564f1daca", "47b14215d780"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "sync": "eb79a9b3682a",
             "sort": "eb79a9b3682a"
           },
-          "state": "ba2035345a68",
+          "state": "9d2d4e824476",
           "effects": [
-            "840c5f323f3d",
-            "a8806d0780bb",
-            "fa699d780625",
-            "641f71cd84d7",
-            "77222aa7cc3b",
-            "b6d257a61780",
-            "49b07092d960",
-            "502a83a190c2",
-            "b7731124942f",
-            "8935c6303d20"
+            "576a78b4cbda",
+            "68106690cec8",
+            "060920401781",
+            "df14917ac077",
+            "460e7d939d77",
+            "c62091867bb2",
+            "33cef55eaaae",
+            "a17c8a2d172f",
+            "b87674312305",
+            "e46028012af2"
           ]
         }
       }
