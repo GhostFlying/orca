@@ -239,6 +239,7 @@ jobs:
           UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
         run: |
           set -euo pipefail
+          git rm -r --ignore-unmatch -- .github/workflows
           git checkout "$UPSTREAM_SHA" -- \
             .github/workflows \
             config/scripts/windows-signing-workflow-contract.test.mjs
@@ -305,7 +306,44 @@ jobs:
           PATCH
           test "$(git hash-object config/scripts/windows-signing-workflow-contract.test.mjs)" = \
             37edc2196d472c30e20f3bf160e7f2dc6077af32
+      - name: Repair v1.4.206 hourly version fixture
+        if: needs.candidate.outputs.upstream_sha == 'c62eca3988ce4d7fce12fbfd20c0c47b39e9ecac'
+        env:
+          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          fixture=config/scripts/hourly-build-version.test.mjs
+          test "$(git rev-parse "$UPSTREAM_SHA:$fixture")" = \
+            7438b16acbd240cc8094d23c180611b02ea1ad20
+          test "$(git hash-object "$fixture")" = \
+            7438b16acbd240cc8094d23c180611b02ea1ad20
+          git apply --unidiff-zero <<'PATCH'
+          diff --git a/config/scripts/hourly-build-version.test.mjs b/config/scripts/hourly-build-version.test.mjs
+          --- a/config/scripts/hourly-build-version.test.mjs
+          +++ b/config/scripts/hourly-build-version.test.mjs
+          @@ -136,4 +136,4 @@ describe('getHourlyBuildIdentity', () => {
+          -        'v1.4.201',
+          -        'v1.4.202',
+          -        'v1.4.202-hourly.202609141912',
+          -        'v1.4.203-hourly.202609140417'
+          +        'v1.4.206',
+          +        'v1.4.207',
+          +        'v1.4.207-hourly.202609141912',
+          +        'v1.4.208-hourly.202609140417'
+          @@ -142,2 +142,2 @@ describe('getHourlyBuildIdentity', () => {
+          -        '1.4.202 • 14 • Sep 14, 12:12PM • 875b86d',
+          -        '1.4.203 • 04 • Sep 13, 9:17PM • 2ce252f'
+          +        '1.4.207 • 14 • Sep 14, 12:12PM • 875b86d',
+          +        '1.4.208 • 04 • Sep 13, 9:17PM • 2ce252f'
+          @@ -146 +146 @@ describe('getHourlyBuildIdentity', () => {
+          -    expect(identity.version).toBe('1.4.203-hourly.202609142000')
+          +    expect(identity.version).toBe('1.4.208-hourly.202609142000')
+          PATCH
+          test "$(git hash-object "$fixture")" = \
+            ef5bc2a77f60994dd04ebe83cfcbb595017cd385
       - name: Test shard
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
         run: |
           pnpm exec vitest run --config config/vitest.config.ts \
             --exclude='**/*.live-shell.test.ts' \
@@ -423,6 +461,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install:release
+      - uses: ./.github/actions/install-mobile-dependencies
       - name: Install Linux packaging dependencies
         if: runner.os == 'Linux'
         run: |

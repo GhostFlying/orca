@@ -233,6 +233,10 @@ describe('fork release maintenance workflows', () => {
     const localizationRepair = testJob.steps.find(
       (step) => step.name === 'Repair v1.4.199 localization fixture'
     )
+    const hourlyRepair = testJob.steps.find(
+      (step) => step.name === 'Repair v1.4.206 hourly version fixture'
+    )
+    const testShard = testJob.steps.find((step) => step.name === 'Test shard')
     expect(checkout.with['fetch-depth']).toBe(0)
     expect(relayDependencies['working-directory']).toBe('cloud')
     expect(relayDependencies.run).toContain(
@@ -242,6 +246,7 @@ describe('fork release maintenance workflows', () => {
       "pnpm@10.24.0 --filter '@orca-cloud/relay^...' build"
     )
     expect(restore.env.UPSTREAM_SHA).toBe(expression('needs.candidate.outputs.upstream_sha'))
+    expect(restore.run).toContain('git rm -r --ignore-unmatch -- .github/workflows')
     expect(restore.run).toContain('git checkout "$UPSTREAM_SHA" --')
     expect(restore.run).toContain('.github/workflows')
     expect(restore.run).toContain('config/scripts/windows-signing-workflow-contract.test.mjs')
@@ -258,11 +263,18 @@ describe('fork release maintenance workflows', () => {
     expect(repair.run).toContain(
       "it('verifies Windows inner binary signatures fail-open before publishing'"
     )
+    expect(hourlyRepair.if).toBe(
+      "needs.candidate.outputs.upstream_sha == 'c62eca3988ce4d7fce12fbfd20c0c47b39e9ecac'"
+    )
+    expect(hourlyRepair.run).toContain('7438b16acbd240cc8094d23c180611b02ea1ad20')
+    expect(hourlyRepair.run).toContain('ef5bc2a77f60994dd04ebe83cfcbb595017cd385')
+    expect(testShard.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
     expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(repair))
     expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(localizationRepair))
     expect(testJob.steps.indexOf(repair)).toBeLessThan(
       testJob.steps.findIndex((step) => step.name === 'Test shard')
     )
+    expect(testJob.steps.indexOf(hourlyRepair)).toBeLessThan(testJob.steps.indexOf(testShard))
   })
 
   it('builds unsigned desktop and mobile clients without stores', () => {
@@ -283,6 +295,11 @@ describe('fork release maintenance workflows', () => {
     )
     expect(macInstall.if).toBe("matrix.platform == 'macos'")
     expect(macInstall.with.command).toBe('pnpm install:release')
+    expect(
+      desktop.steps.some(
+        (step) => step.uses === './.github/actions/install-mobile-dependencies'
+      )
+    ).toBe(true)
   })
 
   it('signs Android releases with the fork key in an isolated job', () => {
