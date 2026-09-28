@@ -236,15 +236,16 @@ describe('fork release maintenance workflows', () => {
     const hourlyRepair = testJob.steps.find(
       (step) => step.name === 'Repair v1.4.206 hourly version fixture'
     )
+    const latestHourlyRepair = testJob.steps.find(
+      (step) => step.name === 'Repair v1.4.215 hourly version fixture'
+    )
     const testShard = testJob.steps.find((step) => step.name === 'Test shard')
     expect(checkout.with['fetch-depth']).toBe(0)
     expect(relayDependencies['working-directory']).toBe('cloud')
     expect(relayDependencies.run).toContain(
       "pnpm@10.24.0 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts"
     )
-    expect(relayDependencies.run).toContain(
-      "pnpm@10.24.0 --filter '@orca-cloud/relay^...' build"
-    )
+    expect(relayDependencies.run).toContain("pnpm@10.24.0 --filter '@orca-cloud/relay^...' build")
     expect(restore.env.UPSTREAM_SHA).toBe(expression('needs.candidate.outputs.upstream_sha'))
     expect(restore.run).toContain('git rm -r --ignore-unmatch -- .github/workflows')
     expect(restore.run).toContain('git checkout "$UPSTREAM_SHA" --')
@@ -268,6 +269,13 @@ describe('fork release maintenance workflows', () => {
     )
     expect(hourlyRepair.run).toContain('7438b16acbd240cc8094d23c180611b02ea1ad20')
     expect(hourlyRepair.run).toContain('ef5bc2a77f60994dd04ebe83cfcbb595017cd385')
+    expect(latestHourlyRepair.if).toBe(
+      "needs.candidate.outputs.upstream_sha == '083f583a53e4c74a65acf420eee4ca2e0efa9df1'"
+    )
+    expect(latestHourlyRepair.run).toContain('9f6b9000844fae89a04bf9da3f7d5f604d41e5f4')
+    expect(latestHourlyRepair.run).toContain('7438b16acbd240cc8094d23c180611b02ea1ad20')
+    expect(latestHourlyRepair.run).toContain('2af342065ba34e48757664a4c417987de297dbe2')
+    expect(latestHourlyRepair.run).toContain('861f8941cf1a323d255d0a22dd786d8dc2bcd938')
     expect(testShard.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
     expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(repair))
     expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(localizationRepair))
@@ -275,6 +283,7 @@ describe('fork release maintenance workflows', () => {
       testJob.steps.findIndex((step) => step.name === 'Test shard')
     )
     expect(testJob.steps.indexOf(hourlyRepair)).toBeLessThan(testJob.steps.indexOf(testShard))
+    expect(testJob.steps.indexOf(latestHourlyRepair)).toBeLessThan(testJob.steps.indexOf(testShard))
   })
 
   it('builds unsigned desktop and mobile clients without stores', () => {
@@ -296,9 +305,7 @@ describe('fork release maintenance workflows', () => {
     expect(macInstall.if).toBe("matrix.platform == 'macos'")
     expect(macInstall.with.command).toBe('pnpm install:release')
     expect(
-      desktop.steps.some(
-        (step) => step.uses === './.github/actions/install-mobile-dependencies'
-      )
+      desktop.steps.some((step) => step.uses === './.github/actions/install-mobile-dependencies')
     ).toBe(true)
   })
 
