@@ -227,6 +227,9 @@ describe('fork release maintenance workflows', () => {
       (step) => step.name === 'Install relay integration dependencies'
     )
     const restore = testJob.steps.find((step) => step.name === 'Restore upstream workflow fixtures')
+    const mobileFixtureRepair = testJob.steps.find(
+      (step) => step.name === 'Repair v1.4.218 mobile workflow fixtures'
+    )
     const repair = testJob.steps.find(
       (step) => step.name === 'Repair v1.4.196 signing contract fixture'
     )
@@ -248,9 +251,20 @@ describe('fork release maintenance workflows', () => {
     expect(relayDependencies.run).toContain("pnpm@10.24.0 --filter '@orca-cloud/relay^...' build")
     expect(restore.env.UPSTREAM_SHA).toBe(expression('needs.candidate.outputs.upstream_sha'))
     expect(restore.run).toContain('git rm -r --ignore-unmatch -- .github/workflows')
-    expect(restore.run).toContain('git checkout "$UPSTREAM_SHA" --')
-    expect(restore.run).toContain('.github/workflows')
+    expect(restore.run).toContain('git checkout "$UPSTREAM_SHA" -- .github/workflows')
+    expect(restore.run).toContain('git cat-file -e "$UPSTREAM_SHA:$signing_contract"')
+    expect(restore.run).toContain('git rm --ignore-unmatch -- "$signing_contract"')
     expect(restore.run).toContain('config/scripts/windows-signing-workflow-contract.test.mjs')
+    expect(mobileFixtureRepair.if).toBe(
+      "needs.candidate.outputs.upstream_sha == '75ea50273328d9bd5465170d10a098711d61b5a4'"
+    )
+    expect(mobileFixtureRepair.run).toContain('cd7c204f8178a90d5c4dfc0b6a74e8f16718d357')
+    expect(mobileFixtureRepair.run).toContain('7ff6251afd6dc4f878c5bff1033eddfe8f7699c0')
+    expect(mobileFixtureRepair.run).toContain('eafa3194238ea3b8130a09ed754cb54c3b28ed41')
+    expect(mobileFixtureRepair.run).toContain(
+      "step.name !== 'Summarize RPC recording changes'"
+    )
+    expect(mobileFixtureRepair.run).toContain('git rm -- "$stale_fixture"')
     expect(localizationRepair.if).toBe(
       "needs.candidate.outputs.upstream_sha == '28957d6004dd191b6f0baff493a9fd3d37405d9d'"
     )
@@ -279,6 +293,12 @@ describe('fork release maintenance workflows', () => {
     expect(testShard.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
     expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(repair))
     expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(localizationRepair))
+    expect(testJob.steps.indexOf(restore)).toBeLessThan(
+      testJob.steps.indexOf(mobileFixtureRepair)
+    )
+    expect(testJob.steps.indexOf(mobileFixtureRepair)).toBeLessThan(
+      testJob.steps.indexOf(testShard)
+    )
     expect(testJob.steps.indexOf(repair)).toBeLessThan(
       testJob.steps.findIndex((step) => step.name === 'Test shard')
     )

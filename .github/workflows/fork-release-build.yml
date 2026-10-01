@@ -240,9 +240,46 @@ jobs:
         run: |
           set -euo pipefail
           git rm -r --ignore-unmatch -- .github/workflows
-          git checkout "$UPSTREAM_SHA" -- \
-            .github/workflows \
-            config/scripts/windows-signing-workflow-contract.test.mjs
+          git checkout "$UPSTREAM_SHA" -- .github/workflows
+          signing_contract=config/scripts/windows-signing-workflow-contract.test.mjs
+          if git cat-file -e "$UPSTREAM_SHA:$signing_contract"; then
+            git checkout "$UPSTREAM_SHA" -- "$signing_contract"
+          else
+            git rm --ignore-unmatch -- "$signing_contract"
+          fi
+      - name: Repair v1.4.218 mobile workflow fixtures
+        if: needs.candidate.outputs.upstream_sha == '75ea50273328d9bd5465170d10a098711d61b5a4'
+        env:
+          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          scope_fixture=config/scripts/mobile-release-check-scope.test.mjs
+          stale_fixture=config/scripts/mobile-recording-pin-checkout.test.mjs
+          test "$(git rev-parse "$UPSTREAM_SHA:$scope_fixture")" = \
+            cd7c204f8178a90d5c4dfc0b6a74e8f16718d357
+          test "$(git rev-parse "$UPSTREAM_SHA:$stale_fixture")" = \
+            7ff6251afd6dc4f878c5bff1033eddfe8f7699c0
+          test "$(git hash-object "$scope_fixture")" = \
+            cd7c204f8178a90d5c4dfc0b6a74e8f16718d357
+          test "$(git hash-object "$stale_fixture")" = \
+            7ff6251afd6dc4f878c5bff1033eddfe8f7699c0
+          git apply --unidiff-zero <<'PATCH'
+          diff --git a/config/scripts/mobile-release-check-scope.test.mjs b/config/scripts/mobile-release-check-scope.test.mjs
+          --- a/config/scripts/mobile-release-check-scope.test.mjs
+          +++ b/config/scripts/mobile-release-check-scope.test.mjs
+          @@ -75 +75,6 @@ it('gates Ruby independently and retains mobile static validation', () => {
+          -  const gated = steps.filter((step) => step.if !== undefined && step.name !== 'Test')
+          +  const gated = steps.filter(
+          +    (step) =>
+          +      step.if !== undefined &&
+          +      step.name !== 'Test' &&
+          +      step.name !== 'Summarize RPC recording changes'
+          +  )
+          PATCH
+          test "$(git hash-object "$scope_fixture")" = \
+            eafa3194238ea3b8130a09ed754cb54c3b28ed41
+          git rm -- "$stale_fixture"
+          test ! -e "$stale_fixture"
       - name: Repair v1.4.199 localization fixture
         if: needs.candidate.outputs.upstream_sha == '28957d6004dd191b6f0baff493a9fd3d37405d9d'
         env:
