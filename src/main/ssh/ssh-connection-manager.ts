@@ -1,10 +1,14 @@
-import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
+import type { SshConnectOptions, SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import {
   SshConnection,
   type SshCachedCredentials,
   type SshConnectionCallbacks
 } from './ssh-connection'
-import { recordSshConnectionOpened, recordSshConnectionReused } from './ssh-connection-attribution'
+import {
+  currentSshConnectOptions,
+  recordSshConnectionOpened,
+  recordSshConnectionReused
+} from './ssh-connection-attribution'
 import { createSshCredentialDeclinedError, isSshCredentialDeclined } from './ssh-credential-decline'
 
 /** A remembered sign-in only applies to the endpoint it was given for; an edited host must ask. */
@@ -37,7 +41,8 @@ export class SshConnectionManager {
     }
   }
 
-  async connect(target: SshTarget): Promise<SshConnection> {
+  async connect(target: SshTarget, options?: SshConnectOptions): Promise<SshConnection> {
+    const connectOptions = options ?? currentSshConnectOptions() ?? {}
     const existing = this.connections.get(target.id)
     if (existing?.getState().status === 'connected') {
       recordSshConnectionReused(existing)
@@ -75,7 +80,7 @@ export class SshConnectionManager {
       this.connections.set(target.id, conn)
 
       try {
-        await conn.connect()
+        await conn.connect(connectOptions)
       } catch (err) {
         // Why: a failed startup can still hold sockets, so it is disconnected, not just forgotten;
         // quietly, so its published error is not replaced by a plain disconnect.
