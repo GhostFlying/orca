@@ -1,7 +1,11 @@
-import type { SshTarget, SshConnectionState } from '../../../shared/ssh-types'
+import type { SshConnectOptions, SshTarget, SshConnectionState } from '../../../shared/ssh-types'
 import { SshConnection, type SshCachedCredentials } from './ssh-connection'
 import type { SshConnectionCallbacks } from './ssh-connection-callbacks'
-import { recordSshConnectionOpened, recordSshConnectionReused } from './ssh-connection-attribution'
+import {
+  currentSshConnectOptions,
+  recordSshConnectionOpened,
+  recordSshConnectionReused
+} from './ssh-connection-attribution'
 import {
   createSshCredentialDeclinedError,
   isSshCredentialDeclined
@@ -39,7 +43,11 @@ export class SshConnectionManager {
   }
 
   /** `probe`: a user's connection test, which a Disconnect does not refuse. */
-  async connect(target: SshTarget, options?: { probe?: boolean }): Promise<SshConnection> {
+  async connect(
+    target: SshTarget,
+    options?: SshConnectOptions & { probe?: boolean }
+  ): Promise<SshConnection> {
+    const connectOptions = options ?? currentSshConnectOptions() ?? {}
     // Why: background dials would revive a host the user disconnected (#30086); before reuse, so
     // none borrows the transport a connection test opened.
     if (!options?.probe && isSshUserDisconnected(target.id)) {
@@ -82,7 +90,7 @@ export class SshConnectionManager {
       this.connections.set(target.id, conn)
 
       try {
-        await conn.connect()
+        await conn.connect(connectOptions)
       } catch (err) {
         // Why: a failed startup can still hold sockets, so it is disconnected, not just forgotten;
         // quietly, so its published error is not replaced by a plain disconnect.
