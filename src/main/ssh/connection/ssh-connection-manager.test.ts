@@ -57,6 +57,7 @@ import {
 import { isAuthError } from './reconnect/ssh-reconnect-error-classification'
 import './ssh-session-start-failure'
 import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from './ssh-user-disconnect'
+import { runAttributedToSshOwner } from './ssh-connection-attribution'
 
 const target = {
   id: 'target-1',
@@ -82,6 +83,19 @@ describe('SshConnectionManager', () => {
     expect(manager.getConnection(target.id)).toBeUndefined()
     reject(new Error('cancelled'))
     await rejected
+  })
+
+  it('applies the connect policy inherited from the host-server decision', async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    const options = { automatic: true, nonInteractive: true }
+
+    await runAttributedToSshOwner(
+      Symbol('background-connect'),
+      () => manager.connect(target),
+      options
+    )
+
+    expect(mockState.instances[0].connect).toHaveBeenCalledWith(options)
   })
 
   beforeEach(() => {

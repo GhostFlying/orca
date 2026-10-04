@@ -1,4 +1,5 @@
 import { appendFileSync } from 'node:fs'
+import type { SshConnectOptions } from '../../../shared/ssh-connect-options'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import { createCancelledConnectAttemptError } from '../../ssh/connection/reconnect/ssh-connect-attempt-cancellation'
 import {
@@ -53,10 +54,11 @@ import {
 /**
  * `automatic`: no user asked for this connect, so a cancelled sign-in or a Disconnect stays.
  * `quiet` (implies automatic): retry a bridged host's move; refusal keeps the host as it was.
+ * `nonInteractive`: refuse any authentication path that would ask the user for input.
  */
 export async function connectTarget(
   targetId: string,
-  options: { automatic?: boolean; quiet?: boolean } = {}
+  options: SshConnectOptions & { quiet?: boolean } = {}
 ): Promise<SshConnectionState> {
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
   if (e2eProbePath) {
@@ -69,7 +71,7 @@ export async function connectTarget(
       const label = getSshTargetRegistryStore()?.getTarget(targetId)?.label ?? targetId
       throw createSshUserDisconnectedError(label)
     }
-    return admitConnect(targetId, true, options.quiet === true)
+    return admitConnect(targetId, options, options.quiet === true)
   }
   clearSshCredentialDeclined(targetId)
   // Only explicit user connects may lift the re-pair and crash-loop caps.
@@ -81,7 +83,7 @@ export async function connectTarget(
   }
   const liftedEnvironments = liftSshHostUserDisconnect(targetId)
   try {
-    return await admitConnect(targetId)
+    return await admitConnect(targetId, options)
   } finally {
     resumeRuntimeEnvironmentStatus(liftedEnvironments)
   }
@@ -89,24 +91,40 @@ export async function connectTarget(
 
 async function admitConnect(
   targetId: string,
-  automatic = false,
+  options: SshConnectOptions,
   quiet = false
 ): Promise<SshConnectionState> {
-  // Fence requests that entered before disconnect/reset but resume after its cleanup.
-  const admissionAuthority = getSshProviderAuthority(targetId)
+  // Why: fence callers that entered before a same-turn disconnect/reset but resume after its cleanup.
+  let admissionAuthority = getSshProviderAuthority(targetId)
   await awaitTargetLifecycle(targetId)
 
-  // Coalesce concurrent connects to avoid leaking the first session.
-  const existing = connectInFlight.get(targetId)
+  // Why: serialize concurrent ssh:connect for the same target; interleaved connects otherwise leak the first session.
+  let existing = connectInFlight.get(targetId)
   let replacePendingTransport = false
-  if (existing) {
-    if (isCurrentConnectAttempt(targetId, existing.authority)) {
-      // A user's connect joining a quiet retry makes it an ordinary connect (#29626).
-      if (!quiet && existing.quiet) {
-        existing.quiet.active = false
-      }
+  while (existing && isCurrentConnectAttempt(targetId, existing.authority)) {
+    // A user's connect joining a quiet retry makes it an ordinary connect (#29626).
+    if (!quiet && existing.quiet) {
+      existing.quiet.active = false
+    }
+    if (existing.nonInteractive === (options.nonInteractive === true)) {
       return existing.promise
     }
+    if (options.nonInteractive === true) {
+      throw new Error('An interactive SSH connection attempt is already in progress.')
+    }
+    try {
+      // An interactive caller can accept a successful background attempt, but must retry with
+      // prompts enabled after a background authentication failure.
+      return await existing.promise
+    } catch {
+      admissionAuthority = getSshProviderAuthority(targetId)
+    }
+    if (connectInFlight.get(targetId) === existing) {
+      connectInFlight.delete(targetId)
+      replacePendingTransport = true
+    }
+    // Another waiter may already have installed the interactive retry; join it.
+    existing = connectInFlight.get(targetId)
   }
   const observedAuthority = admittedConnectAuthority(targetId, admissionAuthority)
   if (!observedAuthority) {
@@ -136,10 +154,11 @@ async function admitConnect(
       }
     : undefined
   const promise = quietMode
-    ? doQuietConnect(targetId, replacePendingTransport, quietMode)
-    : doConnect(targetId, replacePendingTransport, automatic)
+    ? doQuietConnect(targetId, replacePendingTransport, quietMode, options)
+    : doConnect(targetId, replacePendingTransport, options)
   const attempt: ConnectAttempt = {
     authority: getSshProviderAuthority(targetId),
+    nonInteractive: options.nonInteractive === true,
     promise,
     ...(quietMode ? { quiet: quietMode } : {})
   }
@@ -158,7 +177,8 @@ async function admitConnect(
 async function doQuietConnect(
   targetId: string,
   replacePendingTransport: boolean,
-  quiet: QuietConnect
+  quiet: QuietConnect,
+  options: SshConnectOptions
 ): Promise<SshConnectionState> {
   // Replacing a pending transport would hang up the session the kept host still uses.
   if (
@@ -168,13 +188,13 @@ async function doQuietConnect(
   ) {
     throw createCancelledConnectAttemptError()
   }
-  return doConnect(targetId, false, true, quiet)
+  return doConnect(targetId, false, options, quiet)
 }
 
 async function doConnect(
   targetId: string,
   replacePendingTransport = false,
-  automatic = false,
+  options: SshConnectOptions = {},
   quiet?: QuietConnect
 ): Promise<SshConnectionState> {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
@@ -182,7 +202,7 @@ async function doConnect(
     throw new Error(`SSH target "${targetId}" not found`)
   }
   // Read after the lifecycle wait: a Stop or Forget this connect queued behind wrote the hold.
-  if (automatic && isManagedServerRemovalHeld(target)) {
+  if (options.automatic && isManagedServerRemovalHeld(target)) {
     throw createSshUserDisconnectedError(target.label)
   }
 
@@ -197,25 +217,28 @@ async function doConnect(
 
   // Attribute decision-created transports so cancellation closes only those not adopted by a newer owner.
   const owner = Symbol(targetId)
-  // Deploy/conversion require teardown first; rotated authority still lets concurrent connects join.
-  const server = await runAttributedToSshOwner(owner, () => decideHostServer(target)).catch(
-    async (error: unknown): Promise<HostServerOnConnectResult> => {
-      if (!isCurrentConnectAttempt(targetId, authority)) {
-        await abandonDecisionTransport(targetId, owner, authority)
-        throw createCancelledConnectAttemptError()
-      }
-      if (quiet?.active) {
-        // The host is still connected and bridged; a retry no one asked for surfaces no failure.
-        assertSshConnectsNotFenced()
-        console.warn(`[ssh] Retried move for ${targetId} failed; the host stays as it was:`, error)
-        return { route: 'unserved', reason: 'refused' }
-      }
-      // A failed setup leaves no relay to own the transport its decision dialed.
+  // Why after the teardown above: deploy and conversion refuse while a direct session or transport
+  // exists, and the authority rotated synchronously so concurrent connects still join this one.
+  const server = await runAttributedToSshOwner(
+    owner,
+    () => decideHostServer(target),
+    options
+  ).catch(async (error: unknown): Promise<HostServerOnConnectResult> => {
+    if (!isCurrentConnectAttempt(targetId, authority)) {
       await abandonDecisionTransport(targetId, owner, authority)
-      publishHostServerDecisionFailure(targetId, error)
-      throw error
+      throw createCancelledConnectAttemptError()
     }
-  )
+    if (quiet?.active) {
+      // The host is still connected and bridged; a retry no one asked for surfaces no failure.
+      assertSshConnectsNotFenced()
+      console.warn(`[ssh] Retried move for ${targetId} failed; the host stays as it was:`, error)
+      return { route: 'unserved', reason: 'refused' }
+    }
+    // A failed setup leaves no relay to own the transport its decision dialed.
+    await abandonDecisionTransport(targetId, owner, authority)
+    publishHostServerDecisionFailure(targetId, error)
+    throw error
+  })
   // A shutdown that began during the decision is the actionable reason, ahead of the rotation.
   assertSshConnectsNotFenced()
   if (!isCurrentConnectAttempt(targetId, authority)) {

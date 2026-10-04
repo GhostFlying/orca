@@ -75,6 +75,19 @@ describe('SshConnection', () => {
     resetSshConnectionMocks()
   })
 
+  it('forces batch mode for a non-interactive system SSH connect', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await conn.connect({ nonInteractive: true })
+
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.objectContaining({ nonInteractive: true, wrapCommand: false })
+    )
+  })
+
   it('retries a failed system SSH probe without ControlMaster and disables mux for the session', async () => {
     getOrcaControlSocketPathMock.mockImplementation(
       (_target: SshTarget, options?: { disableControlMaster?: boolean }) =>

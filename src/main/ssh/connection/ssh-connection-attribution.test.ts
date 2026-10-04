@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SshConnection } from './ssh-connection'
 import {
   adoptSshConnection,
+  currentSshConnectOptions,
   isSshConnectionSolelyOwnedBy,
   recordSshConnectionOpened,
   runAttributedToSshOwner
@@ -49,5 +50,20 @@ describe('SSH transport attribution', () => {
       adoptSshConnection(opened)
     })
     expect(isSshConnectionSolelyOwnedBy(opened, attempt)).toBe(true)
+  })
+
+  it('carries the connect policy through async decision work', async () => {
+    const options = { automatic: true, nonInteractive: true }
+
+    await runAttributedToSshOwner(
+      Symbol('background'),
+      async () => {
+        await Promise.resolve()
+        expect(currentSshConnectOptions()).toEqual(options)
+      },
+      options
+    )
+
+    expect(currentSshConnectOptions()).toBeUndefined()
   })
 })

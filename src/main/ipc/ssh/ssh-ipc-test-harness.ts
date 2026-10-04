@@ -9,6 +9,9 @@ import type {
 
 export type SshLeaseStoreMock = {
   getRepos: () => unknown[]
+  getSshTargets: Mock
+  updateSshTarget: Mock
+  syncOrcadMigrationScrollbackRetention: Mock
   getSshRemotePtyLeases: Mock
   markSshRemotePtyLease: Mock
   removeSshRemotePtyLeases: Mock
@@ -37,12 +40,22 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockMux,
     mockPortForwardManager,
     mockPortScannerCallbacks,
+    mockDecideHostServer,
+    mockRecheckWhenManagedFenceClears,
+    mockPublishHostServerDecisionFailure,
+    mockPublishManagedServerConnect,
+    mockPublishUnservedHostServer,
+    mockRestoreKeptHostServer,
+    mockPublishBridgedUnservedHostServer,
     mockNextConnectionManagers,
     mockNextPortForwardManagers
   } = mocks
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mockStore = {
     getRepos: () => [],
+    getSshTargets: vi.fn().mockReturnValue([]),
+    updateSshTarget: vi.fn(),
+    syncOrcadMigrationScrollbackRetention: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
     markSshRemotePtyLease: vi.fn(),
     removeSshRemotePtyLeases: vi.fn(),
@@ -104,6 +117,9 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockSshStore.refreshSshRouteSnapshot.mockReset().mockResolvedValue(null)
     mockSshStore.lastRepoReadoptions = []
     mockWindow.webContents.send.mockReset()
+    mockStore.getSshTargets.mockReset().mockReturnValue([])
+    mockStore.updateSshTarget.mockReset()
+    mockStore.syncOrcadMigrationScrollbackRetention.mockReset()
     mockStore.getSshRemotePtyLeases.mockReset().mockReturnValue([])
     mockStore.markSshRemotePtyLease.mockReset()
     mockStore.removeSshRemotePtyLeases.mockReset()
@@ -139,6 +155,36 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockPortForwardManager.callbacksRef.current = null
     powerMonitorOnMock.mockReset()
     powerMonitorOffMock.mockReset()
+
+    mockDecideHostServer.mockReset().mockResolvedValue({
+      route: 'managed',
+      environmentId: 'env-test'
+    })
+    mockRecheckWhenManagedFenceClears.mockReset()
+    mockPublishHostServerDecisionFailure.mockReset()
+    mockPublishManagedServerConnect.mockReset().mockImplementation((targetId: string) => ({
+      targetId,
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    }))
+    mockPublishUnservedHostServer
+      .mockReset()
+      .mockImplementation(() => new Error('This SSH host isn’t supported'))
+    mockRestoreKeptHostServer.mockReset().mockImplementation((targetId: string) => ({
+      targetId,
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    }))
+    mockPublishBridgedUnservedHostServer
+      .mockReset()
+      .mockImplementation((target: { id: string }) => ({
+        targetId: target.id,
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      }))
 
     registerSshHandlers(mockStore as never, () => mockWindow as never)
   }
