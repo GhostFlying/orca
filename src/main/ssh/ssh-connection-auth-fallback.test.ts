@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   clientInstances,
   emitSshEvent,
+  eventHandlers,
   nextSshClientCreation,
   resetSshConnectionMocks,
   ssh2Mock
@@ -68,6 +69,55 @@ describe('SshConnection', () => {
     expect(initialConfig.agent).toBe('/tmp/agent.sock')
     expect(initialConfig.privateKey).toBeUndefined()
     expect(callbacks.onCredentialRequest).not.toHaveBeenCalled()
+  })
+
+  it('allows ssh-agent authentication without prompting in non-interactive mode', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    const callbacks = createCallbacks({ onCredentialRequest: vi.fn() })
+    const conn = new SshConnection(createTarget(), callbacks)
+
+    await conn.connect({ nonInteractive: true })
+
+    expect(clientInstances[0].lastConnectConfig).toMatchObject({ agent: '/tmp/agent.sock' })
+    expect(callbacks.onCredentialRequest).not.toHaveBeenCalled()
+  })
+
+  it('does not request a password after non-interactive agent authentication fails', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/stale-agent.sock')
+    const agentError = Object.assign(new Error('Failed to connect to agent'), { level: 'agent' })
+    ssh2Mock.connectSequence = [agentError]
+    const onCredentialRequest = vi.fn(async () => 'password-123')
+    const conn = new SshConnection(
+      createTarget({
+        identityAgent: '/tmp/stale-agent.sock',
+        identityFile: join(tmpdir(), 'missing-key')
+      }),
+      createCallbacks({ onCredentialRequest })
+    )
+
+    await expect(conn.connect({ nonInteractive: true })).rejects.toThrow(
+      'Failed to connect to agent'
+    )
+    expect(onCredentialRequest).not.toHaveBeenCalled()
+  })
+
+  it('declines keyboard-interactive challenges without opening a credential prompt', async () => {
+    ssh2Mock.connectSequence = ['silent']
+    const onCredentialRequest = vi.fn(async () => 'should-not-be-used')
+    const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+    const connecting = conn.connect({ nonInteractive: true })
+    connecting.catch(() => {})
+    await vi.waitFor(() =>
+      expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
+    )
+    const finish = vi.fn()
+
+    emitSshEvent('keyboard-interactive', '', '', '', [{ prompt: 'Password:', echo: false }], finish)
+
+    await vi.waitFor(() => expect(finish).toHaveBeenCalledWith([]))
+    expect(onCredentialRequest).not.toHaveBeenCalled()
+    await conn.disconnect()
+    await expect(connecting).rejects.toThrow()
   })
 
   it('falls back to direct private key auth when agent auth fails', async () => {

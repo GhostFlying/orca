@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type {
   SshConnectionState,
+  SshConnectOptions,
   SshConfigHostListArgs,
   SshConfigHostListResult,
   SshConfigHostResolution,
@@ -43,10 +44,9 @@ export const sshApi = {
   resolveConfigHost: (args: { alias: string }): Promise<SshConfigHostResolution | null> =>
     ipcRenderer.invoke('ssh:resolveConfigHost', args),
 
-  connect: async (args: {
-    targetId: string
-    automatic?: boolean
-  }): Promise<SshConnectionState | null> => {
+  connect: async (
+    args: { targetId: string } & SshConnectOptions
+  ): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:connect', args)
     return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
   },

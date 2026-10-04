@@ -2,6 +2,14 @@ import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
 import { countUnchangedObserverHistoryReads } from './automation-dispatch-observer-test-probe'
+import {
+  createdWorktree,
+  makeAutomation,
+  makeRun,
+  setupLaunch,
+  type TestRepo,
+  type TestWorktree
+} from './automation-dispatch-test-fixtures'
 
 const mockDispatchEvent = vi.fn()
 
@@ -24,25 +32,6 @@ const mockStoreSubscribe = vi.fn((listener: () => void) => {
   latestStoreSubscriber = listener
   return () => {}
 })
-
-const setupLaunch = {
-  runnerScriptPath: '/tmp/setup.sh',
-  envVars: { ORCA_WORKTREE_PATH: '/repo/worktree' }
-}
-
-const createdWorktree = {
-  id: 'wt-created',
-  repoId: 'repo-1',
-  displayName: 'Automation worktree',
-  path: '/repo/worktree'
-}
-type TestWorktree = typeof createdWorktree
-type TestRepo = {
-  id: string
-  connectionId: string | null
-  executionHostId: string | null
-  path: string
-}
 
 const state = {
   activeView: 'terminal' as const,
@@ -72,34 +61,6 @@ const state = {
   setActiveWorktree: vi.fn(),
   setActiveTab: vi.fn(),
   setActiveTabType: vi.fn()
-}
-
-function makeAutomation(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'automation-1',
-    projectId: 'repo-1',
-    prompt: 'run this',
-    precheck: null,
-    agentId: 'claude',
-    workspaceMode: 'new_per_run',
-    workspaceId: null,
-    baseBranch: null,
-    setupDecision: 'run',
-    reuseSession: false,
-    ...overrides
-  }
-}
-
-function makeRun() {
-  return {
-    id: 'run-1',
-    automationId: 'automation-1',
-    title: 'Nightly setup run',
-    scheduledFor: Date.parse('2026-06-24T03:00:00Z'),
-    trigger: 'scheduled',
-    workspaceId: null,
-    workspaceDisplayName: null
-  }
 }
 
 async function registerAndDispatch(automation = makeAutomation()): Promise<void> {
@@ -215,7 +176,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       }
     })
     mockOnDispatchRequested.mockReturnValue(() => {})
-    mockSshNeedsPassphrasePrompt.mockResolvedValue(false)
+    mockSshNeedsPassphrasePrompt.mockResolvedValue(true)
     mockSshGetState.mockResolvedValue({ status: 'connected' })
     mockSshConnect.mockResolvedValue({ status: 'connected' })
     mockSubmitPromptToAgentPty.mockResolvedValue(true)
@@ -436,7 +397,12 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
 
     expect(state.allWorktrees).not.toHaveBeenCalled()
-    expect(mockSshConnect).toHaveBeenCalledWith({ targetId: 'ssh-folder', automatic: true })
+    expect(mockSshConnect).toHaveBeenCalledWith({
+      targetId: 'ssh-folder',
+      automatic: true,
+      nonInteractive: true
+    })
+    expect(mockSshNeedsPassphrasePrompt).not.toHaveBeenCalled()
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: folderWorkspace.id,
@@ -478,7 +444,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       })
     )
 
-    expect(mockSshNeedsPassphrasePrompt).not.toHaveBeenCalled()
+    expect(mockSshConnect).not.toHaveBeenCalled()
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: folderWorkspace.id })
     )

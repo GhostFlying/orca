@@ -52,6 +52,7 @@ describe('saved port forwards on a managed host', () => {
   it('leaves an explicit connect to restore through its own publish', () => {
     connectInFlight.set('t1', {
       authority: getSshProviderAuthority('t1'),
+      nonInteractive: false,
       promise: new Promise(() => {})
     })
     try {

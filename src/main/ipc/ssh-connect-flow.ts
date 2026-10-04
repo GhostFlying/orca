@@ -1,5 +1,5 @@
 import { appendFileSync } from 'node:fs'
-import type { SshConnectionState } from '../../shared/ssh-types'
+import type { SshConnectOptions, SshConnectionState } from '../../shared/ssh-types'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
 import {
   getSshProviderAuthority,
@@ -26,10 +26,10 @@ import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { startLegacyRelayBridge } from '../ssh/legacy-relay-bridge/legacy-relay-bridge-registry'
 import { clearSshCredentialDeclined } from '../ssh/ssh-credential-decline'
 
-/** `automatic`: no user asked for this connect, so a cancelled sign-in stays cancelled. */
+/** Automatic connects preserve declined credentials; non-interactive connects never prompt. */
 export async function connectTarget(
   targetId: string,
-  options: { automatic?: boolean } = {}
+  options: SshConnectOptions = {}
 ): Promise<SshConnectionState> {
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
   if (e2eProbePath) {
@@ -40,7 +40,7 @@ export async function connectTarget(
     clearSshCredentialDeclined(targetId)
   }
   // Why: fence callers that entered before a same-turn disconnect/reset but resume after its cleanup.
-  const admissionAuthority = getSshProviderAuthority(targetId)
+  let admissionAuthority = getSshProviderAuthority(targetId)
   await awaitTargetLifecycle(targetId)
 
   // Why: serialize concurrent ssh:connect for the same target; interleaved connects otherwise leak the first session.
@@ -48,7 +48,20 @@ export async function connectTarget(
   let replacePendingTransport = false
   if (existing) {
     if (isCurrentConnectAttempt(targetId, existing.authority)) {
-      return existing.promise
+      if (existing.nonInteractive === (options.nonInteractive === true)) {
+        return existing.promise
+      }
+      if (options.nonInteractive === true) {
+        throw new Error('An interactive SSH connection attempt is already in progress.')
+      }
+      try {
+        // Why: an interactive caller may accept a successful background attempt, but after failure
+        // it must retry with prompts enabled instead of inheriting the background policy.
+        return await existing.promise
+      } catch {
+        // The caller below starts a fresh attempt with its own interaction policy.
+        admissionAuthority = getSshProviderAuthority(targetId)
+      }
     }
   }
   if (!isCurrentConnectAttempt(targetId, admissionAuthority)) {
@@ -68,8 +81,12 @@ export async function connectTarget(
   // connectInFlight below (and gets joined) or fails here — it can never slip between the two.
   assertSshConnectsNotFenced()
 
-  const promise = doConnect(targetId, replacePendingTransport)
-  const attempt = { authority: getSshProviderAuthority(targetId), promise }
+  const promise = doConnect(targetId, replacePendingTransport, options)
+  const attempt = {
+    authority: getSshProviderAuthority(targetId),
+    nonInteractive: options.nonInteractive === true,
+    promise
+  }
   connectInFlight.set(targetId, attempt)
   try {
     return await promise
@@ -82,7 +99,8 @@ export async function connectTarget(
 
 async function doConnect(
   targetId: string,
-  replacePendingTransport = false
+  replacePendingTransport = false,
+  options: SshConnectOptions = {}
 ): Promise<SshConnectionState> {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (!target) {
@@ -102,18 +120,22 @@ async function doConnect(
   const owner = Symbol(targetId)
   // Why after the teardown above: deploy and conversion refuse while a direct session or transport
   // exists, and the authority rotated synchronously so concurrent connects still join this one.
-  const server = await runAttributedToSshOwner(owner, () => decideHostServer(target)).catch(
-    async (error: unknown) => {
-      if (!isCurrentConnectAttempt(targetId, authority)) {
-        await abandonDecisionTransport(targetId, owner, authority)
-        throw createCancelledConnectAttemptError()
-      }
-      // A failed setup leaves no relay to own the transport its decision dialed.
-      await abandonDecisionTransport(targetId, owner, authority)
-      publishHostServerDecisionFailure(targetId, error)
-      throw error
+  const server = await runAttributedToSshOwner(owner, async () => {
+    // Establish the transport under the no-prompt policy before the server decision reuses it.
+    if (options.nonInteractive) {
+      await connectionManager!.connect(target, options)
     }
-  )
+    return decideHostServer(target)
+  }).catch(async (error: unknown) => {
+    if (!isCurrentConnectAttempt(targetId, authority)) {
+      await abandonDecisionTransport(targetId, owner, authority)
+      throw createCancelledConnectAttemptError()
+    }
+    // A failed setup leaves no relay to own the transport its decision dialed.
+    await abandonDecisionTransport(targetId, owner, authority)
+    publishHostServerDecisionFailure(targetId, error)
+    throw error
+  })
   // A shutdown that began during the decision is the actionable reason, ahead of the rotation.
   assertSshConnectsNotFenced()
   if (!isCurrentConnectAttempt(targetId, authority)) {

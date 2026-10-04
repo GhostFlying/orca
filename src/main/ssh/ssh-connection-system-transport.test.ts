@@ -68,6 +68,27 @@ describe('SshConnection', () => {
     )
   })
 
+  it('keeps a non-interactive system SSH session in batch mode', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await conn.connect({ nonInteractive: true })
+    await conn.exec('echo after-connect')
+
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.objectContaining({ nonInteractive: true, wrapCommand: false })
+    )
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo after-connect',
+      expect.objectContaining({ nonInteractive: true })
+    )
+  })
+
   it('allows concurrent exec commands for system SSH with an Orca ControlMaster socket', async () => {
     getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/live-socket')
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())

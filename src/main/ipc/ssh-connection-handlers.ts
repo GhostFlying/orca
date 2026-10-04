@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { SshConnectOptions } from '../../shared/ssh-types'
 import { setSshTargetRegistryHandlers, getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import {
   assertSshConnectsNotFenced,
@@ -18,8 +19,11 @@ export function registerSshConnectionHandlers(): void {
     getState: (targetId: string) => getPublicSshState(targetId)
   })
 
-  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string; automatic?: boolean }) => {
-    return connectTarget(args.targetId, { automatic: args.automatic === true })
+  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string } & SshConnectOptions) => {
+    return connectTarget(args.targetId, {
+      automatic: args.automatic === true,
+      nonInteractive: args.nonInteractive === true
+    })
   })
 
   ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {

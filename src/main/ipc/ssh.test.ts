@@ -68,6 +68,79 @@ describe('SSH IPC handlers', () => {
     expect(mockConnectionManager.connect).not.toHaveBeenCalled()
   })
 
+  it('opens the server decision transport with the non-interactive policy', async () => {
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+
+    await handlers.get('ssh:connect')!(null, {
+      targetId: 'ssh-1',
+      automatic: true,
+      nonInteractive: true
+    })
+
+    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, {
+      automatic: true,
+      nonInteractive: true
+    })
+    expect(decideHostServer).toHaveBeenCalledWith(target)
+  })
+
+  it('shares concurrent non-interactive server decisions for one target', async () => {
+    const connection = Promise.withResolvers<object>()
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockReturnValue(connection.promise)
+    vi.mocked(decideHostServer).mockClear()
+
+    const first = Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', nonInteractive: true })
+    )
+    const second = Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', nonInteractive: true })
+    )
+    connection.resolve({})
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+    expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1)
+    expect(decideHostServer).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not join an interactive decision from a non-interactive caller', async () => {
+    const decision = Promise.withResolvers<{
+      route: 'managed'
+      environmentId: string
+    }>()
+    mockSshStore.getTarget.mockReturnValue(target)
+    vi.mocked(decideHostServer).mockReturnValueOnce(decision.promise)
+
+    const interactive = Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' }))
+
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', nonInteractive: true })
+    ).rejects.toThrow('interactive SSH connection attempt is already in progress')
+    decision.resolve({ route: 'managed', environmentId: 'env-test' })
+    await expect(interactive).resolves.toEqual(expect.objectContaining({ status: 'connected' }))
+    expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+  })
+
+  it('retries interactively after a concurrent non-interactive transport fails', async () => {
+    const nonInteractive = Promise.withResolvers<object>()
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockReturnValueOnce(nonInteractive.promise)
+    vi.mocked(decideHostServer).mockClear()
+
+    const background = Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', nonInteractive: true })
+    )
+    const interactive = Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' }))
+    nonInteractive.reject(new Error('batch authentication failed'))
+
+    await expect(background).rejects.toThrow('batch authentication failed')
+    await expect(interactive).resolves.toEqual(expect.objectContaining({ status: 'connected' }))
+    expect(mockConnectionManager.connect).toHaveBeenCalledOnce()
+    expect(mockConnectionManager.disconnect).not.toHaveBeenCalled()
+    expect(decideHostServer).toHaveBeenCalledOnce()
+  })
+
   it('fails a host the managed server does not serve, with no fallback', async () => {
     const decision = {
       route: 'unserved' as const,

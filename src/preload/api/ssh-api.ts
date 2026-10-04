@@ -6,6 +6,7 @@ import type {
   SshConfigHostResolution,
   SshConfigImportResult,
   SshConnectionState,
+  SshConnectOptions,
   SshTarget,
   SshTargetAddResult,
   SshTargetCreateInput,
@@ -23,8 +24,8 @@ export type SshApi = {
   importConfig: (args?: { reAdopt?: boolean }) => Promise<SshConfigImportResult>
   listConfigHosts: (args?: SshConfigHostListArgs) => Promise<SshConfigHostListResult>
   resolveConfigHost: (args: { alias: string }) => Promise<SshConfigHostResolution | null>
-  /** `automatic`: a connect no user asked for; it never lifts a cancelled sign-in. */
-  connect: (args: { targetId: string; automatic?: boolean }) => Promise<SshConnectionState | null>
+  /** Automatic connects preserve declined credentials; non-interactive connects never prompt. */
+  connect: (args: { targetId: string } & SshConnectOptions) => Promise<SshConnectionState | null>
   disconnect: (args: { targetId: string }) => Promise<void>
   getState: (args: { targetId: string }) => Promise<SshConnectionState | null>
   needsPassphrasePrompt: (args: { targetId: string }) => Promise<boolean>
