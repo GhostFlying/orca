@@ -159,4 +159,12 @@ describe('SshConnectionManager', () => {
     expect(mockState.instances[0].disconnect).toHaveBeenCalledOnce()
     expect(manager.getConnection(target.id)).toBeUndefined()
   })
+
+  it('forwards the non-interactive policy to the connection attempt', async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+
+    await manager.connect(target, { nonInteractive: true })
+
+    expect(mockState.instances[0].connect).toHaveBeenCalledWith({ nonInteractive: true })
+  })
 })

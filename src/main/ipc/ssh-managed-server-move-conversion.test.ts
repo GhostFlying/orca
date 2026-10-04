@@ -25,7 +25,7 @@ vi.mock('../ssh/ssh-target-registry', () => ({
 }))
 vi.mock('../ssh/orcad-runtime-deployment', () => ({ createManagedOrcadEnvironment: mocks.deploy }))
 vi.mock('../ssh/orcad-managed-tunnel', () => ({ ensureOrcadManagedTunnel: vi.fn() }))
-vi.mock('./ssh-connect-flow', () => ({ connectTarget: vi.fn() }))
+vi.mock('./ssh-connect-target', () => ({ connectTarget: vi.fn() }))
 vi.mock('./ssh-terminate-sessions', () => ({ terminateSshTargetSessions: vi.fn() }))
 vi.mock('./ssh-session-teardown', () => ({ teardownSshTargetTransport: vi.fn() }))
 vi.mock('./ssh-host-server-connect', () => ({ publishRelayTerminalsStatus: vi.fn() }))

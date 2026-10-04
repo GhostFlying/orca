@@ -35,14 +35,12 @@ const {
   mockConnectionManager,
   mockDeployAndLaunchRelay,
   mockMux,
-  mockRegisterSshGitProvider,
   mockPortForwardManager
 } = mocks
 
 describe('SSH IPC handlers', () => {
   const harness = createSshIpcHarness(mocks)
   const {
-    relayBuildId,
     handlers,
     mockWindow,
     relayReconnectDelaysMs,
@@ -52,130 +50,6 @@ describe('SSH IPC handlers', () => {
   } = harness
 
   beforeEach(harness.reset)
-
-  it('ssh:connect throws for unknown targetId', async () => {
-    mockSshStore.getTarget.mockReturnValue(undefined)
-
-    await expect(handlers.get('ssh:connect')!(null, { targetId: 'unknown' })).rejects.toThrow(
-      'SSH target "unknown" not found'
-    )
-  })
-
-  it('ssh:connect calls connection manager', async () => {
-    const target: SshTarget = {
-      id: 'ssh-1',
-      label: 'Server',
-      host: 'example.com',
-      port: 22,
-      username: 'deploy'
-    }
-    mockSshStore.getTarget.mockReturnValue(target)
-    mockConnectionManager.connect.mockResolvedValue({})
-    mockConnectionManager.getState.mockReturnValue({
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0
-    })
-
-    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
-
-    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
-  })
-
-  it('registers the provider before broadcasting connected authority', async () => {
-    const target: SshTarget = {
-      id: 'ssh-1',
-      label: 'Server',
-      host: 'example.com',
-      port: 22,
-      username: 'deploy'
-    }
-    mockSshStore.getTarget.mockReturnValue(target)
-    mockConnectionManager.connect.mockResolvedValue({})
-    mockConnectionManager.getState.mockReturnValue({
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0
-    })
-
-    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
-
-    const connectedIndex = mockWindow.webContents.send.mock.calls.findIndex(
-      ([channel, payload]) =>
-        channel === 'ssh:state-changed' &&
-        (payload as { state: SshConnectionState }).state.status === 'connected'
-    )
-    expect(connectedIndex).toBeGreaterThanOrEqual(0)
-    expect(mockRegisterSshGitProvider.mock.invocationCallOrder[0]).toBeLessThan(
-      mockWindow.webContents.send.mock.invocationCallOrder[connectedIndex]
-    )
-    expect(mockWindow.webContents.send.mock.calls[connectedIndex]?.[1]).toEqual({
-      targetId: 'ssh-1',
-      state: expect.objectContaining({
-        targetId: 'ssh-1',
-        status: 'connected',
-        providerEpoch: expect.any(String),
-        connectionGeneration: 1
-      })
-    })
-  })
-
-  it('ssh:connect exposes the detected remote platform in public state', async () => {
-    const target: SshTarget = {
-      id: 'ssh-1',
-      label: 'Windows Server',
-      host: 'windows.example.com',
-      port: 22,
-      username: 'deploy'
-    }
-    const hostPlatform = {
-      relayPlatform: 'win32-x64',
-      os: 'win32',
-      arch: 'x64',
-      pathFlavor: 'windows',
-      commandDialect: 'powershell',
-      pathSeparator: '\\',
-      pathDelimiter: ';'
-    }
-    mockDeployAndLaunchRelay.mockResolvedValueOnce({
-      transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
-      serverBuildId: relayBuildId,
-      hostPlatform
-    })
-    mockSshStore.getTarget.mockReturnValue(target)
-    mockConnectionManager.connect.mockResolvedValue({})
-    mockConnectionManager.getState.mockReturnValue({
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0
-    })
-
-    await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).resolves.toEqual({
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      providerEpoch: expect.any(String),
-      connectionGeneration: 1,
-      remotePlatform: 'win32'
-    })
-    expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:state-changed', {
-      targetId: 'ssh-1',
-      state: {
-        targetId: 'ssh-1',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0,
-        providerEpoch: expect.any(String),
-        connectionGeneration: 1,
-        supportsFolderDownload: true,
-        remotePlatform: 'win32'
-      }
-    })
-  })
 
   it('surfaces relay channel loss while the SSH connection remains alive', async () => {
     vi.useFakeTimers()

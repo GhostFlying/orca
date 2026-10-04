@@ -16,7 +16,7 @@ import {
 } from '../ssh/ssh-host-server-telemetry'
 import { knownSshHostPlatform } from '../ssh/ssh-host-platform-memo'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
-import { connectTarget } from './ssh-connect-flow'
+import { connectTarget } from './ssh-connect-target'
 import { teardownSshTargetTransport } from './ssh-session-teardown'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { terminateSshTargetSessions } from './ssh-terminate-sessions'

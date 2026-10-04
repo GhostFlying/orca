@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import type { SshManagedServerStatus, SshTarget } from '../../shared/ssh-types'
 
-vi.mock('./ssh-connect-flow', () => ({ connectTarget: vi.fn() }))
+vi.mock('./ssh-connect-target', () => ({ connectTarget: vi.fn() }))
 vi.mock('./ssh-terminate-sessions', () => ({ terminateSshTargetSessions: vi.fn() }))
 vi.mock('./ssh-session-teardown', () => ({ teardownSshTargetTransport: vi.fn() }))
 

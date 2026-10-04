@@ -1,14 +1,13 @@
-import { appendFileSync } from 'node:fs'
 import type { SshConnection } from '../ssh/ssh-connection'
 import { SshRelaySession } from '../ssh/ssh-relay-session'
-import type { SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
+import type {
+  SshConnectOptions,
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../shared/ssh-types'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
 import { isAuthError } from '../ssh/ssh-connection-utils'
-import {
-  getSshProviderAuthority,
-  isCurrentSshProviderAuthority,
-  rotateSshProviderAuthority
-} from '../ssh/ssh-provider-authority'
+import { rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { allowsDirectSshRelay } from '../ssh/ssh-connection-store'
 import { adoptSshConnection, runAttributedToSshOwner } from '../ssh/ssh-connection-attribution'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
@@ -23,11 +22,8 @@ import {
 import { activeSessions } from './ssh-active-relay-sessions'
 import {
   assertSshConnectsNotFenced,
-  connectInFlight,
   credentialRequestedForTarget,
-  isCurrentConnectAttempt,
-  pendingTransportReconnects,
-  resetRelayInFlight
+  isCurrentConnectAttempt
 } from './ssh-connect-attempt-registry'
 import {
   handleSshConnectionStateChange,
@@ -54,63 +50,11 @@ import {
   abandonDecisionTransport,
   abandonFailedSshSession
 } from './ssh-session-teardown'
-import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
 
-export async function connectTarget(targetId: string): Promise<SshConnectionState> {
-  const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
-  if (e2eProbePath) {
-    appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
-    throw new Error('e2e_forbidden_local_ssh_connect')
-  }
-  // Why: fence callers that entered before a same-turn disconnect/reset but resume after its cleanup.
-  const admissionAuthority = getSshProviderAuthority(targetId)
-  await awaitTargetLifecycle(targetId)
-  const reset = resetRelayInFlight.get(targetId)
-  if (reset) {
-    await reset
-  }
-
-  // Why: serialize concurrent ssh:connect for the same target; interleaved connects otherwise leak the first session.
-  const existing = connectInFlight.get(targetId)
-  let replacePendingTransport = false
-  if (existing) {
-    if (isCurrentConnectAttempt(targetId, existing.authority)) {
-      return existing.promise
-    }
-  }
-  if (!isCurrentConnectAttempt(targetId, admissionAuthority)) {
-    throw createCancelledConnectAttemptError()
-  }
-  const observedAuthority = admissionAuthority
-  if (existing) {
-    if (connectInFlight.get(targetId) === existing) {
-      connectInFlight.delete(targetId)
-      replacePendingTransport = true
-    }
-  }
-  if (!isCurrentSshProviderAuthority(observedAuthority)) {
-    throw createCancelledConnectAttemptError()
-  }
-  // Why: the shutdown drain fences and snapshots synchronously, so a connect either registers in
-  // connectInFlight below (and gets joined) or fails here — it can never slip between the two.
-  assertSshConnectsNotFenced()
-
-  pendingTransportReconnects.delete(targetId)
-  const promise = doConnect(targetId, replacePendingTransport)
-  const attempt = { authority: getSshProviderAuthority(targetId), promise }
-  connectInFlight.set(targetId, attempt)
-  try {
-    return await promise
-  } finally {
-    if (connectInFlight.get(targetId) === attempt) {
-      connectInFlight.delete(targetId)
-    }
-  }
-}
-
-async function doConnect(
+export async function doConnect(
   targetId: string,
-  replacePendingTransport = false
+  replacePendingTransport = false,
+  options: SshConnectOptions = {}
 ): Promise<SshConnectionState> {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (!target) {
@@ -185,18 +129,22 @@ async function doConnect(
   const owner = Symbol(targetId)
   // Why after the teardown above: deploy and conversion refuse while a direct session or transport
   // exists, and the authority rotated synchronously so concurrent connects still join this one.
-  const server = await runAttributedToSshOwner(owner, () => decideHostServer(target)).catch(
-    async (error: unknown) => {
-      if (!isCurrentConnectAttempt(targetId, authority)) {
-        await abandonDecisionTransport(targetId, owner, authority)
-        throw createCancelledConnectAttemptError()
-      }
-      // A failed setup leaves no relay to own the transport its decision dialed.
-      await abandonDecisionTransport(targetId, owner, authority)
-      publishHostServerDecisionFailure(targetId, error)
-      throw error
+  const server = await runAttributedToSshOwner(owner, async () => {
+    // Establish the transport under the no-prompt policy before the server decision reuses it.
+    if (options.nonInteractive) {
+      await connectionManager!.connect(target, options)
     }
-  )
+    return decideHostServer(target)
+  }).catch(async (error: unknown) => {
+    if (!isCurrentConnectAttempt(targetId, authority)) {
+      await abandonDecisionTransport(targetId, owner, authority)
+      throw createCancelledConnectAttemptError()
+    }
+    // A failed setup leaves no relay to own the transport its decision dialed.
+    await abandonDecisionTransport(targetId, owner, authority)
+    publishHostServerDecisionFailure(targetId, error)
+    throw error
+  })
   // A shutdown that began during the decision is the actionable reason, ahead of the rotation.
   assertSshConnectsNotFenced()
   if (!isCurrentConnectAttempt(targetId, authority)) {
@@ -254,7 +202,7 @@ async function doConnect(
     conn && conn !== priorConnection ? conn : null
 
   try {
-    conn = await connectionManager!.connect(target)
+    conn = await connectionManager!.connect(target, options)
     adoptSshConnection(conn, owner)
     if (!ownsSession()) {
       throw createCancelledConnectAttemptError()
