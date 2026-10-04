@@ -23,6 +23,7 @@ import {
 } from './ssh-host-server-connect'
 import {
   beginSshHostCensus,
+  currentSshConnectOptions,
   recordSshConnectionOpened
 } from '../../ssh/connection/ssh-connection-attribution'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
@@ -71,6 +72,85 @@ describe('SSH IPC handlers', () => {
       undefined
     )
     expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+  })
+
+  it('carries a non-interactive policy into every transport opened by the server decision', async () => {
+    mockSshStore.getTarget.mockReturnValue(target)
+    vi.mocked(decideHostServer).mockImplementationOnce(async () => {
+      expect(currentSshConnectOptions()).toEqual({ automatic: true, nonInteractive: true })
+      return { route: 'managed', environmentId: 'env-test' }
+    })
+
+    await handlers.get('ssh:connect')!(null, {
+      targetId: target.id,
+      automatic: true,
+      nonInteractive: true
+    })
+  })
+
+  it('does not let a background connect inherit an in-flight interactive policy', async () => {
+    mockSshStore.getTarget.mockReturnValue(target)
+    const decision = Promise.withResolvers<{ route: 'managed'; environmentId: string }>()
+    vi.mocked(decideHostServer).mockReturnValueOnce(decision.promise)
+
+    const interactive = Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: target.id }))
+    await vi.waitFor(() => expect(decideHostServer).toHaveBeenCalledOnce())
+
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: target.id, nonInteractive: true })
+    ).rejects.toThrow('interactive SSH connection attempt is already in progress')
+    decision.resolve({ route: 'managed', environmentId: 'env-test' })
+    await expect(interactive).resolves.toMatchObject({ status: 'connected' })
+  })
+
+  it('retries interactively after a concurrent background attempt fails', async () => {
+    mockSshStore.getTarget.mockReturnValue(target)
+    const backgroundDecision = Promise.withResolvers<{
+      route: 'managed'
+      environmentId: string
+    }>()
+    vi.mocked(decideHostServer)
+      .mockReturnValueOnce(backgroundDecision.promise)
+      .mockResolvedValueOnce({ route: 'managed', environmentId: 'env-test' })
+
+    const background = Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: target.id, nonInteractive: true })
+    )
+    await vi.waitFor(() => expect(decideHostServer).toHaveBeenCalledOnce())
+    const interactive = Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: target.id }))
+    backgroundDecision.reject(new Error('batch authentication failed'))
+
+    await expect(background).rejects.toThrow('batch authentication failed')
+    await expect(interactive).resolves.toMatchObject({ status: 'connected' })
+    expect(decideHostServer).toHaveBeenCalledTimes(2)
+  })
+
+  it('shares the interactive retry among concurrent waiters after a background failure', async () => {
+    mockSshStore.getTarget.mockReturnValue(target)
+    const backgroundDecision = Promise.withResolvers<{
+      route: 'managed'
+      environmentId: string
+    }>()
+    vi.mocked(decideHostServer)
+      .mockReturnValueOnce(backgroundDecision.promise)
+      .mockResolvedValueOnce({ route: 'managed', environmentId: 'env-test' })
+
+    const background = Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: target.id, nonInteractive: true })
+    )
+    await vi.waitFor(() => expect(decideHostServer).toHaveBeenCalledOnce())
+    const firstInteractive = Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: target.id })
+    )
+    const secondInteractive = Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: target.id })
+    )
+    backgroundDecision.reject(new Error('batch authentication failed'))
+
+    await expect(background).rejects.toThrow('batch authentication failed')
+    await expect(firstInteractive).resolves.toMatchObject({ status: 'connected' })
+    await expect(secondInteractive).resolves.toMatchObject({ status: 'connected' })
+    expect(decideHostServer).toHaveBeenCalledTimes(2)
   })
 
   it('fails a host the managed server does not serve, with no fallback', async () => {

@@ -66,6 +66,25 @@ export function createSshIpcMocks(): SshIpcMocks {
       hasMore: false
     }),
     mockResolveConfigHost: vi.fn().mockResolvedValue(null),
+    mockDecideHostServer: vi.fn(async (): Promise<{ route: 'managed'; environmentId: string }> => ({
+      route: 'managed',
+      environmentId: 'env-test'
+    })),
+    mockRecheckWhenManagedFenceClears: vi.fn(),
+    mockPublishHostServerDecisionFailure: vi.fn(),
+    mockPublishManagedServerConnect: vi.fn((targetId: string) => ({
+      targetId,
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })),
+    mockPublishUnservedHostServer: vi.fn(() => new Error('This SSH host isn’t supported')),
+    mockPublishBridgedUnservedHostServer: vi.fn((target: { id: string }) => ({
+      targetId: target.id,
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })),
     mockNextConnectionManagers: [] as unknown[],
     mockNextPortForwardManagers: [] as unknown[]
   }
@@ -80,6 +99,12 @@ export function createSshIpcMocks(): SshIpcMocks {
     mockPortScannerCallbacks,
     mockListConfigHosts,
     mockResolveConfigHost,
+    mockDecideHostServer,
+    mockRecheckWhenManagedFenceClears,
+    mockPublishHostServerDecisionFailure,
+    mockPublishManagedServerConnect,
+    mockPublishUnservedHostServer,
+    mockPublishBridgedUnservedHostServer,
     mockNextConnectionManagers,
     mockNextPortForwardManagers
   } = state
@@ -103,25 +128,12 @@ export function createSshIpcMocks(): SshIpcMocks {
     },
     // A managed host by default; the real decision is covered by its own tests.
     hostServerConnect: {
-      decideHostServer: vi.fn(async (): Promise<{ route: 'managed'; environmentId: string }> => ({
-        route: 'managed',
-        environmentId: 'env-test'
-      })),
-      recheckWhenManagedFenceClears: vi.fn(),
-      publishHostServerDecisionFailure: vi.fn(),
-      publishManagedServerConnect: vi.fn((targetId: string) => ({
-        targetId,
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0
-      })),
-      publishUnservedHostServer: vi.fn(() => new Error('This SSH host isn’t supported')),
-      publishBridgedUnservedHostServer: vi.fn((target: { id: string }) => ({
-        targetId: target.id,
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0
-      }))
+      decideHostServer: mockDecideHostServer,
+      recheckWhenManagedFenceClears: mockRecheckWhenManagedFenceClears,
+      publishHostServerDecisionFailure: mockPublishHostServerDecisionFailure,
+      publishManagedServerConnect: mockPublishManagedServerConnect,
+      publishUnservedHostServer: mockPublishUnservedHostServer,
+      publishBridgedUnservedHostServer: mockPublishBridgedUnservedHostServer
     },
     sshConnectionStore: {
       isRuntimeOwnedSshTarget: (target: { owner?: unknown }) => target.owner !== undefined,

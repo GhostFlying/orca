@@ -65,6 +65,12 @@ export type SshIpcMockState = {
   mockPortScannerCallbacks: Map<string, unknown>
   mockListConfigHosts: Mock
   mockResolveConfigHost: Mock
+  mockDecideHostServer: Mock
+  mockRecheckWhenManagedFenceClears: Mock
+  mockPublishHostServerDecisionFailure: Mock
+  mockPublishManagedServerConnect: Mock
+  mockPublishUnservedHostServer: Mock
+  mockPublishBridgedUnservedHostServer: Mock
   mockNextConnectionManagers: unknown[]
   mockNextPortForwardManagers: unknown[]
 }

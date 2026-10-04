@@ -17,6 +17,7 @@ vi.mock('./ssh-managed-port-forward-restore', () => ({
   restoreManagedHostPortForwards: h.restore,
   forgetPortForwardRestoreState: h.forgetRestoreState
 }))
+vi.mock('electron', () => ({ app: { getPath: () => process.cwd() } }))
 vi.mock('./ssh-ipc-context', () => ({
   connectionManager: { getState: h.getState, disconnect: h.disconnect, getConnection: vi.fn() },
   currentRuntime: null,
@@ -55,6 +56,7 @@ describe('saved port forwards on a managed host', () => {
   it('leaves an explicit connect to restore through its own publish', () => {
     connectInFlight.set('t1', {
       authority: getSshProviderAuthority('t1'),
+      nonInteractive: false,
       promise: new Promise(() => {})
     })
     try {

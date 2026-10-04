@@ -304,6 +304,7 @@ describe('saved port forward restore', () => {
     h.hostServerStatus.mockReturnValue(undefined)
     connectInFlight.set('t1', {
       authority: getSshProviderAuthority('t1'),
+      nonInteractive: false,
       promise: new Promise(() => {})
     })
     try {
