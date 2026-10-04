@@ -57,6 +57,7 @@ import {
 import { isAuthError } from '../ssh-reconnect-error-classification'
 import { isSshSessionStartFailure } from '../ssh-session-start-failure'
 import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from '../ssh-user-disconnect'
+import { runAttributedToSshOwner } from './ssh-connection-attribution'
 
 const target = {
   id: 'target-1',
@@ -98,6 +99,19 @@ describe('SshConnectionManager', () => {
     const manager = new SshConnectionManager({ onStateChange: vi.fn() })
     await expect(manager.connect(target)).rejects.toBe(refused)
     expect(isSshSessionStartFailure(new Error('Deploy failed', { cause: refused }))).toBe(true)
+  })
+
+  it('applies the connect policy inherited from the host-server decision', async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    const options = { automatic: true, nonInteractive: true }
+
+    await runAttributedToSshOwner(
+      Symbol('background-connect'),
+      () => manager.connect(target),
+      options
+    )
+
+    expect(mockState.instances[0].connect).toHaveBeenCalledWith(options)
   })
 
   it('removes the registration when bulk teardown fails', async () => {
