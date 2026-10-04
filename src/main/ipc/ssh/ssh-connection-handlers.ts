@@ -13,6 +13,7 @@ import { connectionManager } from './ssh-ipc-context'
 import { getPublicSshState } from './ssh-renderer-broadcast'
 import { disconnectSshHostForUser } from './ssh-host-user-disconnect'
 import { errorMessage } from '../../../shared/errors/error-message'
+import type { SshConnectOptions } from '../../../shared/ssh-connect-options'
 import {
   clearSshCredentialDeclined,
   isSshCredentialDeclined
@@ -24,8 +25,11 @@ export function registerSshConnectionHandlers(handle: RegisterSshRequest): void 
     getState: (targetId: string) => getPublicSshState(targetId)
   })
 
-  handle('ssh:connect', async (args: { targetId: string; automatic?: boolean }) => {
-    return connectTarget(args.targetId, { automatic: args.automatic === true })
+  handle('ssh:connect', async (args: { targetId: string } & SshConnectOptions) => {
+    return connectTarget(args.targetId, {
+      automatic: args.automatic === true,
+      nonInteractive: args.nonInteractive === true
+    })
   })
 
   handle('ssh:disconnect', async (args: { targetId: string }) => {

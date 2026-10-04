@@ -32,6 +32,7 @@ import {
   configureRuntimeServices
 } from '../startup/runtime-startup/main-process-runtime-service'
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
+import { connectAutomationHost } from '../automations/automation-host-connect'
 import { createRendererShutdownCheckpointService } from './renderer-shutdown-checkpoint-service'
 import { initializeMainProcessPlugins } from '../startup/plugin-startup/main-process-plugins'
 import { scheduleStalePluginGitTempSweep } from '../plugins/installation/plugin-git-temp-sweep'
@@ -265,7 +266,8 @@ export async function composeDesktopCore(
     // Remote clients mirror schedules; only server processes execute remote_host_service ownership.
     allowRemoteHostScheduling: native.isServeMode(),
     // A macOS update closes windows long before will-quit.
-    isHostQuitting: () => native.isQuitting() || native.isNativeUpdateInstallUnderWay()
+    isHostQuitting: () => native.isQuitting() || native.isNativeUpdateInstallUnderWay(),
+    connectHost: connectAutomationHost
   })
   startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(core, runtime, {

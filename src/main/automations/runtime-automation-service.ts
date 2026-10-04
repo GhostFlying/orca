@@ -29,6 +29,7 @@ import {
 } from './terminal-retention/run-terminal-workspace-session'
 import { automationRunSetupSkip } from './launch/automation-run-setup-skip'
 import { automationSystemSettled } from './dispatch/automation-wake-settle'
+import type { Automation } from '../../shared/automations/automation-definition'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -40,6 +41,8 @@ export function createRuntimeAutomationService(input: {
   /** Only server processes execute remote_host_service schedules. */
   allowRemoteHostScheduling: boolean
   isHostQuitting?: () => boolean
+  /** Injected so headless orcad never pulls Electron SSH dialogs into its graph. */
+  connectHost?: (automation: Automation) => Promise<void>
 }): AutomationService {
   const { store, runtime, claudeUsage, codexUsage } = input
   // Launch handles remain usable before pane-key lookup resolves.
@@ -188,6 +191,7 @@ export function createRuntimeAutomationService(input: {
     },
     terminalLauncher: {
       launch: async (request) => {
+        await input.connectHost?.(request.automation)
         const { terminalHandle, ...launched } = await launchAutomationTerminalAgent(runtime, {
           ...request,
           runs: store.listAutomationRuns(request.automation.id)
