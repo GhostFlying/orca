@@ -80,6 +80,114 @@ describe('SSH IPC handlers', () => {
     expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
   })
 
+  it('ssh:connect forwards the local non-interactive policy', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', nonInteractive: true })
+
+    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { nonInteractive: true })
+  })
+
+  it('shares concurrent non-interactive attempts for one target', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const connection = Promise.withResolvers<object>()
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockReturnValue(connection.promise)
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    const first = Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', nonInteractive: true })
+    )
+    const second = Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', nonInteractive: true })
+    )
+    connection.resolve({})
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+    expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not join an interactive attempt from a non-interactive caller', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const connection = Promise.withResolvers<object>()
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockReturnValue(connection.promise)
+
+    const interactive = Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' }))
+
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', nonInteractive: true })
+    ).rejects.toThrow('interactive SSH connection attempt is already in progress')
+    connection.reject(new Error('interactive failed'))
+    await expect(interactive).rejects.toThrow('interactive failed')
+    expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries interactively after a concurrent non-interactive attempt fails', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const nonInteractive = Promise.withResolvers<object>()
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect
+      .mockReturnValueOnce(nonInteractive.promise)
+      .mockResolvedValueOnce({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    const background = Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: 'ssh-1', nonInteractive: true })
+    )
+    const interactive = Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' }))
+    nonInteractive.reject(new Error('batch authentication failed'))
+
+    await expect(background).rejects.toThrow('batch authentication failed')
+    await expect(interactive).resolves.toEqual(expect.objectContaining({ status: 'connected' }))
+    expect(mockConnectionManager.connect).toHaveBeenNthCalledWith(1, target, {
+      nonInteractive: true
+    })
+    expect(mockConnectionManager.connect).toHaveBeenNthCalledWith(2, target)
+  })
+
   it('registers the provider before broadcasting connected authority', async () => {
     const target: SshTarget = {
       id: 'ssh-1',

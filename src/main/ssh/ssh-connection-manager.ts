@@ -1,4 +1,4 @@
-import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
+import type { SshConnectOptions, SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import { SshConnection, type SshConnectionCallbacks } from './ssh-connection'
 
 // ── Connection Manager ──────────────────────────────────────────────
@@ -24,7 +24,7 @@ export class SshConnectionManager {
     }
   }
 
-  async connect(target: SshTarget): Promise<SshConnection> {
+  async connect(target: SshTarget, options: SshConnectOptions = {}): Promise<SshConnection> {
     const existing = this.connections.get(target.id)
     if (existing?.getState().status === 'connected') {
       return existing
@@ -46,7 +46,7 @@ export class SshConnectionManager {
       this.connections.set(target.id, conn)
 
       try {
-        await conn.connect()
+        await conn.connect(options)
       } catch (err) {
         if (this.connections.get(target.id) === conn) {
           this.connections.delete(target.id)
