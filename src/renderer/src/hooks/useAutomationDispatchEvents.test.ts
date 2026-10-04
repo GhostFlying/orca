@@ -208,7 +208,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       }
     })
     mockOnDispatchRequested.mockReturnValue(() => {})
-    mockSshNeedsPassphrasePrompt.mockResolvedValue(false)
+    mockSshNeedsPassphrasePrompt.mockResolvedValue(true)
     mockSshGetState.mockResolvedValue({ status: 'connected' })
     mockSshConnect.mockResolvedValue({ status: 'connected' })
     mockSubmitPromptToAgentPty.mockResolvedValue(true)
@@ -329,7 +329,11 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
 
     expect(state.allWorktrees).not.toHaveBeenCalled()
-    expect(mockSshConnect).toHaveBeenCalledWith({ targetId: 'ssh-folder', automatic: true })
+    expect(mockSshConnect).toHaveBeenCalledWith({
+      targetId: 'ssh-folder',
+      automatic: true,
+      nonInteractive: true
+    })
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: folderWorkspace.id,
