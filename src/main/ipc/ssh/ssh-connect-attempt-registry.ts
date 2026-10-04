@@ -11,6 +11,7 @@ export const credentialRequestedForTarget = new Set<string>()
 // Coalesce tab connects; disconnect must invalidate late continuations before replacement.
 export type ConnectAttempt = {
   authority: DirectSshAuthority
+  nonInteractive: boolean
   promise: Promise<SshConnectionState>
 }
 

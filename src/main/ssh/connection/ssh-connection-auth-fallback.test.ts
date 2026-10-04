@@ -331,6 +331,22 @@ describe('SshConnection', () => {
     )
   })
 
+  it('does not request a password during a non-interactive connect', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/stale-agent.sock')
+    const agentError = Object.assign(new Error('Failed to connect to agent'), { level: 'agent' })
+    ssh2Mock.connectSequence = [agentError]
+    const onCredentialRequest = vi.fn(async () => 'password-123')
+    const conn = new SshConnection(
+      createTarget({ identityFile: join(tmpdir(), 'missing-key') }),
+      createCallbacks({ onCredentialRequest })
+    )
+
+    await expect(conn.connect({ nonInteractive: true })).rejects.toThrow(
+      'Failed to connect to agent'
+    )
+    expect(onCredentialRequest).not.toHaveBeenCalled()
+  })
+
   it('retries password auth with the no-agent key config after direct key fallback fails', async () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
