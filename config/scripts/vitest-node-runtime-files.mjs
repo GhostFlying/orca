@@ -3,11 +3,21 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/structured-agent-cli-writers.test.ts',
+  'src/main/runtime/trae-headless-automation-completion.test.ts',
   'config/scripts/vitest-sqlite-runtime-boundary.test.ts',
   'config/scripts/cloud-security-history-workflow.test.mjs',
   'config/scripts/skill-recipe-shell.test.mjs',
   'src/main/ssh/legacy-relay/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/ssh-remote-commands.test.ts',
+  // The shared SSH IPC harness reaches the Node-backed profile state store.
+  'src/main/ipc/ssh/ssh-app-shutdown.test.ts',
+  'src/main/ipc/ssh/ssh-connect-decision-cancellation.test.ts',
+  'src/main/ipc/ssh/ssh-credential-cancel.test.ts',
+  'src/main/ipc/ssh/ssh-disconnect-cancellation.test.ts',
+  'src/main/ipc/ssh/ssh-handler-reregistration.test.ts',
+  'src/main/ipc/ssh/ssh-state-broadcast-fanout.test.ts',
+  'src/main/ipc/ssh/ssh-target-registry.test.ts',
+  'src/main/ipc/ssh/ssh.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',

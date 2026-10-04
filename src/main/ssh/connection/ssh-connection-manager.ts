@@ -1,7 +1,11 @@
-import type { SshTarget, SshConnectionState } from '../../../shared/ssh-types'
+import type { SshConnectOptions, SshTarget, SshConnectionState } from '../../../shared/ssh-types'
 import { SshConnection, type SshCachedCredentials } from './ssh-connection'
 import type { SshConnectionCallbacks } from './ssh-connection-callbacks'
-import { recordSshConnectionOpened, recordSshConnectionReused } from './ssh-connection-attribution'
+import {
+  currentSshConnectOptions,
+  recordSshConnectionOpened,
+  recordSshConnectionReused
+} from './ssh-connection-attribution'
 import {
   createSshCredentialDeclinedError,
   isSshCredentialDeclined
@@ -39,7 +43,10 @@ export class SshConnectionManager {
   }
 
   /** `probe`: a user's connection test, which a Disconnect does not refuse. */
-  async connect(target: SshTarget, options?: { probe?: boolean }): Promise<SshConnection> {
+  async connect(
+    target: SshTarget,
+    options?: SshConnectOptions & { probe?: boolean }
+  ): Promise<SshConnection> {
     try {
       return await this.openSession(target, options)
     } catch (error) {
@@ -49,8 +56,9 @@ export class SshConnectionManager {
 
   private async openSession(
     target: SshTarget,
-    options?: { probe?: boolean }
+    options?: SshConnectOptions & { probe?: boolean }
   ): Promise<SshConnection> {
+    const connectOptions = options ?? currentSshConnectOptions() ?? {}
     // Refuse user-disconnected hosts before pool reuse, including transports opened by connection tests (#30086).
     if (!options?.probe && isSshUserDisconnected(target.id)) {
       throw createSshUserDisconnectedError(target.label)
@@ -89,7 +97,7 @@ export class SshConnectionManager {
       this.connections.set(target.id, conn)
 
       try {
-        await conn.connect()
+        await conn.connect(connectOptions)
       } catch (err) {
         // Failed startup may retain sockets; close quietly so cleanup cannot overwrite its published error.
         try {

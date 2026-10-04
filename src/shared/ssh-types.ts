@@ -218,6 +218,13 @@ export type SshConnectionStatus =
   | 'reconnection-failed'
   | 'error'
 
+export type SshConnectOptions = {
+  /** No user asked for this connect, so a cancelled sign-in stays cancelled. */
+  automatic?: boolean
+  /** Refuse any authentication path that would ask the user for input. */
+  nonInteractive?: boolean
+}
+
 export type SshRemotePlatform = 'linux' | 'darwin' | 'win32'
 
 export type SshProviderEpoch = string & { readonly __sshProviderEpoch: unique symbol }
