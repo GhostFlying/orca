@@ -247,6 +247,347 @@ jobs:
           else
             git rm --ignore-unmatch -- "$signing_contract"
           fi
+      - name: Repair v1.4.220 release-cut fixtures
+        if: needs.candidate.outputs.upstream_sha == 'a7927b28ce45cbb044add478d957abe36c99ccd8'
+        env:
+          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          barrier_fixture=config/scripts/ci-background-step-barriers.test.mjs
+          cache_warmup_fixture=config/scripts/ci-cache-warmup-workflow.test.mjs
+          dependency_cache_fixture=config/scripts/ci-dependency-download-cache.test.mjs
+          native_cache_fixture=config/scripts/ci-native-cache.test.mjs
+          git_fixture=config/scripts/git-binary-compatibility-workflow.test.mjs
+          mobile_shell_fixture=config/scripts/mobile-release-shell-switch-workflow.test.mjs
+          node_server_fixture=config/scripts/node-server-change-scope.test.mjs
+          pnpm_fixture=config/scripts/ci-pnpm-verification-cache.test.mjs
+          pr_parallelism_fixture=config/scripts/pr-workflow-parallelism.test.mjs
+          release_e2e_fixture=config/scripts/release-e2e-dispatch-contract.test.mjs
+          hostile_hosts_fixture=config/scripts/ssh-hostile-hosts-workflow.test.mjs
+          workflow_fixture=.github/workflows/pr.yml
+          test "$(git rev-parse "$UPSTREAM_SHA:$barrier_fixture")" = \
+            d9dc6332a9f0747d70f7aeaa37110d3c2f0d33ac
+          test "$(git hash-object "$barrier_fixture")" = \
+            d9dc6332a9f0747d70f7aeaa37110d3c2f0d33ac
+          git apply --unidiff-zero <<'PATCH'
+          diff --git a/config/scripts/ci-background-step-barriers.test.mjs b/config/scripts/ci-background-step-barriers.test.mjs
+          --- a/config/scripts/ci-background-step-barriers.test.mjs
+          +++ b/config/scripts/ci-background-step-barriers.test.mjs
+          @@ -75 +75 @@ describe('CI background step barriers', () => {
+          -    expect(ratchet).toBeLessThan(join)
+          +    expect(ratchet).toBeGreaterThan(join)
+          PATCH
+          test "$(git hash-object "$barrier_fixture")" = \
+            d116d79c4189ce069de7b98ae27cd6f961f316d6
+          test "$(git rev-parse "$UPSTREAM_SHA:$cache_warmup_fixture")" = \
+            74b15e9b2673954d8c31431a17c36643f6ee21a1
+          test "$(git hash-object "$cache_warmup_fixture")" = \
+            74b15e9b2673954d8c31431a17c36643f6ee21a1
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = 'config/scripts/ci-cache-warmup-workflow.test.mjs'
+          let source = fs.readFileSync(path, 'utf8')
+          const replacements = [
+            [
+              "expect(workflow.on.schedule).toEqual([{ cron: '41 * * * *' }])",
+              "expect(workflow.on.schedule).toEqual([{ cron: '41 */6 * * *' }])"
+            ],
+            [
+              "expect(install.with).toEqual({ 'native-runtime': 'node' })",
+              "expect(install.with).toEqual({ 'native-runtime': 'node', 'cache-pnpm-store-lookup-only': 'true' })"
+            ]
+          ]
+          for (const [before, after] of replacements) {
+            if (source.split(before).length !== 2) throw new Error(`expected one fixture match: ${before}`)
+            source = source.replace(before, after)
+          }
+          fs.writeFileSync(path, source)
+          NODE
+          test "$(git hash-object "$cache_warmup_fixture")" = \
+            8ce6edfcd9568ceb741ce3f4cad63853fd11c446
+          test "$(git rev-parse "$UPSTREAM_SHA:$dependency_cache_fixture")" = \
+            584c37f6740f757495655ef19d569a724a7e152d
+          test "$(git hash-object "$dependency_cache_fixture")" = \
+            584c37f6740f757495655ef19d569a724a7e152d
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = 'config/scripts/ci-dependency-download-cache.test.mjs'
+          let source = fs.readFileSync(path, 'utf8')
+          const replacements = [
+            [
+              `expect(step.with.cache).toBe("${'$'}{{ github.event_name != 'pull_request' && 'pnpm' || '' }}")`,
+              `expect(step.with.cache).toBe(\n        "${'$'}{{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}"\n      )`
+            ],
+            [
+              "it('restores PR stores except measured Windows mixed installs, without a post-job save', () => {",
+              "it('restores PR stores except measured Windows, Linux and macOS installs, without a post-job save', () => {"
+            ],
+            [
+              `    expect(resolve.if).toBe(\n      "github.event_name == 'pull_request' && (runner.os != 'Windows' || runner.arch != 'X64' || !contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml'))"\n    )\n    expect(restore.if).toBe(resolve.if)`,
+              `    expect(restore.if).toBe(\n      "github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' && !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') && (runner.os != 'Windows' || !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) && !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml'))"\n    )\n    expect(resolve.if).toBe(\n      restore.if +\n        " || (github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only == 'true')"\n    )`
+            ],
+            [
+              "['Windows x64 root-only PR', 'pull_request', 'Windows', 'X64', false, true, '']",
+              "['Windows x64 root-only PR', 'pull_request', 'Windows', 'X64', false, false, '']"
+            ],
+            [
+              `      runner: { os, arch },\n      inputs: {\n        'cache-dependency-path': mixed ? 'pnpm-lock.yaml\\nmobile/pnpm-lock.yaml' : 'pnpm-lock.yaml'\n      },`,
+              `      runner: { os, arch },\n      steps: { 'pnpm-store-mode': { outputs: { 'lookup-only': '' } } },\n      inputs: {\n        'cache-pnpm-store': 'true',\n        'cache-dependency-path': mixed ? 'pnpm-lock.yaml\\nmobile/pnpm-lock.yaml' : 'pnpm-lock.yaml'\n      },`
+            ],
+            [
+              `expression.replaceAll('inputs.cache-dependency-path', 'inputs["cache-dependency-path"]')`,
+              `expression\n          .replaceAll(\n            'steps.pnpm-store-mode.outputs.lookup-only',\n            'steps["pnpm-store-mode"].outputs["lookup-only"]'\n          )\n          .replaceAll('inputs.cache-dependency-path', 'inputs["cache-dependency-path"]')\n          .replaceAll('inputs.cache-pnpm-store', 'inputs["cache-pnpm-store"]')`
+            ]
+          ]
+          for (const [before, after] of replacements) {
+            if (source.split(before).length !== 2) throw new Error(`expected one fixture match: ${'$'}{before}`)
+            source = source.replace(before, after)
+          }
+          fs.writeFileSync(path, source)
+          NODE
+          test "$(git hash-object "$dependency_cache_fixture")" = \
+            3452e99aff2b26a4fe8785a0a94af4bcd620a480
+          test "$(git rev-parse "$UPSTREAM_SHA:$pr_parallelism_fixture")" = \
+            611dd974b79d1be707b93662da6838053fa3c17f
+          test "$(git hash-object "$pr_parallelism_fixture")" = \
+            611dd974b79d1be707b93662da6838053fa3c17f
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = 'config/scripts/pr-workflow-parallelism.test.mjs'
+          let source = fs.readFileSync(path, 'utf8')
+          const replacements = [
+            [
+              "github.event_name != 'pull_request' && 'pnpm' || ''",
+              "github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || ''"
+            ],
+            [
+              "github.event_name == 'pull_request' && (runner.os != 'Windows' || runner.arch != 'X64' || !contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml'))",
+              "github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' && !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') && (runner.os != 'Windows' || !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) && !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml'))"
+            ]
+          ]
+          for (const [before, after] of replacements) {
+            if (source.split(before).length !== 2) throw new Error(`expected one fixture match: ${before}`)
+            source = source.replace(before, after)
+          }
+          fs.writeFileSync(path, source)
+          NODE
+          test "$(git hash-object "$pr_parallelism_fixture")" = \
+            ee9e63cd4d5e74c5a9bf3c7cb6ce3102616a8d1b
+          test "$(git rev-parse "$UPSTREAM_SHA:$native_cache_fixture")" = \
+            6851ed62f9ba3575a3555b3e5622395ae8de3c4e
+          test "$(git hash-object "$native_cache_fixture")" = \
+            6851ed62f9ba3575a3555b3e5622395ae8de3c4e
+          test "$(git rev-parse "$UPSTREAM_SHA:$mobile_shell_fixture")" = \
+            f6f05c779ebfaf2133d31cb1f9752d598f5fac04
+          test "$(git hash-object "$mobile_shell_fixture")" = \
+            f6f05c779ebfaf2133d31cb1f9752d598f5fac04
+          test "$(git rev-parse "$UPSTREAM_SHA:$release_e2e_fixture")" = \
+            2277cd399a491bbddf5041908167976ac217e6e3
+          test "$(git hash-object "$release_e2e_fixture")" = \
+            2277cd399a491bbddf5041908167976ac217e6e3
+          test "$(git rev-parse "$UPSTREAM_SHA:$hostile_hosts_fixture")" = \
+            c79706ab4fdb6bd26ca233058d200d1383c91cd8
+          test "$(git hash-object "$hostile_hosts_fixture")" = \
+            c79706ab4fdb6bd26ca233058d200d1383c91cd8
+          node <<'NODE'
+          const fs = require('node:fs')
+          const expressionOpen = '$' + '{{'
+          const repairs = [
+            [
+              'config/scripts/ci-native-cache.test.mjs',
+              [[
+                `"inputs.cache-pnpm-verification == 'true'",\n            "inputs.cache-pnpm-verification == 'false'"`,
+                `'enabled: ${expressionOpen} inputs.cache-pnpm-verification }}',\n            "enabled: 'false'"`
+              ]]
+            ],
+            [
+              'config/scripts/mobile-release-shell-switch-workflow.test.mjs',
+              [
+                [
+                  `  '${expressionOpen} steps.pnpm-store.outputs.path }}',\n`,
+                  `  '${expressionOpen} steps.pnpm-store.outputs.path }}',\n  '${expressionOpen} env.ORCA_PNPM_STORE_CACHE_PATH }}',\n`
+                ],
+                [
+                  "github.event_name != 'pull_request' && 'pnpm' || ''",
+                  "github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || ''"
+                ]
+              ]
+            ],
+            [
+              'config/scripts/release-e2e-dispatch-contract.test.mjs',
+              [[
+                `    expect(dispatchJob.if).toBe("${expressionOpen} needs.cut.outputs.tag != '' }}")`,
+                `    expect(dispatchJob.if).toBe(\n      "${expressionOpen} !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' }}"\n    )`
+              ]]
+            ],
+            [
+              'config/scripts/ssh-hostile-hosts-workflow.test.mjs',
+              [[
+                "const runners = { 'darwin-arm64': 'macos-14', 'darwin-x64': 'macos-15-intel' }",
+                "const runners = { 'darwin-arm64': 'macos-15', 'darwin-x64': 'macos-15-intel' }"
+              ]]
+            ]
+          ]
+          for (const [path, replacements] of repairs) {
+            let source = fs.readFileSync(path, 'utf8')
+            for (const [before, after] of replacements) {
+              if (source.split(before).length !== 2) throw new Error(`expected one fixture match in ${path}: ${before}`)
+              source = source.replace(before, after)
+            }
+            fs.writeFileSync(path, source)
+          }
+          NODE
+          test "$(git hash-object "$native_cache_fixture")" = \
+            045cc5de6d82940fc1c90b9b19648dc0086d8bb8
+          test "$(git hash-object "$mobile_shell_fixture")" = \
+            5f45d6872ac498615e7d7f76f591b24e9a4f9d76
+          test "$(git hash-object "$release_e2e_fixture")" = \
+            d939a6231ef988a6f33d66dae3ea8e30e6e74c53
+          test "$(git hash-object "$hostile_hosts_fixture")" = \
+            35c2cddecc25d484d31d06fa1d8e46b28118d6a3
+          test "$(git rev-parse "$UPSTREAM_SHA:$pnpm_fixture")" = \
+            c64d019d06cb751615b852cf69d1038c137719e1
+          test "$(git hash-object "$pnpm_fixture")" = \
+            c64d019d06cb751615b852cf69d1038c137719e1
+          node <<'NODE'
+          const fs = require('node:fs')
+          let source = fs.readFileSync('config/scripts/ci-pnpm-verification-cache.test.mjs', 'utf8')
+          const cacheInputExpression = '$' + '{{ inputs.cache-pnpm-verification }}'
+          const replacements = [
+            [
+              "const resolve = steps.find((step) => step.id === 'verification-cache')\nconst restore = steps.find((step) => step.id === 'verification-cache-restore')",
+              "const cache = steps.find((step) => step.id === 'verification-cache')\nconst cacheAction = parse(\n  readFileSync('.github/actions/restore-pnpm-verification/action.yml', 'utf8')\n)\nconst resolve = cacheAction.runs.steps.find((step) => step.id === 'verification-cache')\nconst restore = cacheAction.runs.steps.find((step) => step.id === 'verification-cache-restore')"
+            ],
+            [
+              "const evaluate = (expression, context) =>\n  runInNewContext(\n    expression.replaceAll('inputs.cache-pnpm-verification', 'inputs[\"cache-pnpm-verification\"]'),\n    context\n  )",
+              'const evaluate = (expression, context) => runInNewContext(expression, context)'
+            ],
+            ["inputs: { 'cache-pnpm-verification': enabled }", 'inputs: { enabled }'],
+            ["expect(resolve.run).toContain('\"$RUNNER_OS\" \"$RUNNER_ARCH\" \"$(pnpm --version)\" \"$POLICY_HASH\"')", `expect(resolve.run).toContain('pnpm_version=\"$(pnpm --version)\"')\n    expect(resolve.run).toContain('\"$RUNNER_OS\" \"$RUNNER_ARCH\" \"$pnpm_version\" \"$POLICY_HASH\"')\n    expect(cache.uses).toBe('./.github/actions/restore-pnpm-verification')\n    expect(cache.with.enabled).toBe('${cacheInputExpression}')`],
+            ['expect(steps.indexOf(restore)).toBeLessThan(steps.indexOf(install))', 'expect(steps.indexOf(cache)).toBeLessThan(steps.indexOf(install))'],
+            ["'verification-cache': { outputs: { key: 'a-key' } },\n        'verification-cache-restore': { outputs: { 'cache-hit': 'false' } }", "'verification-cache': { outputs: { key: 'a-key', 'cache-hit': 'false' } }"],
+            ['steps.verification-cache-restore.outputs.cache-hit', 'steps.verification-cache.outputs.cache-hit'],
+            ['steps["verification-cache-restore"].outputs["cache-hit"]', 'steps["verification-cache"].outputs["cache-hit"]'],
+            ["context.steps['verification-cache-restore'].outputs['cache-hit'] = 'true'", "context.steps['verification-cache'].outputs['cache-hit'] = 'true'"]
+          ]
+          for (const [before, after] of replacements) {
+            if (source.split(before).length !== 2) throw new Error(`expected one fixture match: ${before}`)
+            source = source.replace(before, after)
+          }
+          fs.writeFileSync('config/scripts/ci-pnpm-verification-cache.test.mjs', source)
+          NODE
+          test "$(git hash-object "$pnpm_fixture")" = \
+            c7826210aef12c8d9363d3c5471ba90d6ee3f4ca
+          test "$(git rev-parse "$UPSTREAM_SHA:$git_fixture")" = \
+            c03c7973f6a83aa4593bb7b0fdd1cc40b328da83
+          test "$(git hash-object "$git_fixture")" = \
+            c03c7973f6a83aa4593bb7b0fdd1cc40b328da83
+          test "$(git rev-parse "$UPSTREAM_SHA:$node_server_fixture")" = \
+            0ff118ed678340958dc74fea01ca13425447b3ff
+          test "$(git hash-object "$node_server_fixture")" = \
+            0ff118ed678340958dc74fea01ca13425447b3ff
+          round_two_patch="$RUNNER_TEMP/v1.4.220-release-cut-round-two.patch"
+          cat >"$round_two_patch" <<'PATCH'
+          diff --git a/config/scripts/git-binary-compatibility-workflow.test.mjs b/config/scripts/git-binary-compatibility-workflow.test.mjs
+          index c03c7973f6..ca7d5fe032 100644
+          --- a/config/scripts/git-binary-compatibility-workflow.test.mjs
+          +++ b/config/scripts/git-binary-compatibility-workflow.test.mjs
+          @@ -30,10 +30,17 @@ describe('Git binary compatibility PR gate', () => {
+               expect(run).toContain('git-2.25.5.tar.gz')
+               // Why asserted: the sha256 check only runs on the build path, so a cached binary
+               // must come from a key that pins the same version the tarball line declares.
+          -    expect(run).toContain('if [ -x "$source/git" ]; then')
+          +    expect(run).toContain('[ -x "$source/git" ] && [ -x "$source/git-submodule" ]')
+          +    expect(run).toContain('[ -f "$source/git-sh-setup" ] && [ -f "$source/git-sh-i18n" ]')
+          +    expect(run).toContain(
+          +      '[ -f "$source/git-parse-remote" ] && [ -x "$source/git-sh-i18n--envsubst" ]'
+          +    )
+               expect(run).toContain('41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf')
+               expect(run).toContain('-j"$(nproc)"')
+          -    expect(run).toContain('NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git')
+          +    expect(run).toContain('NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease')
+          +    expect(run).toContain(
+          +      'git git-submodule git-sh-setup git-sh-i18n git-parse-remote git-sh-i18n--envsubst'
+          +    )
+               expect(run).toContain('sha256sum --check')
+               expect(run).toContain('find "$source" -name \'*.o\' -delete')
+               // The cached path and the build path must be the same directory or the guard
+          @@ -61,6 +68,6 @@ describe('Git binary compatibility PR gate', () => {
+               expect(steps[matrixIndex].run).not.toContain('make -C')
+               expect(baselineSteps[cacheIndex].with.path).toBe(BASELINE_DIR)
+               expect(baselineSteps[cacheIndex].with.key).toBe(
+          -      'git-compat-baseline-__GH_EXPR_OPEN__ runner.os }}-__GH_EXPR_OPEN__ runner.arch }}-2.25.5'
+          +      'git-compat-baseline-__GH_EXPR_OPEN__ runner.os }}-__GH_EXPR_OPEN__ runner.arch }}-2.25.5-submodule'
+               )
+             })
+          diff --git a/config/scripts/node-server-change-scope.test.mjs b/config/scripts/node-server-change-scope.test.mjs
+          index 0ff118ed67..607acd0cf5 100644
+          --- a/config/scripts/node-server-change-scope.test.mjs
+          +++ b/config/scripts/node-server-change-scope.test.mjs
+          @@ -149,7 +149,7 @@ it('keeps every platform job and runs them when detection is skipped or fails',
+             expect(detect.env.PUSH_BASE).toBe('__GH_EXPR_OPEN__ github.event.before }}')
+             expect(detect.run).toContain('git fetch --no-tags --depth=1 origin "$PUSH_BASE"')
+             expect(detect.run).toContain('git diff --name-only --no-renames -z "$PUSH_BASE" HEAD')
+          -  expect(detect.run).toContain('node-server-changes" --full-qualification')
+          +  expect(detect.run).toContain('node-server-changes" --defer-graph --full-qualification')
+             expect(workflow.on.pull_request.types).toContain('ready_for_review')
+             expect(workflow.on.schedule).toHaveLength(1)
+             // A pull request may qualify one platform, so the merged commit must re-qualify all six.
+          @@ -213,14 +213,29 @@ it('runs the Bun and Node cross-runtime tests on Linux against pinned inputs', (
+             expect(setupBun.with['bun-version']).toBe('1.4.2')
+             const build = steps.find((step) => String(step.run).includes('build-orcad-bun.mjs'))
+             expect(build.env.BUN_ORCAD_COMMIT).toMatch(/^[0-9a-f]{40}$/)
+          -  expect(build.run).toContain('ORCA_BUN_ORCAD_SLOT=')
+          -  expect(build.run).toContain('BUN_EXECUTABLE=')
+          -  for (const step of [setupBun, build]) {
+          -    expect(step.if).toBe("runner.os == 'Linux'")
+          -  }
+          -  expect(steps.map((step) => step.run).join('\n')).toContain(
+          +  expect(setupBun.if).toBe("runner.os == 'Linux'")
+          +  expect(build.id).toBe('bun-orcad')
+          +  expect(build.background).toBe(true)
+          +  expect(build.if).toBeUndefined()
+          +  expect(build['continue-on-error']).toBeUndefined()
+          +  expect(build.run).toMatch(/^if \[ "\$RUNNER_OS" != Linux \]; then exit 0; fi\n/)
+          +  expect(build.run).toContain('echo "slot=$RUNNER_TEMP/bun-orcad" >> "$GITHUB_OUTPUT"')
+          +  expect(build.run).toContain('echo "executable=$(command -v bun)" >> "$GITHUB_OUTPUT"')
+          +  expect(build.run).not.toContain('GITHUB_ENV')
+          +  const join = steps.findIndex((step) => step.wait === build.id)
+          +  expect(join).toBeGreaterThan(steps.indexOf(build))
+          +  expect(steps[join].if).toBeUndefined()
+          +  expect(steps[join]['continue-on-error']).toBeUndefined()
+          +  const consumer = steps.find((step) => step.run?.startsWith('pnpm test:node-server --artifact '))
+          +  expect(steps.indexOf(consumer)).toBeGreaterThan(join)
+          +  expect(consumer.run).toBe(
+               "pnpm test:node-server --artifact __GH_EXPR_OPEN__ runner.os == 'Linux' && '--cross-runtime' || '' }}"
+             )
+          +  expect(consumer.if).toBeUndefined()
+          +  expect(consumer.env).toEqual({
+          +    ORCA_BUN_ORCAD_SLOT: '__GH_EXPR_OPEN__ steps.bun-orcad.outputs.slot }}',
+          +    BUN_EXECUTABLE: '__GH_EXPR_OPEN__ steps.bun-orcad.outputs.executable }}'
+          +  })
+             const alpine = workflow.jobs.linux_musl.steps.find((step) =>
+               String(step.run).includes('docker run')
+             )
+          PATCH
+          node -e "const fs=require('node:fs');const p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,'utf8').replaceAll('__GH_EXPR_OPEN__','\$'+'{{'))" "$round_two_patch"
+          git apply "$round_two_patch"
+          test "$(git hash-object "$git_fixture")" = \
+            ca7d5fe03220e7dd9d95c8ae3e0d8a359c607d88
+          test "$(git hash-object "$node_server_fixture")" = \
+            607acd0cf5747ccd39649bbe25bff34694686bf3
+          test "$(git rev-parse "$UPSTREAM_SHA:$workflow_fixture")" = \
+            9558255e482e1eed20d5cd63d115a08768aa7815
+          test "$(git hash-object "$workflow_fixture")" = \
+            9558255e482e1eed20d5cd63d115a08768aa7815
+          test "$(grep -Ec '          src/(main/jcode/hook-gate-script|main/ipc/preflight-(provider-command-selection|runnable-local-cli))\.test\.ts' "$workflow_fixture")" = 3
+          awk '$0 != "          src/main/jcode/hook-gate-script.test.ts" && \
+               $0 != "          src/main/ipc/preflight-provider-command-selection.test.ts" && \
+               $0 != "          src/main/ipc/preflight-runnable-local-cli.test.ts"' \
+            "$workflow_fixture" >"$workflow_fixture.tmp"
+          mv "$workflow_fixture.tmp" "$workflow_fixture"
+          test "$(git hash-object "$workflow_fixture")" = \
+            c7e58af93e34d0bb683be28fc3f1fa2dec21fcf3
       - name: Repair v1.4.218 mobile workflow fixtures
         if: needs.candidate.outputs.upstream_sha == '75ea50273328d9bd5465170d10a098711d61b5a4'
         env:

@@ -227,6 +227,9 @@ describe('fork release maintenance workflows', () => {
       (step) => step.name === 'Install relay integration dependencies'
     )
     const restore = testJob.steps.find((step) => step.name === 'Restore upstream workflow fixtures')
+    const releaseCutFixtureRepair = testJob.steps.find(
+      (step) => step.name === 'Repair v1.4.220 release-cut fixtures'
+    )
     const mobileFixtureRepair = testJob.steps.find(
       (step) => step.name === 'Repair v1.4.218 mobile workflow fixtures'
     )
@@ -255,15 +258,78 @@ describe('fork release maintenance workflows', () => {
     expect(restore.run).toContain('git cat-file -e "$UPSTREAM_SHA:$signing_contract"')
     expect(restore.run).toContain('git rm --ignore-unmatch -- "$signing_contract"')
     expect(restore.run).toContain('config/scripts/windows-signing-workflow-contract.test.mjs')
+    expect(releaseCutFixtureRepair.if).toBe(
+      "needs.candidate.outputs.upstream_sha == 'a7927b28ce45cbb044add478d957abe36c99ccd8'"
+    )
+    expect(releaseCutFixtureRepair.run).toContain('d9dc6332a9f0747d70f7aeaa37110d3c2f0d33ac')
+    expect(releaseCutFixtureRepair.run).toContain('d116d79c4189ce069de7b98ae27cd6f961f316d6')
+    expect(releaseCutFixtureRepair.run).toContain('expect(ratchet).toBeGreaterThan(join)')
+    expect(releaseCutFixtureRepair.run).toContain('74b15e9b2673954d8c31431a17c36643f6ee21a1')
+    expect(releaseCutFixtureRepair.run).toContain('8ce6edfcd9568ceb741ce3f4cad63853fd11c446')
+    expect(releaseCutFixtureRepair.run).toContain('584c37f6740f757495655ef19d569a724a7e152d')
+    expect(releaseCutFixtureRepair.run).toContain('3452e99aff2b26a4fe8785a0a94af4bcd620a480')
+    expect(releaseCutFixtureRepair.run).toContain('steps["pnpm-store-mode"].outputs["lookup-only"]')
+    expect(releaseCutFixtureRepair.run).toContain("'cache-pnpm-store': 'true'")
+    expect(releaseCutFixtureRepair.run).toContain(
+      "expect(workflow.on.schedule).toEqual([{ cron: '41 */6 * * *' }])"
+    )
+    expect(releaseCutFixtureRepair.run).toContain("'cache-pnpm-store-lookup-only': 'true'")
+    expect(releaseCutFixtureRepair.run).not.toContain("readWorkflow('pr').jobs.preflight")
+    expect(releaseCutFixtureRepair.run).toContain('611dd974b79d1be707b93662da6838053fa3c17f')
+    expect(releaseCutFixtureRepair.run).toContain('ee9e63cd4d5e74c5a9bf3c7cb6ce3102616a8d1b')
+    expect(releaseCutFixtureRepair.run).toContain('6851ed62f9ba3575a3555b3e5622395ae8de3c4e')
+    expect(releaseCutFixtureRepair.run).toContain('045cc5de6d82940fc1c90b9b19648dc0086d8bb8')
+    expect(releaseCutFixtureRepair.run).toContain('f6f05c779ebfaf2133d31cb1f9752d598f5fac04')
+    expect(releaseCutFixtureRepair.run).toContain('5f45d6872ac498615e7d7f76f591b24e9a4f9d76')
+    expect(releaseCutFixtureRepair.run).toContain('2277cd399a491bbddf5041908167976ac217e6e3')
+    expect(releaseCutFixtureRepair.run).toContain('d939a6231ef988a6f33d66dae3ea8e30e6e74c53')
+    expect(releaseCutFixtureRepair.run).toContain('c79706ab4fdb6bd26ca233058d200d1383c91cd8')
+    expect(releaseCutFixtureRepair.run).toContain('35c2cddecc25d484d31d06fa1d8e46b28118d6a3')
+    expect(releaseCutFixtureRepair.run).toContain("enabled: 'false'")
+    expect(releaseCutFixtureRepair.run).toContain('ORCA_PNPM_STORE_CACHE_PATH')
+    expect(releaseCutFixtureRepair.run).toContain('needs.publish-release.result')
+    expect(releaseCutFixtureRepair.run).toContain("'darwin-arm64': 'macos-15'")
+    expect(releaseCutFixtureRepair.run).toContain(
+      "steps.pnpm-store-mode.outputs.lookup-only != 'true'"
+    )
+    expect(releaseCutFixtureRepair.run).toContain(
+      "inputs.cache-dependency-path == 'pnpm-lock.yaml'"
+    )
+    expect(releaseCutFixtureRepair.run).toContain('c64d019d06cb751615b852cf69d1038c137719e1')
+    expect(releaseCutFixtureRepair.run).toContain('c7826210aef12c8d9363d3c5471ba90d6ee3f4ca')
+    expect(releaseCutFixtureRepair.run).toContain('c03c7973f6a83aa4593bb7b0fdd1cc40b328da83')
+    expect(releaseCutFixtureRepair.run).toContain('ca7d5fe03220e7dd9d95c8ae3e0d8a359c607d88')
+    expect(releaseCutFixtureRepair.run).toContain('0ff118ed678340958dc74fea01ca13425447b3ff')
+    expect(releaseCutFixtureRepair.run).toContain('607acd0cf5747ccd39649bbe25bff34694686bf3')
+    expect(releaseCutFixtureRepair.run).toContain('--defer-graph --full-qualification')
+    expect(releaseCutFixtureRepair.run).toContain(
+      'git-compat-baseline-__GH_EXPR_OPEN__ runner.os }}'
+    )
+    expect(releaseCutFixtureRepair.run).toContain(
+      String.raw`replaceAll('__GH_EXPR_OPEN__','\$'+'{{')`
+    )
+    expect(releaseCutFixtureRepair.run).toContain(
+      "const cacheInputExpression = '$' + '{{ inputs.cache-pnpm-verification }}'"
+    )
+    expect(releaseCutFixtureRepair.run).not.toContain(
+      "toBe('${{ inputs.cache-pnpm-verification }}')"
+    )
+    expect(releaseCutFixtureRepair.run).toContain('9558255e482e1eed20d5cd63d115a08768aa7815')
+    expect(releaseCutFixtureRepair.run).toContain('c7e58af93e34d0bb683be28fc3f1fa2dec21fcf3')
+    expect(releaseCutFixtureRepair.run).toContain('src/main/jcode/hook-gate-script.test.ts')
+    expect(releaseCutFixtureRepair.run).toContain(
+      'src/main/ipc/preflight-provider-command-selection.test.ts'
+    )
+    expect(releaseCutFixtureRepair.run).toContain(
+      'src/main/ipc/preflight-runnable-local-cli.test.ts'
+    )
     expect(mobileFixtureRepair.if).toBe(
       "needs.candidate.outputs.upstream_sha == '75ea50273328d9bd5465170d10a098711d61b5a4'"
     )
     expect(mobileFixtureRepair.run).toContain('cd7c204f8178a90d5c4dfc0b6a74e8f16718d357')
     expect(mobileFixtureRepair.run).toContain('7ff6251afd6dc4f878c5bff1033eddfe8f7699c0')
     expect(mobileFixtureRepair.run).toContain('eafa3194238ea3b8130a09ed754cb54c3b28ed41')
-    expect(mobileFixtureRepair.run).toContain(
-      "step.name !== 'Summarize RPC recording changes'"
-    )
+    expect(mobileFixtureRepair.run).toContain("step.name !== 'Summarize RPC recording changes'")
     expect(mobileFixtureRepair.run).toContain('git rm -- "$stale_fixture"')
     expect(localizationRepair.if).toBe(
       "needs.candidate.outputs.upstream_sha == '28957d6004dd191b6f0baff493a9fd3d37405d9d'"
@@ -292,10 +358,14 @@ describe('fork release maintenance workflows', () => {
     expect(latestHourlyRepair.run).toContain('861f8941cf1a323d255d0a22dd786d8dc2bcd938')
     expect(testShard.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
     expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(repair))
-    expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(localizationRepair))
     expect(testJob.steps.indexOf(restore)).toBeLessThan(
-      testJob.steps.indexOf(mobileFixtureRepair)
+      testJob.steps.indexOf(releaseCutFixtureRepair)
     )
+    expect(testJob.steps.indexOf(releaseCutFixtureRepair)).toBeLessThan(
+      testJob.steps.indexOf(testShard)
+    )
+    expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(localizationRepair))
+    expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(mobileFixtureRepair))
     expect(testJob.steps.indexOf(mobileFixtureRepair)).toBeLessThan(
       testJob.steps.indexOf(testShard)
     )
