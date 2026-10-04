@@ -6,6 +6,7 @@ import type {
   SshConfigHostResolution,
   SshConfigImportResult,
   SshConnectionState,
+  SshConnectOptions,
   SshTarget,
   SshTargetAddResult,
   SshTargetCreateInput,
@@ -25,7 +26,7 @@ export type SshApi = {
   importConfig: (args?: { reAdopt?: boolean }) => Promise<SshConfigImportResult>
   listConfigHosts: (args?: SshConfigHostListArgs) => Promise<SshConfigHostListResult>
   resolveConfigHost: (args: { alias: string }) => Promise<SshConfigHostResolution | null>
-  connect: (args: { targetId: string }) => Promise<SshConnectionState | null>
+  connect: (args: { targetId: string } & SshConnectOptions) => Promise<SshConnectionState | null>
   disconnect: (args: { targetId: string }) => Promise<void>
   terminateSessions: (args: {
     targetId: string

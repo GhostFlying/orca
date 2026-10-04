@@ -64,6 +64,31 @@ describe('SshConnection', () => {
     )
   })
 
+  it('keeps a non-interactive GSSAPI attempt in OpenSSH batch mode', async () => {
+    const callbacks = createCallbacks({ onCredentialRequest: vi.fn() })
+    const conn = new SshConnection(createTarget({ gssapiAuthentication: true }), callbacks)
+
+    await conn.connect({ nonInteractive: true })
+    await conn.exec('echo after-connect')
+
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ gssapiAuthentication: true }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.objectContaining({
+        gssapiOnly: true,
+        nonInteractive: true,
+        wrapCommand: false
+      })
+    )
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ gssapiAuthentication: true }),
+      'echo after-connect',
+      expect.objectContaining({ gssapiOnly: true, nonInteractive: true })
+    )
+    expect(callbacks.onCredentialRequest).not.toHaveBeenCalled()
+  })
+
   it('tries GSSAPI first for a manually owned config-picker target', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValue(
       createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })

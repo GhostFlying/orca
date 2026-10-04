@@ -1,6 +1,6 @@
 import { isLiveSshPtyLease } from '../../shared/ssh-pty-lease-liveness'
 import { ipcMain } from 'electron'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { SshConnectOptions, SshTarget } from '../../shared/ssh-types'
 import { toAppSshPtyId } from '../providers/ssh-pty-id'
 import { rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
@@ -95,8 +95,8 @@ export function registerSshConnectionHandlers(): void {
     getState: (targetId: string) => getPublicSshState(targetId)
   })
 
-  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
-    return connectTarget(args.targetId)
+  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string } & SshConnectOptions) => {
+    return connectTarget(args.targetId, { nonInteractive: args.nonInteractive })
   })
 
   ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {

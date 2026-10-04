@@ -1,6 +1,12 @@
-import type { DirectSshAuthority, SshConnectionState } from '../../shared/ssh-types'
+import type {
+  DirectSshAuthority,
+  SshConnectOptions,
+  SshConnectionState
+} from '../../shared/ssh-types'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
+import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
 import {
+  getSshProviderAuthority,
   isCurrentSshProviderAuthority,
   rotateSshProviderAuthority
 } from '../ssh/ssh-provider-authority'
@@ -12,11 +18,55 @@ export const credentialRequestedForTarget = new Set<string>()
 // attempt so its late continuation cannot clobber a replacement.
 export type ConnectAttempt = {
   authority: DirectSshAuthority
+  nonInteractive: boolean
   promise: Promise<SshConnectionState>
 }
 
 export const connectInFlight = new Map<string, ConnectAttempt>()
 export const pendingTransportReconnects = new Set<string>()
+
+export function runSharedSshConnectAttempt(
+  targetId: string,
+  options: SshConnectOptions,
+  admissionAuthority: DirectSshAuthority,
+  start: (replacePendingTransport: boolean) => Promise<SshConnectionState>
+): Promise<SshConnectionState> {
+  const existing = connectInFlight.get(targetId)
+  if (existing && isCurrentConnectAttempt(targetId, existing.authority)) {
+    if (existing.nonInteractive === (options.nonInteractive === true)) {
+      return existing.promise
+    }
+    if (options.nonInteractive === true) {
+      throw new Error('An interactive SSH connection attempt is already in progress.')
+    }
+    return existing.promise.catch(() =>
+      runSharedSshConnectAttempt(targetId, options, getSshProviderAuthority(targetId), start)
+    )
+  }
+  if (!isCurrentConnectAttempt(targetId, admissionAuthority)) {
+    throw createCancelledConnectAttemptError()
+  }
+  let replacePendingTransport = false
+  if (existing && connectInFlight.get(targetId) === existing) {
+    connectInFlight.delete(targetId)
+    replacePendingTransport = true
+  }
+  if (!isCurrentSshProviderAuthority(admissionAuthority)) {
+    throw createCancelledConnectAttemptError()
+  }
+  const promise = start(replacePendingTransport)
+  const attempt = {
+    authority: getSshProviderAuthority(targetId),
+    nonInteractive: options.nonInteractive === true,
+    promise
+  }
+  connectInFlight.set(targetId, attempt)
+  return promise.finally(() => {
+    if (connectInFlight.get(targetId) === attempt) {
+      connectInFlight.delete(targetId)
+    }
+  })
+}
 
 // Why the quit gate rather than a local latch: "the committed quit has begun" already has an owner,
 // and a private copy could be set by something that is not actually quitting — leaving SSH connects

@@ -1,14 +1,14 @@
 import { appendFileSync } from 'node:fs'
 import type { SshConnection } from '../ssh/ssh-connection'
 import { SshRelaySession } from '../ssh/ssh-relay-session'
-import type { SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
+import type {
+  SshConnectOptions,
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../shared/ssh-types'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
 import { isAuthError } from '../ssh/ssh-connection-utils'
-import {
-  getSshProviderAuthority,
-  isCurrentSshProviderAuthority,
-  rotateSshProviderAuthority
-} from '../ssh/ssh-provider-authority'
+import { getSshProviderAuthority, rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { allowsDirectSshRelay } from '../ssh/ssh-connection-store'
 import { adoptSshConnection, runAttributedToSshOwner } from '../ssh/ssh-connection-attribution'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
@@ -23,11 +23,11 @@ import {
 import { activeSessions } from './ssh-active-relay-sessions'
 import {
   assertSshConnectsNotFenced,
-  connectInFlight,
   credentialRequestedForTarget,
   isCurrentConnectAttempt,
   pendingTransportReconnects,
-  resetRelayInFlight
+  resetRelayInFlight,
+  runSharedSshConnectAttempt
 } from './ssh-connect-attempt-registry'
 import {
   handleSshConnectionStateChange,
@@ -56,7 +56,10 @@ import {
 } from './ssh-session-teardown'
 import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
 
-export async function connectTarget(targetId: string): Promise<SshConnectionState> {
+export async function connectTarget(
+  targetId: string,
+  options: SshConnectOptions = {}
+): Promise<SshConnectionState> {
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
   if (e2eProbePath) {
     appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
@@ -70,47 +73,18 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
     await reset
   }
 
-  // Why: serialize concurrent ssh:connect for the same target; interleaved connects otherwise leak the first session.
-  const existing = connectInFlight.get(targetId)
-  let replacePendingTransport = false
-  if (existing) {
-    if (isCurrentConnectAttempt(targetId, existing.authority)) {
-      return existing.promise
-    }
-  }
-  if (!isCurrentConnectAttempt(targetId, admissionAuthority)) {
-    throw createCancelledConnectAttemptError()
-  }
-  const observedAuthority = admissionAuthority
-  if (existing) {
-    if (connectInFlight.get(targetId) === existing) {
-      connectInFlight.delete(targetId)
-      replacePendingTransport = true
-    }
-  }
-  if (!isCurrentSshProviderAuthority(observedAuthority)) {
-    throw createCancelledConnectAttemptError()
-  }
-  // Why: the shutdown drain fences and snapshots synchronously, so a connect either registers in
-  // connectInFlight below (and gets joined) or fails here — it can never slip between the two.
-  assertSshConnectsNotFenced()
-
-  pendingTransportReconnects.delete(targetId)
-  const promise = doConnect(targetId, replacePendingTransport)
-  const attempt = { authority: getSshProviderAuthority(targetId), promise }
-  connectInFlight.set(targetId, attempt)
-  try {
-    return await promise
-  } finally {
-    if (connectInFlight.get(targetId) === attempt) {
-      connectInFlight.delete(targetId)
-    }
-  }
+  return runSharedSshConnectAttempt(targetId, options, admissionAuthority, (replaceTransport) => {
+    // The shutdown gate and attempt registration run in one synchronous block.
+    assertSshConnectsNotFenced()
+    pendingTransportReconnects.delete(targetId)
+    return doConnect(targetId, replaceTransport, options)
+  })
 }
 
 async function doConnect(
   targetId: string,
-  replacePendingTransport = false
+  replacePendingTransport = false,
+  options: SshConnectOptions = {}
 ): Promise<SshConnectionState> {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (!target) {
@@ -254,7 +228,9 @@ async function doConnect(
     conn && conn !== priorConnection ? conn : null
 
   try {
-    conn = await connectionManager!.connect(target)
+    conn = options.nonInteractive
+      ? await connectionManager!.connect(target, options)
+      : await connectionManager!.connect(target)
     adoptSshConnection(conn, owner)
     if (!ownsSession()) {
       throw createCancelledConnectAttemptError()
