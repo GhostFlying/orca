@@ -19,6 +19,7 @@ import type {
   ShellOptions
 } from 'ssh2'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../../shared/ssh-types'
+import type { SshConnectOptions } from '../../../shared/ssh-connect-options'
 import {
   getOrcaControlSocketPath,
   isOpenSshConfigBackedTarget,
@@ -102,6 +103,7 @@ export class SshConnection {
   private systemSshLoopbackRoute: SystemSshLoopbackRoute | null = null
   private systemSshLoopbackRouteStartingGeneration: number | null = null
   private systemSshLoopbackRouteAbortController: AbortController | null = null
+  private systemSshNonInteractiveForSession = false
   private useSystemSshTransport = false
   private credentialAbortController = new AbortController()
   private readonly pendingSsh2Clients = new Set<SshClient>()
@@ -296,7 +298,7 @@ export class SshConnection {
     }
   }
 
-  async connect(): Promise<void> {
+  async connect(options: SshConnectOptions = {}): Promise<void> {
     if (this.disposed) {
       throw new Error('Connection disposed')
     }
@@ -306,7 +308,7 @@ export class SshConnection {
     for (let attempt = 0; attempt < INITIAL_RETRY_ATTEMPTS; attempt++) {
       const connectGeneration = ++this.connectGeneration
       try {
-        await this.attemptConnect(connectGeneration)
+        await this.attemptConnect(connectGeneration, options)
         this.reconnector.markInitialConnect()
         return
       } catch (err) {
@@ -352,9 +354,10 @@ export class SshConnection {
     kind: SshCredentialKind,
     detail: string,
     connectGeneration: number,
+    options: SshConnectOptions,
     echo?: boolean
   ): Promise<string | null | undefined> {
-    if (!this.isCurrentConnectAttempt(connectGeneration)) {
+    if (options.nonInteractive === true || !this.isCurrentConnectAttempt(connectGeneration)) {
       return undefined
     }
     this.openCredentialPrompts += 1
@@ -377,6 +380,7 @@ export class SshConnection {
     instructions: string,
     prompts: Prompt[],
     connectGeneration: number,
+    options: SshConnectOptions,
     onPromptStart: () => void
   ): Promise<string[] | null> {
     if (prompts.length === 0 || prompts.length > SSH_KEYBOARD_INTERACTIVE_MAX_PROMPTS) {
@@ -389,10 +393,12 @@ export class SshConnection {
         targetId: this.target.id,
         hostDetail,
         // Preserve a missing prompter as a capability gap, not a cancellation.
-        requestCredential: this.callbacks.onCredentialRequest
-          ? async (_targetId, kind, detail, echo) =>
-              (await this.requestCredential(kind, detail, connectGeneration, echo)) ?? null
-          : undefined,
+        requestCredential:
+          this.callbacks.onCredentialRequest && options.nonInteractive !== true
+            ? async (_targetId, kind, detail, echo) =>
+                (await this.requestCredential(kind, detail, connectGeneration, options, echo)) ??
+                null
+            : undefined,
         getCachedPassword: () => this.cachedPassword,
         setCachedPassword: (value) => {
           if (isCurrent()) {
@@ -421,13 +427,17 @@ export class SshConnection {
     return isCurrent() ? responses : null
   }
 
-  private async attemptConnect(connectGeneration = ++this.connectGeneration): Promise<void> {
+  private async attemptConnect(
+    connectGeneration = ++this.connectGeneration,
+    options: SshConnectOptions = {}
+  ): Promise<void> {
     this.credentialAbortController.abort()
     this.credentialAbortController = new AbortController()
     this.setState('connecting')
     this.killProxy()
     this.keyboardInteractiveCancelled = false
     this.keyboardInteractivePasswordState = { passwordAutoAnswered: false }
+    this.systemSshNonInteractiveForSession = options.nonInteractive === true
 
     const resolved = await resolveWithSshG(this.target.configHost || this.target.label).catch(
       () => null
@@ -441,7 +451,7 @@ export class SshConnection {
       throw createCancelledConnectAttemptError()
     }
     if (usesConfiguredSystemTransport || requiresSecurityKeyTransport) {
-      await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
+      await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, false, options)
       return
     }
     // ssh2 lacks GSSAPI; config-backed Kerberos hosts try OpenSSH SSO before credential fallback.
@@ -451,7 +461,12 @@ export class SshConnection {
         : this.target.gssapiAuthentication === true
     ) {
       try {
-        await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)
+        await this.doSystemSshProbeWithControlMasterRetry(
+          connectGeneration,
+          resolved,
+          true,
+          options
+        )
         return
       } catch (probeErr) {
         if (!this.isCurrentConnectAttempt(connectGeneration)) {
@@ -481,22 +496,26 @@ export class SshConnection {
     }
 
     try {
-      await this.doSsh2Connect(config, connectGeneration)
+      await this.doSsh2Connect(config, connectGeneration, options)
     } catch (err) {
       await recoverFailedSsh2Attempt(
         err,
         { config, resolved, effectiveProxy, skippedIdentityFiles },
-        this.credentialFallbackHost(connectGeneration)
+        this.credentialFallbackHost(connectGeneration, options)
       ).catch((finalErr: unknown) => {
         throw withSkippedIdentityFileDetail(finalErr, skippedIdentityFiles)
       })
     }
   }
 
-  private credentialFallbackHost(connectGeneration: number): Ssh2CredentialFallbackHost {
+  private credentialFallbackHost(
+    connectGeneration: number,
+    options: SshConnectOptions
+  ): Ssh2CredentialFallbackHost {
     return {
       target: this.target,
-      hasCredentialPrompter: () => Boolean(this.callbacks.onCredentialRequest),
+      hasCredentialPrompter: () =>
+        Boolean(this.callbacks.onCredentialRequest) && options.nonInteractive !== true,
       cachedPassphrase: () => this.cachedPassphrase,
       cachedPassword: () => this.cachedPassword,
       setCachedPassphrase: (value) => {
@@ -509,14 +528,20 @@ export class SshConnection {
       },
       isKeyboardInteractiveCancelled: () => this.keyboardInteractiveCancelled,
       isCurrentAttempt: () => this.isCurrentConnectAttempt(connectGeneration),
-      connect: (config) => this.doSsh2Connect(config, connectGeneration),
+      connect: (config) => this.doSsh2Connect(config, connectGeneration, options),
       respawnProxy: (config, proxy) => this.respawnProxy(config, proxy, connectGeneration),
       killProxyIfCurrent: () => this.killProxyIfCurrent(connectGeneration),
       isPinnedByOrcaHostKeyStore: () => this.orcaStorePinnedGeneration === connectGeneration,
       probeSystemSsh: (resolved, gssapiOnly) =>
-        this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, gssapiOnly),
+        this.doSystemSshProbeWithControlMasterRetry(
+          connectGeneration,
+          resolved,
+          gssapiOnly,
+          options
+        ),
       resetSystemTransportIfCurrent: () => this.resetSystemTransportIfCurrent(connectGeneration),
-      requestCredential: (kind, detail) => this.requestCredential(kind, detail, connectGeneration)
+      requestCredential: (kind, detail) =>
+        this.requestCredential(kind, detail, connectGeneration, options)
     }
   }
 
@@ -548,7 +573,10 @@ export class SshConnection {
     }
   }
 
-  private async doSystemSshProbe(connectGeneration: number): Promise<void> {
+  private async doSystemSshProbe(
+    connectGeneration: number,
+    options: SshConnectOptions
+  ): Promise<void> {
     if (!this.isCurrentConnectAttempt(connectGeneration)) {
       throw createCancelledConnectAttemptError()
     }
@@ -558,7 +586,10 @@ export class SshConnection {
 
     // Probe before platform detection: raw echo works in POSIX, cmd and PowerShell; /bin/sh wrapping does not.
     const channel = spawnTrackedSystemSshChannel(
-      this.sessionChannelHost(),
+      {
+        ...this.sessionChannelHost(),
+        systemSshBuildArgsOptions: () => this.getSystemSshBuildArgsOptions(options)
+      },
       'echo ORCA-SYSTEM-SSH-OK',
       {
         wrapCommand: false
@@ -588,7 +619,8 @@ export class SshConnection {
   private async doSystemSshProbeWithControlMasterRetry(
     connectGeneration: number,
     resolved: SshResolvedConfig | null,
-    gssapiOnly = false
+    gssapiOnly = false,
+    options: SshConnectOptions = {}
   ): Promise<void> {
     if (!this.isCurrentConnectAttempt(connectGeneration)) {
       throw createCancelledConnectAttemptError()
@@ -596,12 +628,13 @@ export class SshConnection {
     this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
     this.systemSshControlMasterDisabledForSession = false
     this.systemSshGssapiOnlyForSession = gssapiOnly
+    this.systemSshNonInteractiveForSession = options.nonInteractive === true
     const controlPath = getOrcaControlSocketPath(this.target, {
       resolvedConfig: this.systemSshResolvedConfig,
       gssapiOnly: this.systemSshGssapiOnlyForSession
     })
     try {
-      await this.doSystemSshProbe(connectGeneration)
+      await this.doSystemSshProbe(connectGeneration, options)
     } catch (err) {
       if (!controlPath || !this.isCurrentConnectAttempt(connectGeneration)) {
         throw err
@@ -617,7 +650,7 @@ export class SshConnection {
       this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
       this.systemSshControlMasterDisabledForSession = true
       try {
-        await this.doSystemSshProbe(connectGeneration)
+        await this.doSystemSshProbe(connectGeneration, options)
       } catch (retryErr) {
         if (this.isCurrentConnectAttempt(connectGeneration)) {
           this.systemSshControlMasterDisabledForSession = false
@@ -631,7 +664,7 @@ export class SshConnection {
     return !this.disposed && connectGeneration === this.connectGeneration
   }
 
-  getSystemSshBuildArgsOptions(): SystemSshBuildArgsOptions {
+  getSystemSshBuildArgsOptions(connectOptions: SshConnectOptions = {}): SystemSshBuildArgsOptions {
     const options: SystemSshBuildArgsOptions = {}
     if (this.systemSshResolvedConfig) {
       options.resolvedConfig = this.systemSshResolvedConfig
@@ -648,6 +681,9 @@ export class SshConnection {
     }
     if (this.systemSshLoopbackRoute) {
       options.loopbackRoute = this.systemSshLoopbackRoute.args
+    }
+    if (connectOptions.nonInteractive === true || this.systemSshNonInteractiveForSession) {
+      options.nonInteractive = true
     }
     return options
   }
@@ -732,7 +768,11 @@ export class SshConnection {
     return sources
   }
 
-  private async doSsh2Connect(config: ConnectConfig, connectGeneration: number): Promise<void> {
+  private async doSsh2Connect(
+    config: ConnectConfig,
+    connectGeneration: number,
+    options: SshConnectOptions = {}
+  ): Promise<void> {
     const hostKeyResolved = this.hostKeyResolvedConfig
     const isCurrentAttempt = (): boolean => this.isCurrentConnectAttempt(connectGeneration)
     const verdict = await installSsh2HostKeyVerification(config, {
@@ -762,6 +802,7 @@ export class SshConnection {
           instructions,
           prompts,
           connectGeneration,
+          options,
           onPromptStart
         ),
       hostKeyRejection: () => verdict.rejection,
@@ -850,6 +891,7 @@ export class SshConnection {
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
     this.systemSshGssapiOnlyForSession = false
+    this.systemSshNonInteractiveForSession = false
     this.useSystemSshTransport = false
   }
 
