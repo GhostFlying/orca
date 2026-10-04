@@ -10,6 +10,7 @@ import { connectionManager } from './ssh-ipc-context'
 import { getPublicSshState } from './ssh-renderer-broadcast'
 import { disconnectRegisteredSshTarget } from './ssh-session-teardown'
 import { errorMessage } from '../../shared/error-message'
+import type { SshConnectOptions } from '../../shared/ssh-types'
 import { clearSshCredentialDeclined, isSshCredentialDeclined } from '../ssh/ssh-credential-decline'
 
 export function registerSshConnectionHandlers(): void {
@@ -18,8 +19,11 @@ export function registerSshConnectionHandlers(): void {
     getState: (targetId: string) => getPublicSshState(targetId)
   })
 
-  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string; automatic?: boolean }) => {
-    return connectTarget(args.targetId, { automatic: args.automatic === true })
+  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string } & SshConnectOptions) => {
+    return connectTarget(args.targetId, {
+      automatic: args.automatic === true,
+      nonInteractive: args.nonInteractive === true
+    })
   })
 
   ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
