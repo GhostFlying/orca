@@ -114,26 +114,13 @@ export async function prepareAutomationDispatchWorkspace(args: {
       ? (folderWorkspaceConnectionId ?? null)
       : (repo.connectionId ?? null)
   if (sshTargetId) {
-    const needsPrompt = await window.api.ssh.needsPassphrasePrompt({
-      targetId: sshTargetId
-    })
-    if (needsPrompt) {
-      await markDispatchResult({
-        runId: run.id,
-        status: 'skipped_needs_interactive_auth',
-        workspaceId: context.workspaceId,
-        workspaceDisplayName: context.workspaceDisplayName,
-        error: translate(
-          'auto.hooks.useAutomationDispatchEvents.16a21d6413',
-          'SSH reconnect requires interactive credentials.'
-        )
-      })
-      return null
-    }
     const sshState = await window.api.ssh.getState({ targetId: sshTargetId })
     if (sshState?.status !== 'connected') {
       try {
-        const connected = await window.api.ssh.connect({ targetId: sshTargetId })
+        const connected = await window.api.ssh.connect({
+          targetId: sshTargetId,
+          nonInteractive: true
+        })
         if (connected?.status !== 'connected') {
           throw new Error('SSH target is unavailable.')
         }
