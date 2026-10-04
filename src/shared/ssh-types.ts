@@ -203,6 +203,10 @@ export type SshConnectionStatus =
   | 'reconnection-failed'
   | 'error'
 
+export type SshConnectOptions = {
+  nonInteractive?: boolean
+}
+
 export type SshRemotePlatform = 'linux' | 'darwin' | 'win32'
 
 export type SshProviderEpoch = string & { readonly __sshProviderEpoch: unique symbol }

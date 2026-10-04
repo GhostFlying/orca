@@ -1,7 +1,11 @@
 import { appendFileSync } from 'node:fs'
 import type { SshConnection } from '../ssh/ssh-connection'
 import { SshRelaySession } from '../ssh/ssh-relay-session'
-import type { SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
+import type {
+  SshConnectOptions,
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../shared/ssh-types'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import {
@@ -42,14 +46,17 @@ import {
 import { abandonCancelledConnectAttempt, abandonFailedSshSession } from './ssh-session-teardown'
 import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
 
-export async function connectTarget(targetId: string): Promise<SshConnectionState> {
+export async function connectTarget(
+  targetId: string,
+  options: SshConnectOptions = {}
+): Promise<SshConnectionState> {
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
   if (e2eProbePath) {
     appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
     throw new Error('e2e_forbidden_local_ssh_connect')
   }
   // Why: fence callers that entered before a same-turn disconnect/reset but resume after its cleanup.
-  const admissionAuthority = getSshProviderAuthority(targetId)
+  let admissionAuthority = getSshProviderAuthority(targetId)
   await awaitTargetLifecycle(targetId)
   const reset = resetRelayInFlight.get(targetId)
   if (reset) {
@@ -61,7 +68,20 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
   let replacePendingTransport = false
   if (existing) {
     if (isCurrentConnectAttempt(targetId, existing.authority)) {
-      return existing.promise
+      if (existing.nonInteractive === (options.nonInteractive === true)) {
+        return existing.promise
+      }
+      if (options.nonInteractive === true) {
+        throw new Error('An interactive SSH connection attempt is already in progress.')
+      }
+      try {
+        // Why: an interactive caller may accept a successful background attempt, but after failure
+        // it must retry with prompts enabled instead of inheriting the background policy.
+        return await existing.promise
+      } catch {
+        // The caller below starts a fresh attempt with its own interaction policy.
+        admissionAuthority = getSshProviderAuthority(targetId)
+      }
     }
   }
   if (!isCurrentConnectAttempt(targetId, admissionAuthority)) {
@@ -82,8 +102,12 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
   assertSshConnectsNotFenced()
 
   pendingTransportReconnects.delete(targetId)
-  const promise = doConnect(targetId, replacePendingTransport)
-  const attempt = { authority: getSshProviderAuthority(targetId), promise }
+  const promise = doConnect(targetId, replacePendingTransport, options)
+  const attempt = {
+    authority: getSshProviderAuthority(targetId),
+    nonInteractive: options.nonInteractive === true,
+    promise
+  }
   connectInFlight.set(targetId, attempt)
   try {
     return await promise
@@ -96,7 +120,8 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
 
 async function doConnect(
   targetId: string,
-  replacePendingTransport = false
+  replacePendingTransport = false,
+  options: SshConnectOptions = {}
 ): Promise<SshConnectionState> {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (!target) {
@@ -190,7 +215,9 @@ async function doConnect(
     conn && conn !== priorConnection ? conn : null
 
   try {
-    conn = await connectionManager!.connect(target)
+    conn = options.nonInteractive
+      ? await connectionManager!.connect(target, options)
+      : await connectionManager!.connect(target)
     if (!ownsSession()) {
       throw createCancelledConnectAttemptError()
     }

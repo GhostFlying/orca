@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import {
   sshRemotePtyLeaseAllowsReattach,
+  type SshConnectOptions,
   type SshTarget,
   type SshTerminateSessionsResult
 } from '../../shared/ssh-types'
@@ -108,8 +109,8 @@ export function registerSshConnectionHandlers(): void {
     getState: (targetId: string) => getPublicSshState(targetId)
   })
 
-  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
-    return connectTarget(args.targetId)
+  ipcMain.handle('ssh:connect', async (_event, args: { targetId: string } & SshConnectOptions) => {
+    return connectTarget(args.targetId, { nonInteractive: args.nonInteractive })
   })
 
   ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
