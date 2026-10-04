@@ -12,6 +12,7 @@ export const credentialRequestedForTarget = new Set<string>()
 // attempt so its late continuation cannot clobber a replacement.
 export type ConnectAttempt = {
   authority: DirectSshAuthority
+  nonInteractive: boolean
   promise: Promise<SshConnectionState>
 }
 

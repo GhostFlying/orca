@@ -54,6 +54,7 @@ import {
   resetSshCredentialDeclinesForTests
 } from './ssh-credential-decline'
 import { isAuthError } from './ssh-connection-utils'
+import { runAttributedToSshOwner } from './ssh-connection-attribution'
 
 const target = {
   id: 'target-1',
@@ -87,6 +88,19 @@ describe('SshConnectionManager', () => {
     await expect(manager.connect(target)).rejects.toThrow('auth failed')
     expect(mockState.instances.at(-1)?.disconnect).toHaveBeenCalledWith({ quiet: true })
     expect(manager.getConnection(target.id)).toBeUndefined()
+  })
+
+  it('applies the connect policy inherited from the host-server decision', async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    const options = { automatic: true, nonInteractive: true }
+
+    await runAttributedToSshOwner(
+      Symbol('background-connect'),
+      () => manager.connect(target),
+      options
+    )
+
+    expect(mockState.instances[0].connect).toHaveBeenCalledWith(options)
   })
 
   it('removes the registration when bulk teardown fails', async () => {
