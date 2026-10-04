@@ -2637,6 +2637,9 @@
           }
         }
       },
+      "useAutomationDispatchEvents": {
+        "16a21d6413": "SSH reconnect requires interactive credentials."
+      },
       "useComposerState": {
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
         "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
