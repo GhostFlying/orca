@@ -2,13 +2,13 @@
 
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { DESKTOP_STABLE_TAG } from '../../config/scripts/release-tag-patterns.mjs'
 
 const API_VERSION = '2022-11-28'
-const STABLE_TAG_PATTERN = /^v(\d+)\.(\d+)\.(\d+)$/
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/
 
 export function parseStableTag(tag) {
-  const match = STABLE_TAG_PATTERN.exec(tag)
+  const match = DESKTOP_STABLE_TAG.exec(tag)
   if (!match) {
     return null
   }

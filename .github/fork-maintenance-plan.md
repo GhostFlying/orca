@@ -36,6 +36,13 @@ fork patch stack against its generated upstream anchor. A newly adopted Release
 must not be blocked only because its unchanged upstream tree already carries a
 warning that upstream's own PR gate treats as baseline debt.
 
+The release test gate restores upstream workflow definitions as fixtures for
+upstream's workflow contract tests. When the Release commit's parent is
+upstream's workflows-only `ci: sync release workflows with main for the vX.Y.Z
+cut` commit, the gate restores the workflows from before that sync, because the
+synced definitions come from a newer `main` than the Release's tests. Add a
+per-Release fixture repair only for a mismatch that remains after that.
+
 ## Invariants
 
 The production fork is a linear patch stack over one published upstream desktop

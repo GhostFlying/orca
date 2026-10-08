@@ -237,16 +237,43 @@ jobs:
       - name: Restore upstream workflow fixtures
         env:
           UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+          UPSTREAM_TAG: ${{ needs.candidate.outputs.upstream_tag }}
         run: |
           set -euo pipefail
           git rm -r --ignore-unmatch -- .github/workflows
-          git checkout "$UPSTREAM_SHA" -- .github/workflows
+          fixture_sha="$UPSTREAM_SHA"
+          sync_sha="$(git rev-parse "$UPSTREAM_SHA^")"
+          # Why: a release cut can sync newer main workflows onto release code; test the pair that shipped together.
+          if [[ "$(git show -s --format=%s "$sync_sha")" == "ci: sync release workflows with main for the $UPSTREAM_TAG cut" ]] &&
+            [[ -z "$(git diff --name-only "$sync_sha^" "$sync_sha" -- . ':(exclude).github/workflows')" ]]; then
+            fixture_sha="$sync_sha^"
+          fi
+          echo "Upstream workflow fixtures: $fixture_sha"
+          git checkout "$fixture_sha" -- .github/workflows
           signing_contract=config/scripts/windows-signing-workflow-contract.test.mjs
           if git cat-file -e "$UPSTREAM_SHA:$signing_contract"; then
             git checkout "$UPSTREAM_SHA" -- "$signing_contract"
           else
             git rm --ignore-unmatch -- "$signing_contract"
           fi
+      - name: Repair v1.4.222 release-cut fixtures
+        if: needs.candidate.outputs.upstream_sha == '4bb6f2072b07c1f0664b809551f77754700570e4'
+        env:
+          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          relay_gc_fixture=src/main/ssh/ssh-remote-commands.test.ts
+          test "$(git rev-parse "$UPSTREAM_SHA:$relay_gc_fixture")" = 76073d24d89f8d5576c066394601c3aa97427d31
+          test "$(git hash-object "$relay_gc_fixture")" = 76073d24d89f8d5576c066394601c3aa97427d31
+          git apply --unidiff-zero <<'PATCH'
+          diff --git a/src/main/ssh/ssh-remote-commands.test.ts b/src/main/ssh/ssh-remote-commands.test.ts
+          --- a/src/main/ssh/ssh-remote-commands.test.ts
+          +++ b/src/main/ssh/ssh-remote-commands.test.ts
+          @@ -282 +282 @@ describe('ssh remote command builders', () => {
+          -        expect(entries).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
+          +        expect([...entries].sort()).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
+          PATCH
+          test "$(git hash-object "$relay_gc_fixture")" = 9d986cc3c4d5f534c2bdfe3155a894757dc8bb52
       - name: Repair v1.4.220 release-cut fixtures
         if: needs.candidate.outputs.upstream_sha == 'a7927b28ce45cbb044add478d957abe36c99ccd8'
         env:

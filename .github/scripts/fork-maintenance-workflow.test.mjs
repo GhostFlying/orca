@@ -227,6 +227,9 @@ describe('fork release maintenance workflows', () => {
       (step) => step.name === 'Install relay integration dependencies'
     )
     const restore = testJob.steps.find((step) => step.name === 'Restore upstream workflow fixtures')
+    const latestReleaseCutFixtureRepair = testJob.steps.find(
+      (step) => step.name === 'Repair v1.4.222 release-cut fixtures'
+    )
     const releaseCutFixtureRepair = testJob.steps.find(
       (step) => step.name === 'Repair v1.4.220 release-cut fixtures'
     )
@@ -254,10 +257,29 @@ describe('fork release maintenance workflows', () => {
     expect(relayDependencies.run).toContain("pnpm@10.24.0 --filter '@orca-cloud/relay^...' build")
     expect(restore.env.UPSTREAM_SHA).toBe(expression('needs.candidate.outputs.upstream_sha'))
     expect(restore.run).toContain('git rm -r --ignore-unmatch -- .github/workflows')
-    expect(restore.run).toContain('git checkout "$UPSTREAM_SHA" -- .github/workflows')
+    expect(restore.env.UPSTREAM_TAG).toBe(expression('needs.candidate.outputs.upstream_tag'))
+    expect(restore.run).toContain('fixture_sha="$UPSTREAM_SHA"')
+    expect(restore.run).toContain(
+      '"ci: sync release workflows with main for the $UPSTREAM_TAG cut"'
+    )
+    expect(restore.run).toContain(
+      `git diff --name-only "$sync_sha^" "$sync_sha" -- . ':(exclude).github/workflows'`
+    )
+    expect(restore.run).toContain('fixture_sha="$sync_sha^"')
+    expect(restore.run).toContain('git checkout "$fixture_sha" -- .github/workflows')
     expect(restore.run).toContain('git cat-file -e "$UPSTREAM_SHA:$signing_contract"')
     expect(restore.run).toContain('git rm --ignore-unmatch -- "$signing_contract"')
     expect(restore.run).toContain('config/scripts/windows-signing-workflow-contract.test.mjs')
+    expect(latestReleaseCutFixtureRepair.if).toBe(
+      "needs.candidate.outputs.upstream_sha == '4bb6f2072b07c1f0664b809551f77754700570e4'"
+    )
+    expect(latestReleaseCutFixtureRepair.run).toContain('76073d24d89f8d5576c066394601c3aa97427d31')
+    expect(latestReleaseCutFixtureRepair.run).toContain('9d986cc3c4d5f534c2bdfe3155a894757dc8bb52')
+    expect(latestReleaseCutFixtureRepair.run).toContain('git apply --unidiff-zero')
+    expect(latestReleaseCutFixtureRepair.run.match(/git hash-object/g)).toHaveLength(2)
+    expect(latestReleaseCutFixtureRepair.run).toContain(
+      "expect([...entries].sort()).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])"
+    )
     expect(releaseCutFixtureRepair.if).toBe(
       "needs.candidate.outputs.upstream_sha == 'a7927b28ce45cbb044add478d957abe36c99ccd8'"
     )
@@ -362,6 +384,12 @@ describe('fork release maintenance workflows', () => {
       testJob.steps.indexOf(releaseCutFixtureRepair)
     )
     expect(testJob.steps.indexOf(releaseCutFixtureRepair)).toBeLessThan(
+      testJob.steps.indexOf(testShard)
+    )
+    expect(testJob.steps.indexOf(restore)).toBeLessThan(
+      testJob.steps.indexOf(latestReleaseCutFixtureRepair)
+    )
+    expect(testJob.steps.indexOf(latestReleaseCutFixtureRepair)).toBeLessThan(
       testJob.steps.indexOf(testShard)
     )
     expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(localizationRepair))
