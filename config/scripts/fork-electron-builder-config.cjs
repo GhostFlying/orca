@@ -6,6 +6,12 @@ delete win.signtoolOptions
 module.exports = {
   ...base,
   win,
+  mac: {
+    ...base.mac,
+    identity: '-',
+    hardenedRuntime: false,
+    notarize: false
+  },
   publish: {
     ...base.publish,
     owner: 'GhostFlying',

@@ -21,6 +21,8 @@ describe('fork Electron Builder config', () => {
 
   it('keeps macOS outside the trusted release-signing path', () => {
     expect(config.forceCodeSigning).toBe(false)
+    expect(config.mac.identity).toBe('-')
+    expect(config.mac.hardenedRuntime).toBe(false)
     expect(config.mac.notarize).toBe(false)
   })
 })

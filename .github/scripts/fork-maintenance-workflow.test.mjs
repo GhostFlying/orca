@@ -409,7 +409,6 @@ describe('fork release maintenance workflows', () => {
     expect(buildText).toContain('ubuntu-24.04-arm')
     expect(buildText).toContain('macos-15')
     expect(buildText).toContain('macos-26')
-    expect(buildText).toContain('CSC_IDENTITY_AUTO_DISCOVERY=false')
     expect(unsignedIosText).toContain('CODE_SIGNING_ALLOWED=NO')
     expect(buildText).toContain('assembleRelease')
     expect(buildText).not.toContain('TestFlight')
@@ -425,6 +424,33 @@ describe('fork release maintenance workflows', () => {
     expect(
       desktop.steps.some((step) => step.uses === './.github/actions/install-mobile-dependencies')
     ).toBe(true)
+  })
+
+  it('requires explicit ad-hoc signing and verifies final macOS artifacts before staging', () => {
+    const steps = job(build, 'desktop').steps
+    const packageStep = steps.find((step) => step.name === 'Package ad-hoc macOS clients')
+    const verification = steps.find(
+      (step) => step.name === 'Verify complete ad-hoc macOS signatures'
+    )
+    expect(packageStep.env).toEqual({
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+      CSC_NAME: '-',
+      ORCA_COMPUTER_MACOS_SIGN_IDENTITY: '-'
+    })
+    expect(verification.if).toBe("matrix.platform == 'macos'")
+    expect(verification.run).toBe('node .github/scripts/verify-fork-macos-signatures.mjs dist')
+    expect(steps.indexOf(verification)).toBeGreaterThan(steps.indexOf(packageStep))
+    expect(steps.indexOf(verification)).toBeLessThan(
+      steps.findIndex((step) => step.name === 'Stage desktop release assets')
+    )
+    for (const path of [
+      '.github/scripts/verify-fork-macos-signatures.mjs',
+      '.github/scripts/verify-fork-macos-signatures.test.mjs'
+    ]) {
+      expect(syncText).toContain(path)
+      expect(hotfixText).toContain(path)
+      expect(stateText).toContain(`'${path}'`)
+    }
   })
 
   it('signs Android releases with the fork key in an isolated job', () => {

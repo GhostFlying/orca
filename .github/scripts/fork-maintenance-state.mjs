@@ -20,6 +20,8 @@ const MAINTENANCE_PATHS = [
   '.github/scripts/upstream-release.mjs',
   '.github/scripts/upstream-release.test.mjs',
   '.github/scripts/vitest.config.mjs',
+  '.github/scripts/verify-fork-macos-signatures.mjs',
+  '.github/scripts/verify-fork-macos-signatures.test.mjs',
   '.github/workflows/',
   'config/scripts/fork-electron-builder-config.cjs',
   'config/scripts/fork-electron-builder-config.test.mjs',

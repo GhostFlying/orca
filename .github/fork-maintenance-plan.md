@@ -21,6 +21,8 @@ The executable sources of truth are:
   source-range extraction, and maintenance snapshot validation.
 - `.github/scripts/fork-release-assets.mjs`: required asset set, checksums,
   metadata, and Release tag derivation.
+- `.github/scripts/verify-fork-macos-signatures.mjs`: complete ad-hoc signatures
+  in both unpacked macOS applications and their final ZIP/DMG artifacts.
 
 Run the maintenance tests before publishing a candidate:
 
@@ -169,7 +171,10 @@ version:
 - Windows x64: unsigned NSIS installer, blockmap, and fork update manifest.
 - Linux x64 and arm64: AppImage, deb, and rpm packages.
 - macOS x64 and arm64: DMG and ZIP with ad-hoc signing only; no Developer ID
-  signing or notarization.
+  signing or notarization. The fork explicitly selects identity `-` for the
+  application and helpers, with hardened runtime disabled. Packaging must pass
+  deep/strict signature verification and reject linker-only signatures, missing
+  resource seals, or certificate identities before assets can be staged.
 - Android: release APK signed with the fork-only key stored in GitHub Actions
   secrets, with no Play Store upload. The signing job rejects the public Expo
   debug certificate, verifies the fork certificate identity, and records the

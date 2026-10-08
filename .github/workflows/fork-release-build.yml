@@ -937,20 +937,16 @@ jobs:
           ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --linux AppImage deb rpm --arm64 --publish never
       - name: Package ad-hoc macOS clients
         if: matrix.platform == 'macos'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_NAME: '-'
+          ORCA_COMPUTER_MACOS_SIGN_IDENTITY: '-'
         run: |
           node config/scripts/ensure-native-runtime.mjs --runtime=electron
-          CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --mac --publish never
-      - name: Verify macOS artifacts are not Developer ID signed
+          pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --mac --publish never
+      - name: Verify complete ad-hoc macOS signatures
         if: matrix.platform == 'macos'
-        run: |
-          set -euo pipefail
-          for app in dist/mac*/Orca.app; do
-            details="$(codesign -dv --verbose=4 "$app" 2>&1 || true)"
-            if grep -Eq 'Authority=Developer ID Application|TeamIdentifier=[A-Z0-9]+' <<<"$details"; then
-              echo "Unexpected trusted macOS signing identity in $app" >&2
-              exit 1
-            fi
-          done
+        run: node .github/scripts/verify-fork-macos-signatures.mjs dist
       - name: Stage desktop release assets
         shell: bash
         run: |

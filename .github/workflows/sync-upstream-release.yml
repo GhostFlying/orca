@@ -125,6 +125,8 @@ jobs:
             .github/scripts/upstream-release.mjs
             .github/scripts/upstream-release.test.mjs
             .github/scripts/vitest.config.mjs
+            .github/scripts/verify-fork-macos-signatures.mjs
+            .github/scripts/verify-fork-macos-signatures.test.mjs
             .github/workflows/sync-upstream-release.yml
             .github/workflows/fork-hotfix-candidate.yml
             .github/workflows/fork-release-build.yml
