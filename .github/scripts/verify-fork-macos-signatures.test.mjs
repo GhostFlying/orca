@@ -32,6 +32,12 @@ describe('fork macOS signature identity', () => {
   ])('rejects certificate-based identities: %s', (details) => {
     expect(() => assertAdhocSignature(details, 'app')).toThrow()
   })
+
+  it('rejects an unsupported artifact architecture before platform-specific checks', () => {
+    expect(() => verifyForkMacArtifacts('dist', '1.2.3', ['riscv64'])).toThrow(
+      'Unsupported macOS architecture: riscv64'
+    )
+  })
 })
 
 describe.skipIf(process.platform !== 'darwin')('native fork macOS signature gate', () => {

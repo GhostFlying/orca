@@ -1,13 +1,26 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto'
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { parse, stringify } from 'yaml'
 import { parseStableTag } from './upstream-release.mjs'
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/
 const CERTIFICATE_SHA256_PATTERN = /^[0-9a-f]{64}$/
+const MAC_UPDATE_MANIFESTS = [
+  {
+    name: 'latest-mac-x64.yml',
+    assets: [/^Orca-\d+\.\d+\.\d+-mac\.zip$/, /^orca-macos-x64\.dmg$/],
+    primary: /^Orca-\d+\.\d+\.\d+-mac\.zip$/
+  },
+  {
+    name: 'latest-mac-arm64.yml',
+    assets: [/^Orca-\d+\.\d+\.\d+-arm64-mac\.zip$/, /^orca-macos-arm64\.dmg$/],
+    primary: /^Orca-\d+\.\d+\.\d+-arm64-mac\.zip$/
+  }
+]
 const REQUIRED_ASSETS = [
   ['Windows installer', /^orca-windows-setup\.exe$/],
   ['Windows blockmap', /^orca-windows-setup\.exe\.blockmap$/],
@@ -46,6 +59,57 @@ function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
+function onePathNamed(paths, name) {
+  const matches = paths.filter((path) => basename(path) === name)
+  if (matches.length !== 1) {
+    throw new Error(`${name} asset count must be 1, got ${matches.length}`)
+  }
+  return matches[0]
+}
+
+export function mergeMacUpdateManifests(directory) {
+  const root = resolve(directory)
+  const paths = filesUnder(root)
+  const splitPaths = MAC_UPDATE_MANIFESTS.map(({ name }) =>
+    paths.filter((path) => basename(path) === name)
+  )
+  if (splitPaths.every((matches) => matches.length === 0)) {
+    return false
+  }
+  if (paths.some((path) => basename(path) === 'latest-mac.yml')) {
+    throw new Error('cannot merge split macOS manifests beside latest-mac.yml')
+  }
+
+  const manifests = MAC_UPDATE_MANIFESTS.map(({ name, assets, primary }, index) => {
+    const path = onePathNamed(splitPaths[index], name)
+    const manifest = parse(readFileSync(path, 'utf8'))
+    if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.files)) {
+      throw new Error(`${name} is not an electron-builder update manifest`)
+    }
+    const urls = manifest.files.map((file) => file?.url)
+    if (assets.some((pattern) => urls.filter((url) => pattern.test(url)).length !== 1)) {
+      throw new Error(`${name} does not describe exactly one ZIP and DMG for its architecture`)
+    }
+    if (!primary.test(manifest.path)) {
+      throw new Error(`${name} primary path does not match its architecture`)
+    }
+    return { manifest, path }
+  })
+  if (manifests[0].manifest.version !== manifests[1].manifest.version) {
+    throw new Error('split macOS update manifest versions differ')
+  }
+  const files = manifests.flatMap(({ manifest }) => manifest.files)
+  const urls = files.map((file) => file.url)
+  if (new Set(urls).size !== urls.length) {
+    throw new Error('split macOS update manifests contain duplicate asset URLs')
+  }
+  writeFileSync(join(root, 'latest-mac.yml'), stringify({ ...manifests[0].manifest, files }))
+  for (const { path } of manifests) {
+    rmSync(path)
+  }
+  return true
+}
+
 export function releaseTag(upstreamTag, candidateSha) {
   if (!parseStableTag(upstreamTag)) {
     throw new Error('upstream tag must match vX.Y.Z')
@@ -67,6 +131,7 @@ export function verifyAndDescribeAssets({
   androidCertificateSha256,
   iosBuildNumber
 }) {
+  mergeMacUpdateManifests(directory)
   if (!SHA_PATTERN.test(candidateSha)) {
     throw new Error('candidate SHA must be lowercase hex')
   }

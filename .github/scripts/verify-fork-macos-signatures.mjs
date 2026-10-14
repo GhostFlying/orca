@@ -52,17 +52,29 @@ export function verifyForkMacApp(appPath) {
   }
 }
 
-export function verifyForkMacArtifacts(distDirectory, version) {
-  for (const directory of ['mac', 'mac-arm64']) {
-    verifyForkMacApp(join(distDirectory, directory, 'Orca.app'))
+const MAC_ARTIFACTS = {
+  x64: { directory: 'mac', zipSuffix: 'mac' },
+  arm64: { directory: 'mac-arm64', zipSuffix: 'arm64-mac' }
+}
+
+export function verifyForkMacArtifacts(
+  distDirectory,
+  version,
+  architectures = Object.keys(MAC_ARTIFACTS)
+) {
+  for (const arch of architectures) {
+    if (!MAC_ARTIFACTS[arch]) {
+      throw new Error(`Unsupported macOS architecture: ${arch}`)
+    }
+  }
+  for (const arch of architectures) {
+    verifyForkMacApp(join(distDirectory, MAC_ARTIFACTS[arch].directory, 'Orca.app'))
   }
   const temporaryDirectory = mkdtempSync(join(tmpdir(), 'orca-fork-signatures-'))
   const mountedVolumes = new Set()
   try {
-    for (const [arch, zipName] of [
-      ['x64', `Orca-${version}-mac.zip`],
-      ['arm64', `Orca-${version}-arm64-mac.zip`]
-    ]) {
+    for (const arch of architectures) {
+      const zipName = `Orca-${version}-${MAC_ARTIFACTS[arch].zipSuffix}.zip`
       const zipDirectory = join(temporaryDirectory, `zip-${arch}`)
       run('ditto', ['-x', '-k', join(distDirectory, zipName), zipDirectory])
       verifyForkMacApp(join(zipDirectory, 'Orca.app'))
@@ -100,6 +112,13 @@ if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
   const { version } = JSON.parse(
     readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
   )
-  verifyForkMacArtifacts(resolve(process.argv[2] || 'dist'), version)
-  console.log('Verified complete ad-hoc signatures in both macOS apps, ZIPs, and DMGs')
+  const architecture = process.argv[3]
+  verifyForkMacArtifacts(
+    resolve(process.argv[2] || 'dist'),
+    version,
+    architecture ? [architecture] : undefined
+  )
+  console.log(
+    `Verified complete ad-hoc signatures in ${architecture ?? 'both'} macOS apps, ZIPs, and DMGs`
+  )
 }

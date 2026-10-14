@@ -135,6 +135,7 @@ describe('fork release maintenance workflows', () => {
       'lint',
       'typecheck',
       'test',
+      'relay-integration',
       'cross-version-wire',
       'mobile-checks',
       'desktop',
@@ -155,6 +156,7 @@ describe('fork release maintenance workflows', () => {
       'lint',
       'typecheck',
       'test',
+      'relay-integration',
       'cross-version-wire',
       'mobile-checks',
       'desktop',
@@ -223,8 +225,13 @@ describe('fork release maintenance workflows', () => {
   it('restores upstream workflow fixtures before running the upstream test suite', () => {
     const testJob = job(build, 'test')
     const checkout = testJob.steps.find((step) => step.uses === 'actions/checkout@v6')
-    const relayDependencies = testJob.steps.find(
+    const bunSetup = testJob.steps.find((step) => step.uses?.startsWith('oven-sh/setup-bun@'))
+    const relayJob = job(build, 'relay-integration')
+    const relayDependencies = relayJob.steps.find(
       (step) => step.name === 'Install relay integration dependencies'
+    )
+    const relayTest = relayJob.steps.find(
+      (step) => step.name === 'Test relay integration contracts'
     )
     const restore = testJob.steps.find((step) => step.name === 'Restore upstream workflow fixtures')
     const latestReleaseCutFixtureRepair = testJob.steps.find(
@@ -248,13 +255,21 @@ describe('fork release maintenance workflows', () => {
     const latestHourlyRepair = testJob.steps.find(
       (step) => step.name === 'Repair v1.4.215 hourly version fixture'
     )
+    const syncSpawnRepair = testJob.steps.find(
+      (step) => step.name === 'Repair v1.4.225 main sync-spawn ratchet'
+    )
     const testShard = testJob.steps.find((step) => step.name === 'Test shard')
     expect(checkout.with['fetch-depth']).toBe(0)
+    expect(bunSetup.with['bun-version-file']).toBe('config/.bun-version')
+    expect(relayJob.permissions).toEqual({ contents: 'read' })
     expect(relayDependencies['working-directory']).toBe('cloud')
     expect(relayDependencies.run).toContain(
       "pnpm@10.24.0 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts"
     )
     expect(relayDependencies.run).toContain("pnpm@10.24.0 --filter '@orca-cloud/relay^...' build")
+    expect(relayTest.run).toContain('tests/e2e/relay-region-compatibility.unit.test.ts')
+    expect(relayTest.run).toContain('tests/e2e/relay-region-correction.unit.test.ts')
+    expect(relayTest.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
     expect(restore.env.UPSTREAM_SHA).toBe(expression('needs.candidate.outputs.upstream_sha'))
     expect(restore.run).toContain('git rm -r --ignore-unmatch -- .github/workflows')
     expect(restore.env.UPSTREAM_TAG).toBe(expression('needs.candidate.outputs.upstream_tag'))
@@ -262,6 +277,7 @@ describe('fork release maintenance workflows', () => {
     expect(restore.run).toContain(
       '"ci: sync release workflows with main for the $UPSTREAM_TAG cut"'
     )
+    expect(restore.run).toContain('"ci: sync workflows with main for the $UPSTREAM_TAG cut"')
     expect(restore.run).toContain(
       `git diff --name-only "$sync_sha^" "$sync_sha" -- . ':(exclude).github/workflows'`
     )
@@ -378,7 +394,20 @@ describe('fork release maintenance workflows', () => {
     expect(latestHourlyRepair.run).toContain('7438b16acbd240cc8094d23c180611b02ea1ad20')
     expect(latestHourlyRepair.run).toContain('2af342065ba34e48757664a4c417987de297dbe2')
     expect(latestHourlyRepair.run).toContain('861f8941cf1a323d255d0a22dd786d8dc2bcd938')
+    expect(syncSpawnRepair.if).toBe(
+      "needs.candidate.outputs.upstream_sha == 'd22f72308106ef62f558cbde16dacb1f21031ae3'"
+    )
+    expect(syncSpawnRepair.run).toContain('b5e2be3a49ffe39217fee7f9ecda0d2494bb6d74')
+    expect(syncSpawnRepair.run).toContain('99464da96df24d6c89bf917a420bb4826c9dc9e5')
+    expect(syncSpawnRepair.run).toContain("git apply --unidiff-zero <<'PATCH'")
+    expect(syncSpawnRepair.run).toContain("from './ratchet-baseline.mjs'")
     expect(testShard.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
+    expect(testShard.env.ORCA_BALANCE_UNIT_SHARDS).toBe('1')
+    expect(testShard.env.NODE_COMPILE_CACHE).toContain('orca-node-compile-cache-')
+    expect(testShard.run).toContain('node config/scripts/run-vitest.mjs run')
+    expect(testShard.run).toContain('ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"')
+    expect(testShard.run).toContain('--retry=1')
+    expect(testShard.run).not.toContain('--exclude')
     expect(testJob.steps.indexOf(restore)).toBeLessThan(testJob.steps.indexOf(repair))
     expect(testJob.steps.indexOf(restore)).toBeLessThan(
       testJob.steps.indexOf(releaseCutFixtureRepair)
@@ -402,55 +431,39 @@ describe('fork release maintenance workflows', () => {
     )
     expect(testJob.steps.indexOf(hourlyRepair)).toBeLessThan(testJob.steps.indexOf(testShard))
     expect(testJob.steps.indexOf(latestHourlyRepair)).toBeLessThan(testJob.steps.indexOf(testShard))
+    expect(testJob.steps.indexOf(syncSpawnRepair)).toBeLessThan(testJob.steps.indexOf(testShard))
   })
 
   it('builds unsigned desktop and mobile clients without stores', () => {
     expect(buildText).toContain('windows-2022')
     expect(buildText).toContain('ubuntu-24.04-arm')
     expect(buildText).toContain('macos-15')
+    expect(buildText).toContain('macos-15-intel')
     expect(buildText).toContain('macos-26')
     expect(unsignedIosText).toContain('CODE_SIGNING_ALLOWED=NO')
     expect(buildText).toContain('assembleRelease')
     expect(buildText).not.toContain('TestFlight')
   })
 
-  it('installs both macOS CPU variants before packaging both clients', () => {
-    const desktop = job(build, 'desktop')
-    const macInstall = desktop.steps.find(
-      (step) => step.name === 'Install macOS release dependencies'
+  it('builds the root workspace package before running mobile checks', () => {
+    const mobile = job(build, 'mobile-checks')
+    const rootInstall = mobile.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
     )
-    expect(macInstall.if).toBe("matrix.platform == 'macos'")
-    expect(macInstall.with.command).toBe('pnpm install:release')
-    expect(
-      desktop.steps.some((step) => step.uses === './.github/actions/install-mobile-dependencies')
-    ).toBe(true)
-  })
-
-  it('requires explicit ad-hoc signing and verifies final macOS artifacts before staging', () => {
-    const steps = job(build, 'desktop').steps
-    const packageStep = steps.find((step) => step.name === 'Package ad-hoc macOS clients')
-    const verification = steps.find(
-      (step) => step.name === 'Verify complete ad-hoc macOS signatures'
-    )
-    expect(packageStep.env).toEqual({
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false',
-      CSC_NAME: '-',
-      ORCA_COMPUTER_MACOS_SIGN_IDENTITY: '-'
+    const bunSetup = mobile.steps.find((step) => step.uses?.startsWith('oven-sh/setup-bun@'))
+    expect(rootInstall.with).toEqual({
+      'native-runtime': 'none',
+      'node-version': 24,
+      'cache-dependency-path': 'pnpm-lock.yaml\nmobile/pnpm-lock.yaml\n'
     })
-    expect(verification.if).toBe("matrix.platform == 'macos'")
-    expect(verification.run).toBe('node .github/scripts/verify-fork-macos-signatures.mjs dist')
-    expect(steps.indexOf(verification)).toBeGreaterThan(steps.indexOf(packageStep))
-    expect(steps.indexOf(verification)).toBeLessThan(
-      steps.findIndex((step) => step.name === 'Stage desktop release assets')
-    )
-    for (const path of [
-      '.github/scripts/verify-fork-macos-signatures.mjs',
-      '.github/scripts/verify-fork-macos-signatures.test.mjs'
-    ]) {
-      expect(syncText).toContain(path)
-      expect(hotfixText).toContain(path)
-      expect(stateText).toContain(`'${path}'`)
-    }
+    expect(bunSetup.with['bun-version-file']).toBe('config/.bun-version')
+    expect(
+      mobile.steps.find(
+        (step) =>
+          step['working-directory'] === 'mobile' &&
+          step.run === 'node ../config/scripts/run-mobile-ci-tests.mjs'
+      )
+    ).toBeDefined()
   })
 
   it('signs Android releases with the fork key in an isolated job', () => {
@@ -509,6 +522,13 @@ describe('fork release maintenance workflows', () => {
     expect(job(build, 'release-bundle').steps.map((step) => step.name)).toContain(
       'Verify complete release assets'
     )
+    expect(
+      job(build, 'release-bundle').steps.some(
+        (step) =>
+          step.uses === './.github/actions/install-node-dependencies' &&
+          step.with['native-runtime'] === 'none'
+      )
+    ).toBe(true)
     expect(names.indexOf('Verify trusted release bundle')).toBeLessThan(
       names.indexOf('Create or refresh draft Release')
     )

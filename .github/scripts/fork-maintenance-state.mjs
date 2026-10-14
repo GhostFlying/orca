@@ -14,6 +14,7 @@ const MAINTENANCE_PATHS = [
   '.github/fork-maintenance-v1.4.197-implementation-plan.md',
   '.github/scripts/fork-maintenance-state.mjs',
   '.github/scripts/fork-maintenance-state.test.mjs',
+  '.github/scripts/fork-release-build-macos.test.mjs',
   '.github/scripts/fork-release-assets.mjs',
   '.github/scripts/fork-release-assets.test.mjs',
   '.github/scripts/fork-maintenance-workflow.test.mjs',

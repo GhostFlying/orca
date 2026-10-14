@@ -229,11 +229,9 @@ jobs:
         with:
           native-runtime: node
       - run: node config/scripts/install-electron-package-binary.mjs
-      - name: Install relay integration dependencies
-        working-directory: cloud
-        run: |
-          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
-          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay^...' build
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
       - name: Restore upstream workflow fixtures
         env:
           UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
@@ -244,7 +242,9 @@ jobs:
           fixture_sha="$UPSTREAM_SHA"
           sync_sha="$(git rev-parse "$UPSTREAM_SHA^")"
           # Why: a release cut can sync newer main workflows onto release code; test the pair that shipped together.
-          if [[ "$(git show -s --format=%s "$sync_sha")" == "ci: sync release workflows with main for the $UPSTREAM_TAG cut" ]] &&
+          sync_subject="$(git show -s --format=%s "$sync_sha")"
+          if [[ "$sync_subject" == "ci: sync release workflows with main for the $UPSTREAM_TAG cut" ||
+            "$sync_subject" == "ci: sync workflows with main for the $UPSTREAM_TAG cut" ]] &&
             [[ -z "$(git diff --name-only "$sync_sha^" "$sync_sha" -- . ':(exclude).github/workflows')" ]]; then
             fixture_sha="$sync_sha^"
           fi
@@ -788,15 +788,104 @@ jobs:
             2af342065ba34e48757664a4c417987de297dbe2
           test "$(git hash-object "$fixture")" = \
             861f8941cf1a323d255d0a22dd786d8dc2bcd938
+      - name: Repair v1.4.225 main sync-spawn ratchet
+        if: needs.candidate.outputs.upstream_sha == 'd22f72308106ef62f558cbde16dacb1f21031ae3'
+        env:
+          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          ratchet=config/scripts/check-main-sync-spawn-ratchet.mjs
+          test "$(git rev-parse "$UPSTREAM_SHA:$ratchet")" = \
+            b5e2be3a49ffe39217fee7f9ecda0d2494bb6d74
+          test "$(git hash-object "$ratchet")" = \
+            b5e2be3a49ffe39217fee7f9ecda0d2494bb6d74
+          git apply --unidiff-zero <<'PATCH'
+          diff --git a/config/scripts/check-main-sync-spawn-ratchet.mjs b/config/scripts/check-main-sync-spawn-ratchet.mjs
+          index b5e2be3a49..99464da96d 100644
+          --- a/config/scripts/check-main-sync-spawn-ratchet.mjs
+          +++ b/config/scripts/check-main-sync-spawn-ratchet.mjs
+          @@ -1 +1 @@
+          -import { globSync, readFileSync, writeFileSync } from 'node:fs'
+          +import { globSync, readFileSync } from 'node:fs'
+          @@ -7,4 +7,4 @@ import {
+          -  formatBaseline,
+          -  parseBaseline,
+          -  parseBaselineNotes
+          -} from './check-focus-read-ratchet.mjs'
+          +  parseCountBaseline,
+          +  pruneCountBaseline,
+          +  totalCount
+          +} from './ratchet-baseline.mjs'
+          @@ -387,4 +386,0 @@ export function collectSyncSpawnSources(root = ROOT) {
+          -function total(counts) {
+          -  return [...counts.values()].reduce((sum, count) => sum + count, 0)
+          -}
+          -
+          @@ -395 +391 @@ export function main(root = ROOT) {
+          -    parseBaseline(readFileSync(path.join(root, BASELINE_PATH), 'utf8'))
+          +    parseCountBaseline(readFileSync(path.join(root, BASELINE_PATH), 'utf8'))
+          @@ -411 +407 @@ export function main(root = ROOT) {
+          -    `Main sync-spawn ratchet OK — ${total(counts)} use(s) in ${counts.size} legacy file(s).`
+          +    `Main sync-spawn ratchet OK — ${totalCount(counts)} use(s) in ${counts.size} legacy file(s).`
+          @@ -417,2 +412,0 @@ export function prune(root = ROOT) {
+          -  const baselineFile = path.join(root, BASELINE_PATH)
+          -  const text = readFileSync(baselineFile, 'utf8')
+          @@ -420,9 +414,2 @@ export function prune(root = ROOT) {
+          -  // Lowers entries only; growth still has to be fixed in the code.
+          -  const pruned = new Map(
+          -    [...parseBaseline(text)].map(([file, allowed]) => [
+          -      file,
+          -      Math.min(allowed, counts.get(file) ?? 0)
+          -    ])
+          -  )
+          -  writeFileSync(baselineFile, formatBaseline(pruned, BASELINE_HEADER, parseBaselineNotes(text)))
+          -  console.log(`Pruned ${BASELINE_PATH} to ${total(pruned)} use(s).`)
+          +  const kept = pruneCountBaseline(root, BASELINE_PATH, BASELINE_HEADER, counts)
+          +  console.log(`Pruned ${BASELINE_PATH} to ${kept} use(s).`)
+          PATCH
+          test "$(git hash-object "$ratchet")" = \
+            99464da96df24d6c89bf917a420bb4826c9dc9e5
       - name: Test shard
         env:
+          NODE_COMPILE_CACHE: ${{ runner.temp }}/orca-node-compile-cache-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          ORCA_BALANCE_UNIT_SHARDS: '1'
           ORCA_BACKGROUND_LAUNCH: '1'
         run: |
-          pnpm exec vitest run --config config/vitest.config.ts \
-            --exclude='**/*.live-shell.test.ts' \
-            --exclude='**/*.node-pty.test.ts' \
-            --exclude=tests/e2e/cross-version-wire/** \
+          ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
+          export ORCA_SHARD_SOURCE_SHA
+          node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
+            --retry=1 \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
+
+  relay-integration:
+    needs: candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.candidate.outputs.candidate_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: none
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            cloud/pnpm-lock.yaml
+      - name: Install relay integration dependencies
+        working-directory: cloud
+        run: |
+          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
+          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay^...' build
+      - name: Test relay integration contracts
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          tests/e2e/relay-region-compatibility.unit.test.ts
+          tests/e2e/relay-region-correction.unit.test.ts
 
   cross-version-wire:
     needs: candidate
@@ -843,20 +932,21 @@ jobs:
         with:
           ref: ${{ needs.candidate.outputs.candidate_sha }}
           persist-credentials: false
-      - uses: pnpm/action-setup@v6
+      - uses: ./.github/actions/install-node-dependencies
         with:
-          run_install: false
-      - uses: actions/setup-node@v6
-        with:
+          native-runtime: none
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: mobile/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile --ignore-scripts
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
       - run: pnpm install --frozen-lockfile
         working-directory: mobile
       - run: pnpm typecheck
         working-directory: mobile
-      - run: pnpm test
+      - run: node ../config/scripts/run-mobile-ci-tests.mjs
         working-directory: mobile
       - run: pnpm lint
         working-directory: mobile
@@ -874,7 +964,11 @@ jobs:
             os: ubuntu-latest
           - platform: linux-arm64
             os: ubuntu-24.04-arm
-          - platform: macos
+          - platform: macos-x64
+            mac_arch: x64
+            os: macos-15-intel
+          - platform: macos-arm64
+            mac_arch: arm64
             os: macos-15
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
@@ -893,7 +987,7 @@ jobs:
           node-version-file: package.json
           cache: pnpm
       - name: Install dependencies
-        if: matrix.platform != 'macos'
+        if: runner.os != 'macOS'
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
@@ -901,7 +995,7 @@ jobs:
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
       - name: Install macOS release dependencies
-        if: matrix.platform == 'macos'
+        if: runner.os == 'macOS'
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
@@ -935,18 +1029,22 @@ jobs:
         run: |
           node config/scripts/ensure-native-runtime.mjs --runtime=electron
           ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --linux AppImage deb rpm --arm64 --publish never
-      - name: Package ad-hoc macOS clients
-        if: matrix.platform == 'macos'
+      - name: Package ad-hoc macOS client
+        if: runner.os == 'macOS'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           CSC_NAME: '-'
           ORCA_COMPUTER_MACOS_SIGN_IDENTITY: '-'
-        run: |
-          node config/scripts/ensure-native-runtime.mjs --runtime=electron
-          pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --mac --publish never
+          ORCA_FORK_MAC_ARCH: ${{ matrix.mac_arch }}
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-${{ matrix.mac_arch }} && node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --mac --${{ matrix.mac_arch }} --publish never
       - name: Verify complete ad-hoc macOS signatures
-        if: matrix.platform == 'macos'
-        run: node .github/scripts/verify-fork-macos-signatures.mjs dist
+        if: runner.os == 'macOS'
+        run: node .github/scripts/verify-fork-macos-signatures.mjs dist ${{ matrix.mac_arch }}
       - name: Stage desktop release assets
         shell: bash
         run: |
@@ -956,7 +1054,14 @@ jobs:
             windows-x64) cp dist/orca-windows-setup.exe dist/orca-windows-setup.exe.blockmap dist/latest.yml release-assets/ ;;
             linux-x64) cp dist/*.AppImage dist/*.deb dist/*.rpm dist/latest-linux.yml release-assets/ ;;
             linux-arm64) cp dist/*.AppImage dist/*.deb dist/*.rpm dist/latest-linux-arm64.yml release-assets/ ;;
-            macos) cp dist/orca-macos-*.dmg dist/Orca-*-mac.zip dist/latest-mac.yml release-assets/ ;;
+            macos-x64)
+              cp dist/orca-macos-x64.dmg dist/Orca-*-mac.zip release-assets/
+              cp dist/latest-mac.yml release-assets/latest-mac-x64.yml
+              ;;
+            macos-arm64)
+              cp dist/orca-macos-arm64.dmg dist/Orca-*-arm64-mac.zip release-assets/
+              cp dist/latest-mac.yml release-assets/latest-mac-arm64.yml
+              ;;
           esac
       - uses: actions/upload-artifact@v7
         with:
@@ -1162,6 +1267,9 @@ jobs:
         with:
           ref: ${{ needs.candidate.outputs.candidate_sha }}
           persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: none
       - uses: actions/download-artifact@v8
         with:
           pattern: fork-release-*
@@ -1195,6 +1303,7 @@ jobs:
       - lint
       - typecheck
       - test
+      - relay-integration
       - cross-version-wire
       - mobile-checks
       - desktop
