@@ -59,6 +59,21 @@ describe('fork release maintenance workflows', () => {
     expect(fetch.run).not.toContain('anchor_sha=0000000000000000000000000000000000000000')
   })
 
+  it('uses the validated release version before creating an anchor or replaying patches', () => {
+    const prepare = job(sync, 'prepare')
+    const inspect = prepare.steps.find((step) => step.id === 'state')
+    const anchor = prepare.steps.find((step) => step.id === 'anchor')
+    const replay = prepare.steps.find((step) => step.id === 'replay')
+    expect(inspect.env.UPSTREAM_TAG).toBe(expression('steps.release.outputs.tag'))
+    expect(inspect.run).toContain('--target-tag="$UPSTREAM_TAG"')
+    expect(inspect.run).toContain('result=\\(.syncResult)')
+    expect(inspect.run).toContain('older-release')
+    expect(anchor.if).toBe("steps.state.outputs.result == 'pending'")
+    expect(replay.if).toBe("steps.state.outputs.result == 'pending'")
+    expect(prepare.steps.indexOf(inspect)).toBeLessThan(prepare.steps.indexOf(anchor))
+    expect(prepare.steps.indexOf(anchor)).toBeLessThan(prepare.steps.indexOf(replay))
+  })
+
   it('routes context-free agents to a preserved conflict runbook', () => {
     expect(agentsText).toContain('.github/fork-maintenance-plan.md')
     expect(agentsText).toContain('Never push directly to `fork` or `upstream-release`')
@@ -234,6 +249,9 @@ describe('fork release maintenance workflows', () => {
       (step) => step.name === 'Test relay integration contracts'
     )
     const restore = testJob.steps.find((step) => step.name === 'Restore upstream workflow fixtures')
+    const currentReleaseFixtureRepair = testJob.steps.find(
+      (step) => step.name === 'Repair v1.4.227 SSH listing fixture'
+    )
     const latestReleaseCutFixtureRepair = testJob.steps.find(
       (step) => step.name === 'Repair v1.4.222 release-cut fixtures'
     )
@@ -278,6 +296,18 @@ describe('fork release maintenance workflows', () => {
       '"ci: sync release workflows with main for the $UPSTREAM_TAG cut"'
     )
     expect(restore.run).toContain('"ci: sync workflows with main for the $UPSTREAM_TAG cut"')
+    expect(restore.run).toContain('f51e82c4c26745f6a15e215e4391f533327697e2')
+    expect(restore.run).toContain('a2200368928d198db7b07eb35c4b970aa418a7a8')
+    expect(restore.run).toContain(
+      '"ci: carry main\'s workflow files so the release tag can be pushed"'
+    )
+    expect(currentReleaseFixtureRepair.if).toBe(
+      "needs.candidate.outputs.upstream_sha == 'f51e82c4c26745f6a15e215e4391f533327697e2'"
+    )
+    expect(currentReleaseFixtureRepair.run).toContain('3188253bf9a13b7d8dc9875cebbf94eba4835955')
+    expect(currentReleaseFixtureRepair.run).toContain('96d70e46774fd6c273b07089ea3e823a24211168')
+    expect(restore.run).toContain('recognized_release_sync=true')
+    expect(restore.run).toContain('[[ "$recognized_release_sync" == true ]]')
     expect(restore.run).toContain(
       `git diff --name-only "$sync_sha^" "$sync_sha" -- . ':(exclude).github/workflows'`
     )
@@ -432,6 +462,9 @@ describe('fork release maintenance workflows', () => {
     expect(testJob.steps.indexOf(hourlyRepair)).toBeLessThan(testJob.steps.indexOf(testShard))
     expect(testJob.steps.indexOf(latestHourlyRepair)).toBeLessThan(testJob.steps.indexOf(testShard))
     expect(testJob.steps.indexOf(syncSpawnRepair)).toBeLessThan(testJob.steps.indexOf(testShard))
+    expect(testJob.steps.indexOf(currentReleaseFixtureRepair)).toBeLessThan(
+      testJob.steps.indexOf(testShard)
+    )
   })
 
   it('builds unsigned desktop and mobile clients without stores', () => {
@@ -445,7 +478,7 @@ describe('fork release maintenance workflows', () => {
     expect(buildText).not.toContain('TestFlight')
   })
 
-  it('builds the root workspace package before running mobile checks', () => {
+  it('uses release-compatible mobile tests when the synced runner is newer than release code', () => {
     const mobile = job(build, 'mobile-checks')
     const rootInstall = mobile.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
@@ -457,13 +490,15 @@ describe('fork release maintenance workflows', () => {
       'cache-dependency-path': 'pnpm-lock.yaml\nmobile/pnpm-lock.yaml\n'
     })
     expect(bunSetup.with['bun-version-file']).toBe('config/.bun-version')
-    expect(
-      mobile.steps.find(
-        (step) =>
-          step['working-directory'] === 'mobile' &&
-          step.run === 'node ../config/scripts/run-mobile-ci-tests.mjs'
-      )
-    ).toBeDefined()
+    const mobileTests = mobile.steps.find(
+      (step) => step.name === 'Run release-compatible mobile tests'
+    )
+    expect(mobileTests['working-directory']).toBe('mobile')
+    expect(mobileTests.env.UPSTREAM_SHA).toBe(expression('needs.candidate.outputs.upstream_sha'))
+    expect(mobileTests.run).toContain('node ../config/scripts/run-mobile-ci-tests.mjs')
+    expect(mobileTests.run).toContain('f51e82c4c26745f6a15e215e4391f533327697e2')
+    expect(mobileTests.run).toContain('pnpm test')
+    expect(mobileTests.run).toContain('exit 1')
   })
 
   it('signs Android releases with the fork key in an isolated job', () => {

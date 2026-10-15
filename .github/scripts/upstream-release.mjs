@@ -74,6 +74,25 @@ export function validateReleaseCommit({ tag, sha, packageVersion }) {
   return { ...parsed, sha }
 }
 
+export function resolveReleaseSync({ currentTag, currentSha, targetTag, targetSha }) {
+  const current = parseStableTag(currentTag)
+  const target = parseStableTag(targetTag)
+  if (!current || !target) {
+    throw new Error('current and target upstream release tags must match vX.Y.Z')
+  }
+  const comparison = compareTags(target, current)
+  if (comparison < 0) {
+    return { syncResult: 'noop', syncReason: 'older-release' }
+  }
+  if (comparison === 0 && currentSha !== targetSha) {
+    throw new Error(`${targetTag} now resolves to a different commit than the production anchor`)
+  }
+  if (currentSha === targetSha) {
+    return { syncResult: 'noop', syncReason: 'already-anchored' }
+  }
+  return { syncResult: 'pending', syncReason: 'newer-release' }
+}
+
 async function githubJson(fetchImpl, url, token) {
   const response = await fetchImpl(url, {
     headers: {

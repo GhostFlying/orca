@@ -243,8 +243,16 @@ jobs:
           sync_sha="$(git rev-parse "$UPSTREAM_SHA^")"
           # Why: a release cut can sync newer main workflows onto release code; test the pair that shipped together.
           sync_subject="$(git show -s --format=%s "$sync_sha")"
+          recognized_release_sync=false
           if [[ "$sync_subject" == "ci: sync release workflows with main for the $UPSTREAM_TAG cut" ||
-            "$sync_subject" == "ci: sync workflows with main for the $UPSTREAM_TAG cut" ]] &&
+            "$sync_subject" == "ci: sync workflows with main for the $UPSTREAM_TAG cut" ]]; then
+            recognized_release_sync=true
+          elif [[ "$UPSTREAM_SHA" == f51e82c4c26745f6a15e215e4391f533327697e2 &&
+            "$sync_sha" == a2200368928d198db7b07eb35c4b970aa418a7a8 &&
+            "$sync_subject" == "ci: carry main's workflow files so the release tag can be pushed" ]]; then
+            recognized_release_sync=true
+          fi
+          if [[ "$recognized_release_sync" == true ]] &&
             [[ -z "$(git diff --name-only "$sync_sha^" "$sync_sha" -- . ':(exclude).github/workflows')" ]]; then
             fixture_sha="$sync_sha^"
           fi
@@ -256,6 +264,24 @@ jobs:
           else
             git rm --ignore-unmatch -- "$signing_contract"
           fi
+      - name: Repair v1.4.227 SSH listing fixture
+        if: needs.candidate.outputs.upstream_sha == 'f51e82c4c26745f6a15e215e4391f533327697e2'
+        env:
+          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          relay_gc_fixture=src/main/ssh/ssh-remote-commands.test.ts
+          test "$(git rev-parse "$UPSTREAM_SHA:$relay_gc_fixture")" = 3188253bf9a13b7d8dc9875cebbf94eba4835955
+          test "$(git hash-object "$relay_gc_fixture")" = 3188253bf9a13b7d8dc9875cebbf94eba4835955
+          git apply --unidiff-zero <<'PATCH'
+          diff --git a/src/main/ssh/ssh-remote-commands.test.ts b/src/main/ssh/ssh-remote-commands.test.ts
+          --- a/src/main/ssh/ssh-remote-commands.test.ts
+          +++ b/src/main/ssh/ssh-remote-commands.test.ts
+          @@ -313 +313 @@ describe('ssh remote command builders', () => {
+          -        expect(entries).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
+          +        expect([...entries].sort()).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
+          PATCH
+          test "$(git hash-object "$relay_gc_fixture")" = 96d70e46774fd6c273b07089ea3e823a24211168
       - name: Repair v1.4.222 release-cut fixtures
         if: needs.candidate.outputs.upstream_sha == '4bb6f2072b07c1f0664b809551f77754700570e4'
         env:
@@ -946,7 +972,19 @@ jobs:
         working-directory: mobile
       - run: pnpm typecheck
         working-directory: mobile
-      - run: node ../config/scripts/run-mobile-ci-tests.mjs
+      - name: Run release-compatible mobile tests
+        env:
+          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          if test -f ../config/scripts/run-mobile-ci-tests.mjs; then
+            node ../config/scripts/run-mobile-ci-tests.mjs
+          elif test "$UPSTREAM_SHA" = f51e82c4c26745f6a15e215e4391f533327697e2; then
+            pnpm test
+          else
+            echo 'Mobile CI runner is missing for an unrecognized upstream Release' >&2
+            exit 1
+          fi
         working-directory: mobile
       - run: pnpm lint
         working-directory: mobile

@@ -89,19 +89,19 @@ jobs:
         env:
           ANCHOR_LEASE_SHA: ${{ steps.refs.outputs.anchor_lease_sha }}
           TARGET_SHA: ${{ steps.refs.outputs.target_sha }}
+          UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
           node .github/scripts/fork-maintenance-state.mjs inspect \
             --anchor="refs/remotes/origin/$ANCHOR_BRANCH" \
             --fork="refs/remotes/origin/$FORK_BRANCH" \
-            --target="$TARGET_SHA" >"$RUNNER_TEMP/fork-sync-state.json"
+            --target="$TARGET_SHA" --target-tag="$UPSTREAM_TAG" >"$RUNNER_TEMP/fork-sync-state.json"
           jq . "$RUNNER_TEMP/fork-sync-state.json"
           jq -r '"anchor_sha=\(.anchorSha)"' "$RUNNER_TEMP/fork-sync-state.json" >>"$GITHUB_OUTPUT"
           jq -r '"fork_sha=\(.forkSha)"' "$RUNNER_TEMP/fork-sync-state.json" >>"$GITHUB_OUTPUT"
-          if [[ "$(jq -r .upstreamSha "$RUNNER_TEMP/fork-sync-state.json")" = "$TARGET_SHA" ]]; then
-            echo "result=noop" >>"$GITHUB_OUTPUT"
-          else
-            echo "result=pending" >>"$GITHUB_OUTPUT"
+          jq -r '"result=\(.syncResult)"' "$RUNNER_TEMP/fork-sync-state.json" >>"$GITHUB_OUTPUT"
+          if [[ "$(jq -r .syncReason "$RUNNER_TEMP/fork-sync-state.json")" = older-release ]]; then
+            echo "::notice::Published upstream $UPSTREAM_TAG is older than the production anchor; keeping the current fork."
           fi
       - name: Create safe release anchor
         if: steps.state.outputs.result == 'pending'

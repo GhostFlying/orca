@@ -58,6 +58,54 @@ function appendCommit(root, file, value, subject) {
 }
 
 describe('inspectForkPatchStack', () => {
+  it('validates release versions and skips a withdrawn-release downgrade', () => {
+    const root = createRepository()
+    git(root, 'checkout', '-b', 'older-release', 'anchor^')
+    const older = appendCommit(root, 'package.json', '{"version":"1.4.224"}\n', 'older release')
+    git(root, 'checkout', '-b', 'newer-release', 'anchor^')
+    const newer = appendCommit(root, 'package.json', '{"version":"1.4.225"}\n', 'newer release')
+    git(
+      root,
+      'commit',
+      '--allow-empty',
+      '-m',
+      'release anchor',
+      '-m',
+      'Fork-Maintenance-Generated: upstream-anchor-v1',
+      '-m',
+      'Upstream-Release: v1.4.225'
+    )
+    git(root, 'branch', '-f', 'anchor')
+    git(root, 'checkout', '-b', 'fork')
+    const patch = appendCommit(root, 'fork.txt', 'fork\n', 'fork behavior')
+    const inspect = (targetRef, targetTag) =>
+      inspectForkPatchStack({
+        anchorRef: 'anchor',
+        forkRef: 'fork',
+        targetRef,
+        targetTag,
+        cwd: root
+      })
+    expect(inspect(older, 'v1.4.224')).toMatchObject({
+      patchCommits: [patch],
+      syncResult: 'noop',
+      syncReason: 'older-release'
+    })
+    expect(inspect(newer, 'v1.4.225')).toMatchObject({
+      syncResult: 'noop',
+      syncReason: 'already-anchored'
+    })
+    expect(() => inspect(older, 'v1.4.225')).toThrow('package.json version')
+    git(root, 'checkout', 'newer-release')
+    const rewritten = appendCommit(root, 'rewritten.txt', 'changed\n', 'rewritten release')
+    expect(() => inspect(rewritten, 'v1.4.225')).toThrow('different commit')
+    const next = appendCommit(root, 'package.json', '{"version":"1.5.0"}\n', 'next release')
+    expect(inspect(next, 'v1.5.0')).toMatchObject({
+      syncResult: 'pending',
+      syncReason: 'newer-release'
+    })
+  })
+
   it('returns an ordered linear patch stack and accepts a fast-forward target', () => {
     const root = createRepository()
     git(root, 'switch', '-c', 'fork')

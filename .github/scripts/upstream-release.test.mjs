@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   fetchReleases,
   parseStableTag,
+  resolveReleaseSync,
   resolveStableRelease,
   validateReleaseCommit
 } from './upstream-release.mjs'
@@ -69,5 +70,62 @@ describe('upstream stable release selection', () => {
       .mockResolvedValueOnce(response([{ tag_name: 'v1.4.188' }]))
     await expect(fetchReleases('stablyai/orca', 'token', fetchImpl)).resolves.toHaveLength(101)
     expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the adopted release when upstream withdraws the newest release', () => {
+    const target = resolveStableRelease([{ tag_name: 'v1.4.224', draft: false, prerelease: false }])
+    expect(
+      resolveReleaseSync({
+        currentTag: 'v1.4.225',
+        currentSha: 'a'.repeat(40),
+        targetTag: target.tag,
+        targetSha: 'b'.repeat(40)
+      })
+    ).toEqual({ syncResult: 'noop', syncReason: 'older-release' })
+  })
+
+  it.each([
+    ['v1.4.99', 'v1.4.100'],
+    ['v1.4.225', 'v1.5.0'],
+    ['v1.9.999', 'v2.0.0']
+  ])(
+    'advances from %s to %s without requiring related release commits',
+    (currentTag, targetTag) => {
+      expect(
+        resolveReleaseSync({
+          currentTag,
+          currentSha: 'a'.repeat(40),
+          targetTag,
+          targetSha: 'b'.repeat(40)
+        })
+      ).toEqual({ syncResult: 'pending', syncReason: 'newer-release' })
+    }
+  )
+
+  it.each([
+    ['v1.4.100', 'v1.4.99'],
+    ['v1.5.0', 'v1.4.999'],
+    ['v2.0.0', 'v1.99.999']
+  ])('does not downgrade from %s to %s', (currentTag, targetTag) => {
+    expect(
+      resolveReleaseSync({
+        currentTag,
+        currentSha: 'a'.repeat(40),
+        targetTag,
+        targetSha: 'b'.repeat(40)
+      })
+    ).toEqual({ syncResult: 'noop', syncReason: 'older-release' })
+  })
+
+  it('recognizes the same anchored release and rejects rewritten same-version tags', () => {
+    const current = { currentTag: 'v1.4.225', currentSha: 'a'.repeat(40), targetTag: 'v1.4.225' }
+    expect(resolveReleaseSync({ ...current, targetSha: 'a'.repeat(40) })).toEqual({
+      syncResult: 'noop',
+      syncReason: 'already-anchored'
+    })
+    expect(() => resolveReleaseSync({ ...current, targetSha: 'b'.repeat(40) })).toThrow(
+      'different commit than the production anchor'
+    )
+    expect(() => resolveReleaseSync({ ...current, targetTag: 'main' })).toThrow('must match vX.Y.Z')
   })
 })

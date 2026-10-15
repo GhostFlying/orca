@@ -99,7 +99,12 @@ single optional final generated snapshot.
 
 `sync-upstream-release.yml` polls the upstream Releases API hourly and also
 supports a manually requested published stable tag. A run is a no-op when the
-highest eligible release is already anchored. Otherwise it:
+highest eligible release is already anchored or is older than the adopted
+release. Upstream withdrawing a Release must not trigger an automatic downgrade;
+keep the current production refs and wait for a newer published stable Release.
+A tag for the adopted version that now resolves to a different commit fails
+closed. Compare validated release versions, not commit ancestry, because release
+commits may be detached version bumps. Otherwise it:
 
 1. Captures exact transaction leases for the source `fork`,
    `upstream-release`, preview, upstream tag, and release commit. These guard
@@ -135,7 +140,7 @@ Release discovery:
    for the source branch and all production refs, rejects merges and maintenance
    path changes in the hotfix range, and constructs `candidate/fork-hotfix` as
    `upstream-release + existing business patches + hotfix patches + one final
-   maintenance snapshot`.
+maintenance snapshot`.
 4. Only the leased `candidate/fork-hotfix` push starts the same full release
    build and finalizer used by upstream sync. A direct dispatch at a `fix/...`
    ref fails the canonical-candidate check.

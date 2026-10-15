@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { resolveReleaseSync, validateReleaseCommit } from './upstream-release.mjs'
 
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/
 const GIT_BINARY = process.env.ORCA_FORK_MAINTENANCE_GIT_BINARY || 'git'
@@ -144,6 +145,7 @@ export function inspectForkPatchStack({
   anchorRef,
   forkRef,
   targetRef,
+  targetTag,
   requireTargetDescendant = false,
   cwd = process.cwd()
 }) {
@@ -151,6 +153,21 @@ export function inspectForkPatchStack({
   const forkSha = requireCommitSha(git(['rev-parse', `${forkRef}^{commit}`], cwd), 'forkSha')
   const targetSha = requireCommitSha(git(['rev-parse', `${targetRef}^{commit}`], cwd), 'targetSha')
   const upstreamSha = requireGeneratedAnchor(anchorSha, cwd)
+  let syncState = {}
+  if (targetTag) {
+    const currentTag = requiredTrailer(anchorSha, 'Upstream-Release', cwd)
+    for (const [tag, sha] of [
+      [currentTag, upstreamSha],
+      [targetTag, targetSha]
+    ]) {
+      validateReleaseCommit({
+        tag,
+        sha,
+        packageVersion: JSON.parse(git(['show', `${sha}:package.json`], cwd)).version
+      })
+    }
+    syncState = resolveReleaseSync({ currentTag, currentSha: upstreamSha, targetTag, targetSha })
+  }
 
   if (!isAncestor(anchorSha, forkSha, cwd)) {
     throw new Error(`${anchorRef} is not an ancestor of ${forkRef}`)
@@ -193,7 +210,8 @@ export function inspectForkPatchStack({
     targetSha,
     patchCommits,
     patchCount: patchCommits.length,
-    generatedMaintenanceSnapshotSha: generatedWorkflowSnapshots[0] ?? null
+    generatedMaintenanceSnapshotSha: generatedWorkflowSnapshots[0] ?? null,
+    ...syncState
   }
 }
 
@@ -391,7 +409,8 @@ function runCli(argv) {
     const result = inspectForkPatchStack({
       anchorRef: requiredOption(options, 'anchor'),
       forkRef: requiredOption(options, 'fork'),
-      targetRef: requiredOption(options, 'target')
+      targetRef: requiredOption(options, 'target'),
+      targetTag: options['target-tag']
     })
     console.log(JSON.stringify(result))
     return
