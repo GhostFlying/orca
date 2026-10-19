@@ -133,6 +133,7 @@ jobs:
       - name: Verify fork maintenance contract
         run: |
           node .github/scripts/fork-maintenance-state.mjs inspect-candidate --candidate=HEAD
+          node .github/scripts/fork-orcad-template-workflow.mjs --upstream=${{ needs.candidate.outputs.upstream_sha }} --check
           pnpm exec vitest run --config .github/scripts/vitest.config.mjs
 
   lint:
@@ -989,8 +990,19 @@ jobs:
       - run: pnpm lint
         working-directory: mobile
 
-  desktop:
+  orcad-template:
     needs: candidate
+    permissions:
+      contents: read
+    uses: ./.github/workflows/fork-orcad-template.yml
+    with:
+      ref: ${{ needs.candidate.outputs.candidate_sha }}
+      build_template: true
+
+  desktop:
+    needs: [candidate, orcad-template]
+    env:
+      ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
     name: Desktop ${{ matrix.platform }}
     strategy:
       fail-fast: false
@@ -1050,6 +1062,11 @@ jobs:
         run: pnpm build:release
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+      - name: Download this candidate's server template
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
       - name: Package unsigned Windows client
         if: matrix.platform == 'windows-x64'
         shell: pwsh
@@ -1080,6 +1097,8 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-${{ matrix.mac_arch }} && node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --mac --${{ matrix.mac_arch }} --publish never
+      - name: Verify packaged server template
+        run: node .github/scripts/verify-fork-orcad-template.mjs dist ${{ matrix.platform }}
       - name: Verify complete ad-hoc macOS signatures
         if: runner.os == 'macOS'
         run: node .github/scripts/verify-fork-macos-signatures.mjs dist ${{ matrix.mac_arch }}
@@ -1345,6 +1364,7 @@ jobs:
       - cross-version-wire
       - mobile-checks
       - desktop
+      - orcad-template
       - android
       - android-sign
       - ios

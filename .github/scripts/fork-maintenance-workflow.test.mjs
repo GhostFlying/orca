@@ -592,6 +592,7 @@ describe('fork release maintenance workflows', () => {
       'sync-upstream-release.yml',
       'fork-hotfix-candidate.yml',
       'fork-release-build.yml',
+      'fork-orcad-template.yml',
       'pr.yml',
       'mobile.yml'
     ]) {

@@ -121,6 +121,11 @@ jobs:
             .github/scripts/fork-maintenance-state.test.mjs
             .github/scripts/fork-maintenance-workflow.test.mjs
             .github/scripts/fork-release-build-macos.test.mjs
+            .github/scripts/fork-orcad-template-workflow.mjs
+            .github/scripts/fork-orcad-template-workflow.test.mjs
+            .github/scripts/verify-fork-orcad-template.mjs
+            .github/scripts/verify-fork-orcad-template.test.mjs
+            .github/fork-orcad-template-implementation-plan.md
             .github/scripts/fork-release-assets.mjs
             .github/scripts/fork-release-assets.test.mjs
             .github/scripts/upstream-release.mjs
@@ -131,6 +136,7 @@ jobs:
             .github/workflows/sync-upstream-release.yml
             .github/workflows/fork-hotfix-candidate.yml
             .github/workflows/fork-release-build.yml
+            .github/workflows/fork-orcad-template.yml
             config/scripts/fork-electron-builder-config.cjs
             config/scripts/fork-electron-builder-config.test.mjs
             mobile/scripts/build-unsigned-ios.sh
@@ -165,6 +171,7 @@ jobs:
             printf '\n'
             cat "$upstream_agents_without_fork"
           } >AGENTS.md
+          node .github/scripts/fork-orcad-template-workflow.mjs --upstream="$TARGET_SHA"
           git add -- "${maintenance_paths[@]}"
           git add -- AGENTS.md
           target_date="$(git show -s --format=%cI "$TARGET_SHA")"
@@ -273,6 +280,7 @@ jobs:
               .github/workflows/sync-upstream-release.yml|\
               .github/workflows/fork-hotfix-candidate.yml|\
               .github/workflows/fork-release-build.yml|\
+              .github/workflows/fork-orcad-template.yml|\
               .github/workflows/pr.yml|\
               .github/workflows/mobile.yml) desired=active ;;
               *) desired=disabled ;;

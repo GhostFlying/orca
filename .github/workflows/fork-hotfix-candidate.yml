@@ -105,6 +105,11 @@ jobs:
             .github/scripts/fork-maintenance-state.test.mjs
             .github/scripts/fork-maintenance-workflow.test.mjs
             .github/scripts/fork-release-build-macos.test.mjs
+            .github/scripts/fork-orcad-template-workflow.mjs
+            .github/scripts/fork-orcad-template-workflow.test.mjs
+            .github/scripts/verify-fork-orcad-template.mjs
+            .github/scripts/verify-fork-orcad-template.test.mjs
+            .github/fork-orcad-template-implementation-plan.md
             .github/scripts/fork-release-assets.mjs
             .github/scripts/fork-release-assets.test.mjs
             .github/scripts/upstream-release.mjs

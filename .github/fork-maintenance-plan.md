@@ -15,6 +15,10 @@ The executable sources of truth are:
   hotfix transaction capture, and isolated candidate publication.
 - `.github/workflows/fork-release-build.yml`: candidate validation, tests, all
   platform builds, Release asset verification, atomic promotion, and publish.
+- `.github/scripts/fork-orcad-template-workflow.mjs`: call-only server-template
+  workflow generation from the selected upstream Release.
+- `.github/scripts/verify-fork-orcad-template.mjs`: complete packaged server
+  template verification, also used for extracted macOS ZIP/DMG applications.
 - `.github/scripts/upstream-release.mjs`: eligible Release selection and Release
   commit validation.
 - `.github/scripts/fork-maintenance-state.mjs`: anchor, transaction metadata,
@@ -125,6 +129,39 @@ The workflow uses the release tag commit after upstream has updated
 `package.json`; it never follows the tip of upstream `main`. If polling skips
 multiple releases, only the highest eligible release is built.
 
+## Server template qualification and packaging
+
+Every desktop build must ship `Resources/orcad-template` (or `resources` on
+Windows/Linux). `build:release` alone does not create it. The release workflow
+calls `fork-orcad-template.yml` with the validated candidate SHA and
+`build_template: true`; its read-only qualification lanes build all upstream
+native targets and the glibc 2.17 compatibility slot, then merge them with the
+qualified mobile web assets. The artifact includes hidden target/runtime markers.
+All desktop jobs download that run's artifact and set
+`ORCA_REQUIRE_ORCAD_TEMPLATE=1`. A missing or corrupt template fails packaging,
+post-pack verification, and the release gate. macOS ZIP and DMG round trips verify
+template contents as well as complete ad-hoc signatures.
+
+The call-only workflow is generated from the selected upstream Release's
+`node-server-tests.yml`; it has no independent PR, manual or scheduled trigger.
+Generation preserves upstream qualification jobs except that template callers
+skip diff-based change detection and therefore qualify the full platform matrix,
+even for maintenance-only pushes. The upstream sync regenerates it from
+`TARGET_SHA` before committing the safe anchor. Hotfixes retain the production
+copy. The maintenance gate checks reproducibility against the exact upstream SHA;
+an unsupported input interface or change-detection shape fails closed.
+
+For a same-version maintenance repair (including the v1.4.229 template omission),
+capture fresh production/protected refs and verify the already adopted published
+upstream Release. Reproduce the safe-anchor and business-patch replay transaction
+at that same Release, applying only maintenance changes in one final generated
+snapshot. Verify product-tree equivalence with the captured production fork.
+Validate the new candidate and publish only `sync/upstream-release` with its
+exact captured lease. The full finalizer promotes the new anchor/fork/mirror and
+publishes a new SHA-qualified prerelease; keep the previous Release intact.
+The product hotfix intake rejects maintenance paths and is not used for this
+repair. The hourly same-release no-op policy remains unchanged.
+
 ## Fork hotfixes
 
 A product hotfix starts as reviewable commits on a normal `fix/...` branch
@@ -216,6 +253,7 @@ Only these workflows are enabled in the fork:
 - `sync-upstream-release.yml`
 - `fork-hotfix-candidate.yml`
 - `fork-release-build.yml`
+- `fork-orcad-template.yml` (call-only)
 - `pr.yml`
 - `mobile.yml`
 
@@ -224,7 +262,8 @@ parity, but is disabled at the repository level along with all other workflows.
 This prevents its scheduled runs and notifications on the fork. The safe anchor
 takes the standard PR, Mobile Checks, and E2E workflow definitions from the
 selected upstream Release and the three maintenance workflows from the current
-production fork.
+production fork. The call-only template workflow is regenerated from that
+Release; it is not frozen to a prior Release's platform matrix.
 
 ## Protected refs and bootstrap
 
@@ -278,11 +317,13 @@ commit, reproduce `Create safe release anchor` from
    builder config, and the unsigned iOS script. Preserve only the marked Fork
    Release Maintenance block from the production `AGENTS.md`; retain all other
    `AGENTS.md` content from the selected upstream Release.
-3. Create one anchor commit with all required trailers:
+3. Regenerate the call-only template workflow with
+   `node .github/scripts/fork-orcad-template-workflow.mjs --upstream=<release-sha>`.
+4. Create one anchor commit with all required trailers:
    `Upstream-Release`, `Upstream-Commit`, `Fork-Maintenance-Source-Fork`,
    `Fork-Maintenance-Source-Anchor`, `Fork-Maintenance-Source-Preview`, and
    `Fork-Maintenance-Generated: upstream-anchor-v1`.
-4. Use the Release commit date and the repository's configured Git identity.
+5. Use the Release commit date and the repository's configured Git identity.
    Do not add a bot/agent identity or co-author.
 
 Obtain the ordered business patch list from the current production refs rather

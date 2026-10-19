@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { verifyForkOrcadTemplate } from './verify-fork-orcad-template.mjs'
 
 function run(command, args) {
   const result = spawnSync(command, args, { encoding: 'utf8' })
@@ -39,6 +40,7 @@ export function verifyForkMacApp(appPath) {
     throw new Error('macOS signature verification requires macOS')
   }
   verifyCode(appPath, true)
+  verifyForkOrcadTemplate(join(appPath, 'Contents', 'Resources'))
   const frameworks = join(appPath, 'Contents', 'Frameworks')
   verifyCode(join(frameworks, 'Orca Helper.app'), true)
   for (const entry of readdirSync(frameworks)) {

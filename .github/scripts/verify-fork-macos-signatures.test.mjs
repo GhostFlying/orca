@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { writeOrcadTemplateTestFixture } from '../../config/scripts/orcad-template-test-fixture.mjs'
 import {
   assertAdhocSignature,
   verifyForkMacApp,
@@ -78,7 +79,7 @@ describe.skipIf(process.platform !== 'darwin')('native fork macOS signature gate
     }
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     directory = mkdtempSync(join(tmpdir(), 'orca-signature-test-'))
     const source = join(directory, 'fixture.c')
     executable = join(directory, 'fixture')
@@ -86,6 +87,9 @@ describe.skipIf(process.platform !== 'darwin')('native fork macOS signature gate
     run('cc', [source, '-o', executable])
     app = join(directory, 'Orca.app')
     createBundle(app, 'test.orca')
+    await writeOrcadTemplateTestFixture(join(app, 'Contents', 'Resources'), {
+      compat: true
+    })
     createBundle(join(app, 'Contents', 'Frameworks', 'Orca Helper.app'), 'test.orca.helper')
     createBundle(join(app, 'Contents', 'Resources', 'Orca Computer Use.app'), 'test.orca.computer')
     for (const helper of ['orca-notification-status', 'orca-keyboard-layout']) {
