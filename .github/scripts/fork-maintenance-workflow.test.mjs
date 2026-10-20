@@ -296,6 +296,9 @@ describe('fork release maintenance workflows', () => {
       '"ci: sync release workflows with main for the $UPSTREAM_TAG cut"'
     )
     expect(restore.run).toContain('"ci: sync workflows with main for the $UPSTREAM_TAG cut"')
+    expect(restore.run).toContain(
+      '"ci: match main\'s workflow files so the release token can tag this branch"'
+    )
     expect(restore.run).toContain('f51e82c4c26745f6a15e215e4391f533327697e2')
     expect(restore.run).toContain('a2200368928d198db7b07eb35c4b970aa418a7a8')
     expect(restore.run).toContain(

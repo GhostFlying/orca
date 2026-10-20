@@ -246,7 +246,8 @@ jobs:
           sync_subject="$(git show -s --format=%s "$sync_sha")"
           recognized_release_sync=false
           if [[ "$sync_subject" == "ci: sync release workflows with main for the $UPSTREAM_TAG cut" ||
-            "$sync_subject" == "ci: sync workflows with main for the $UPSTREAM_TAG cut" ]]; then
+            "$sync_subject" == "ci: sync workflows with main for the $UPSTREAM_TAG cut" ||
+            "$sync_subject" == "ci: match main's workflow files so the release token can tag this branch" ]]; then
             recognized_release_sync=true
           elif [[ "$UPSTREAM_SHA" == f51e82c4c26745f6a15e215e4391f533327697e2 &&
             "$sync_sha" == a2200368928d198db7b07eb35c4b970aa418a7a8 &&
