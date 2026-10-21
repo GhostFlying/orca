@@ -11,6 +11,7 @@ import omp from './omp.json'
 import opencode from './opencode.json'
 import opencode2 from './opencode2.json'
 import pi from './pi.json'
+import trae from './trae.json'
 import primeAgent from './prime-agent.json'
 import unknownPane from './unknown-pane.json'
 
@@ -46,6 +47,7 @@ export const RAW_BUNDLED_AGENT_STATE_RULE_FILES: readonly unknown[] = [
   opencode,
   opencode2,
   pi,
+  trae,
   primeAgent,
   unknownPane
 ]
