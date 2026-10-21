@@ -214,6 +214,7 @@ describe('profile.hooks', () => {
     expect(hookAuthority('codex')).toBe('turn-end')
     // DSH posts no hook for an approval pause, so only its Stop is trusted.
     expect(hookAuthority('dsh')).toBe('turn-end')
+    expect(hookAuthority('trae')).toBe('turn-end')
     for (const agent of ['claude', 'cursor', 'gemini', 'grok', null] as const) {
       expect(hookAuthority(agent)).toBe('identity-only')
     }
@@ -380,17 +381,16 @@ describe('evaluateTuiIdle turn-end hook lane (codex)', () => {
   })
 })
 
-describe('evaluateTuiIdle turn-end hook lane (dsh)', () => {
-  // DSH's title carries no rest status and it emits no OSC 9999, so its hook row is its only
-  // rest signal: before this lane, `terminal wait --for tui-idle` ran to timeout (STA-9409).
-  const dsh = (hookRows: AgentStatusIpcPayload[], over: { lastInputAt?: number } = {}) =>
+describe.each(['dsh', 'trae'] as const)('evaluateTuiIdle turn-end hook lane (%s)', (agent) => {
+  // Neither a headless Trae nor DSH needs a synthetic ready title once Stop arrives.
+  const evaluateAgent = (hookRows: AgentStatusIpcPayload[], over: { lastInputAt?: number } = {}) =>
     evaluateTuiIdle(
       input({
-        agent: 'dsh',
+        agent,
         record: record({ lastOscTitle: '\u2726 \u{1F40B} repo' }),
         readHookTurn: () =>
           readTuiIdleHookTurn({
-            agent: 'dsh',
+            agent,
             handles: [HANDLE],
             paneKeys: [PANE_KEY],
             hookRows,
@@ -402,22 +402,24 @@ describe('evaluateTuiIdle turn-end hook lane (dsh)', () => {
   const PENDING = { kind: 'pending', quietForeground: 'closed' }
 
   it("settles on the hook store's fresh done, with no first-party status", () => {
-    expect(dsh([row({ agentType: 'dsh' })])).toEqual({ kind: 'ready-strong' })
+    expect(evaluateAgent([row({ agentType: agent })])).toEqual({ kind: 'ready-strong' })
   })
 
   it('does not settle on a stale done, one from before the latest input, or a working row', () => {
     const receivedAt = Date.now() - 1000
     expect(
-      dsh([row({ agentType: 'dsh', receivedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1 })])
+      evaluateAgent([
+        row({ agentType: agent, receivedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1 })
+      ])
     ).toEqual(PENDING)
-    expect(dsh([row({ agentType: 'dsh', receivedAt })], { lastInputAt: receivedAt + 1 })).toEqual(
-      PENDING
-    )
-    expect(dsh([row({ agentType: 'dsh', state: 'working' })])).toEqual(PENDING)
+    expect(
+      evaluateAgent([row({ agentType: agent, receivedAt })], { lastInputAt: receivedAt + 1 })
+    ).toEqual(PENDING)
+    expect(evaluateAgent([row({ agentType: agent, state: 'working' })])).toEqual(PENDING)
   })
 
   it("does not settle on a session start or another agent's done", () => {
-    expect(dsh([row({ agentType: 'dsh', sessionBoundary: true })])).toEqual(PENDING)
-    expect(dsh([row({ agentType: 'claude' })])).toEqual(PENDING)
+    expect(evaluateAgent([row({ agentType: agent, sessionBoundary: true })])).toEqual(PENDING)
+    expect(evaluateAgent([row({ agentType: 'claude' })])).toEqual(PENDING)
   })
 })
