@@ -19,6 +19,17 @@ const build = parse(read('../workflows/fork-release-build.yml'))
 const syncText = read('../workflows/sync-upstream-release.yml')
 const hotfixText = read('../workflows/fork-hotfix-candidate.yml')
 const expression = (value) => ['$', '{{ ', value, ' }}'].join('')
+const withFastRunnersInput = (source) =>
+  source.includes('\n      fast_runners:\n')
+    ? source
+    : source.replace(
+        /(^  workflow_call:\n[\s\S]*?^      build_template:\n(?:^ {8}.*\n)+)/m,
+        `$1      fast_runners:\n        type: boolean\n        default: false\n`
+      )
+const withReadOnlyJobPermissions = (source) =>
+  /^    permissions:/m.test(source)
+    ? source
+    : source.replace('  persistence:\n', '  persistence:\n    permissions:\n      contents: read\n')
 
 describe('fork server template workflow', () => {
   it('reproduces the selected release with only call triggers and complete qualification', () => {
@@ -47,6 +58,16 @@ describe('fork server template workflow', () => {
     expect(Object.keys(next.on)).toEqual(['workflow_call'])
   })
 
+  it('accepts the known fast-runner input and read-only job permissions', () => {
+    const compatible = withReadOnlyJobPermissions(withFastRunnersInput(upstream))
+    const next = parse(generateTemplateWorkflow(compatible, 'a'.repeat(40)))
+    expect(next.on.workflow_call.inputs.fast_runners).toMatchObject({
+      type: 'boolean',
+      default: false
+    })
+    expect(next.jobs.persistence.permissions).toEqual({ contents: 'read' })
+  })
+
   it.each([
     (source) =>
       source.replace(
@@ -54,6 +75,16 @@ describe('fork server template workflow', () => {
         'changed\n        type: string'
       ),
     (source) => source.replace('contents: read', 'contents: write'),
+    (source) =>
+      withReadOnlyJobPermissions(source).replace(
+        '    permissions:\n      contents: read',
+        '    permissions:\n      contents: write'
+      ),
+    (source) =>
+      source.replace(
+        '  workflow_call:\n    inputs:\n',
+        '  workflow_call:\n    inputs:\n      unexpected:\n        type: string\n'
+      ),
     (source) => source.replace('  changes:', '  changed:')
   ])('rejects an incompatible upstream interface or qualification shape', (change) => {
     expect(() => generateTemplateWorkflow(change(upstream), upstreamSha)).toThrow()
