@@ -1,0 +1,9 @@
+{
+  "id": "trae",
+  "engineVersion": 1,
+  "profile": {
+    "hooks": "turn-end"
+  },
+  "anchors": [],
+  "rules": []
+}
