@@ -17,3 +17,5 @@ Independent review identified two boundary fixes: an explicit SSH connection sel
 Filesystem selection also inherits connectionId from the selected project group when no explicit connection is supplied. Read that group before resolving a local caller's creation path; a missing group is not a local-filesystem fallback. Metadata-only updates do not resolve or alter paths.
 
 Both removal specs participate in the existing destructive-command intent filter: benign listing/move typos must not recommend deletion, while explicit removal typos remain recoverable. Cover the actual command registry rather than mirroring a flag in a unit assertion.
+
+The full release gate caught missing desktop launch routing for the two new command roots. Register both in the import-free main startup allowlist so direct packaged-binary invocations redirect into CLI mode. Retain the existing registry parity regression and add behavior coverage using the real default allowlist, then rerun focused tests, native typechecks and independent review before a fresh immutable hotfix transaction.
