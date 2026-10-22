@@ -3,6 +3,7 @@ import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
 import { JIRA_HANDLER_GROUP } from './jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
+import { FOLDER_WORKSPACE_HANDLER_GROUP } from './folder-workspace-handler-group'
 
 export type HandlerGroup = {
   name: string
@@ -16,6 +17,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   JIRA_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,
   REFERENCE_HANDLER_GROUP,
+  FOLDER_WORKSPACE_HANDLER_GROUP,
   {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
