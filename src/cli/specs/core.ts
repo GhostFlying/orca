@@ -8,6 +8,7 @@ import { REPO_COMMAND_SPECS } from './repo'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
 import { TERMINAL_SET_PANE_TITLE_COMMAND_SPEC } from './terminal-set-pane-title'
+import { FOLDER_WORKSPACE_COMMAND_SPECS } from './folder-workspace'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -18,6 +19,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca open', 'orca open --json']
   },
   ...SERVE_COMMAND_SPECS,
+  ...FOLDER_WORKSPACE_COMMAND_SPECS,
   {
     path: ['status'],
     summary: 'Show app/runtime/graph readiness',
