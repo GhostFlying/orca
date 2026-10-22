@@ -10,6 +10,10 @@ import { suggestCommands, unknownCommandData } from './command-suggestion'
 import { COMMAND_SPECS } from './specs'
 
 const blocked = [
+  ['folder-workspace ls', 'folder-workspace rm'],
+  ['folder-workspace mv', 'folder-workspace rm'],
+  ['project-group ls', 'project-group rm'],
+  ['project-group mv', 'project-group rm'],
   ['orchestration resume', 'orchestration reset'],
   ['orchestration rerun', 'orchestration reset'],
   ['orchestration repl', 'orchestration reset'],
@@ -26,6 +30,8 @@ const blocked = [
 ]
 
 const recovery = [
+  ['folder-workspace rmm', 'folder-workspace rm'],
+  ['project-group rmm', 'project-group rm'],
   ['orchestration rese', 'orchestration reset'],
   ['orchestration rest', 'orchestration reset'],
   ['emulator kil', 'emulator kill'],
