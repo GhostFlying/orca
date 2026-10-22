@@ -189,14 +189,12 @@ describe('folder workspace inherited filesystem', () => {
     }
   )
   it('rejects an inherited SSH relative path before creating a workspace', async () => {
-    const call = vi
-      .fn<RuntimeClient['call']>()
-      .mockResolvedValue({
-        id: 'group-read',
-        ok: true,
-        result: { groups: [{ id: 'group', connectionId: 'ssh-host' }] },
-        _meta: { runtimeId: 'runtime' }
-      })
+    const call = vi.fn<RuntimeClient['call']>().mockResolvedValue({
+      id: 'group-read',
+      ok: true,
+      result: { groups: [{ id: 'group', connectionId: 'ssh-host' }] },
+      _meta: { runtimeId: 'runtime' }
+    })
     await expect(
       FOLDER_WORKSPACE_HANDLERS['folder-workspace create']!(
         context(call, { path: 'relative', group: 'group', name: 'Task' })
@@ -205,14 +203,12 @@ describe('folder workspace inherited filesystem', () => {
     expect(call).toHaveBeenCalledExactlyOnceWith('projectGroup.list')
   })
   it('does not create a workspace when its selected group is missing', async () => {
-    const call = vi
-      .fn<RuntimeClient['call']>()
-      .mockResolvedValue({
-        id: 'group-read',
-        ok: true,
-        result: { groups: [] },
-        _meta: { runtimeId: 'runtime' }
-      })
+    const call = vi.fn<RuntimeClient['call']>().mockResolvedValue({
+      id: 'group-read',
+      ok: true,
+      result: { groups: [] },
+      _meta: { runtimeId: 'runtime' }
+    })
     await expect(
       FOLDER_WORKSPACE_HANDLERS['folder-workspace create']!(
         context(call, { path: 'relative', group: 'missing', name: 'Task' })
