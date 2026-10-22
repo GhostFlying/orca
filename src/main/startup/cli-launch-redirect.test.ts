@@ -1,4 +1,5 @@
 import { posix, win32 } from 'node:path'
+import { CLI_COMMAND_NAMES } from './cli-command-names'
 import { describe, expect, it, vi } from 'vitest'
 import {
   getCliLaunchArgs,
@@ -27,6 +28,21 @@ const windows = {
 
 const linuxOptions = { platform: 'linux' as const, isPackaged: true, commandNames: COMMAND_NAMES }
 const windowsOptions = { platform: 'win32' as const, isPackaged: true, commandNames: COMMAND_NAMES }
+
+describe('native folder CLI command launch routing', () => {
+  it.each(['folder-workspace', 'project-group'])(
+    'redirects a direct binary %s invocation with the production allowlist',
+    (command) => {
+      expect(
+        getCliLaunchArgs([linux.execPath, command, 'list', '--json'], linux.cliEntryPath, {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames: CLI_COMMAND_NAMES
+        })
+      ).toEqual([command, 'list', '--json'])
+    }
+  )
+})
 
 describe('CLI launch redirect: entry-path form', () => {
   it('detects a launch that received the unpacked CLI entrypoint', () => {
