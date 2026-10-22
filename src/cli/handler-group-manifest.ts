@@ -17,6 +17,20 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   LINEAR_HANDLER_GROUP,
   REFERENCE_HANDLER_GROUP,
   {
+    name: 'folder-workspace',
+    keys: [
+      'folder-workspace list',
+      'folder-workspace create',
+      'folder-workspace show',
+      'folder-workspace update',
+      'folder-workspace rm',
+      'project-group list',
+      'project-group create',
+      'project-group rm'
+    ],
+    load: async () => (await import('./handlers/folder-workspace.js')).FOLDER_WORKSPACE_HANDLERS
+  },
+  {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS
