@@ -118,17 +118,19 @@ describe('Trae automation completion without a renderer', () => {
       },
       terminalObserver: createRuntimeAutomationRunTerminalObserver(runtime, {
         getAgentStatusRowsForPane: (paneKey) => runtime.getAgentStatusRowsForPane(paneKey),
-        getAcceptedReply: () => undefined,
-        subscribeStatusChanges: () => () => {},
+        getAcceptedReply: (paneKey, leadTurnKey) =>
+          runtime.getAcceptedAgentReply(paneKey, leadTurnKey),
+        subscribeStatusChanges: (listener) => runtime.subscribeAgentStatusRowChanges(listener),
         agentCommandsForRun: () => ['traecli']
       })
     })
     const run = await service.runNow(automation.id)
-    await vi.waitFor(() => {
+    // The launch runs in a detached lane, so the returned row is the saved pending acknowledgement.
+    await vi.waitFor(() =>
       expect(
-        store.listAutomationRuns(automation.id).find((entry) => entry.id === run.id)
-      ).toMatchObject({ status: 'dispatched' })
-    })
+        store.listAutomationRuns(automation.id).find((entry) => entry.id === run.id)?.status
+      ).toBe('dispatched')
+    )
     rows.push(hookRow())
     runtime.onPtyData(PTY_ID, 'Task complete.\r\n', Date.now())
 
