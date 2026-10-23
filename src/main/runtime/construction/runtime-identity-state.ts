@@ -3,8 +3,8 @@ import type { SessionTitlePublisher } from '../session-tabs/session-title-publis
 import { randomUUID } from 'node:crypto'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
-import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import type { ObservedAgent } from '../../../shared/observed-agent'
+import { resolveAgentReadinessIdentity } from '../../../shared/agent-readiness-identity'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
 import type { RuntimeAutomationController } from '../integrations/automations/runtime-automation-controller'
@@ -259,14 +259,13 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     null
 
   /** Rank launch authority first, then foreground evidence for agents Orca did not launch. */
-  getPaneTerminalAgent(ptyId: string | null | undefined): TerminalAgent | null {
+  getPaneTerminalAgent(ptyId: string | null | undefined): ObservedAgent | null {
     const pty = ptyId ? this.ptysById.get(ptyId) : undefined
     return pty?.launchAgent ?? pty?.foregroundAgent ?? pty?.launchCommandAgent ?? null
   }
 
   protected getPaneAgentForTuiIdle(ptyId: string | null | undefined): TuiAgent | null {
-    const agent = this.getPaneTerminalAgent(ptyId)
-    return isTuiAgent(agent) ? agent : null
+    return resolveAgentReadinessIdentity(this.getPaneTerminalAgent(ptyId))
   }
 
   protected deliveryRecheckTimersByPtyId = new Map<string, ReturnType<typeof setTimeout>>()
