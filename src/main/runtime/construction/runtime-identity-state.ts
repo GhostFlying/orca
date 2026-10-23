@@ -11,8 +11,8 @@ import {
   mobileSnapshotIdentityUnchanged
 } from '../mobile-session-snapshot-equality'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import type { ObservedAgent } from '../../../shared/observed-agent'
+import { resolveAgentReadinessIdentity } from '../../../shared/agent-readiness-identity'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeClientSettingsController } from '../runtime-client-settings'
 import type { RuntimeAutomationController } from '../runtime-automation-controller'
@@ -272,14 +272,13 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     null
 
   /** Rank launch authority first, then foreground evidence for agents Orca did not launch. */
-  protected getPaneTerminalAgent(ptyId: string | null | undefined): TerminalAgent | null {
+  protected getPaneTerminalAgent(ptyId: string | null | undefined): ObservedAgent | null {
     const pty = ptyId ? this.ptysById.get(ptyId) : undefined
     return pty?.launchAgent ?? pty?.foregroundAgent ?? pty?.launchCommandAgent ?? null
   }
 
   protected getPaneAgentForTuiIdle(ptyId: string | null | undefined): TuiAgent | null {
-    const agent = this.getPaneTerminalAgent(ptyId)
-    return isTuiAgent(agent) ? agent : null
+    return resolveAgentReadinessIdentity(this.getPaneTerminalAgent(ptyId))
   }
 
   protected deliveryRecheckTimersByPtyId = new Map<string, ReturnType<typeof setTimeout>>()
