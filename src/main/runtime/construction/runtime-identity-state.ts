@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { preserveTerminalRetirementProofs } from '../mobile-session-terminal-retirement-proof'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { resolveAgentReadinessIdentity } from '../../../shared/agent-readiness-identity'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeClientSettingsController } from '../runtime-client-settings'
 import type { RuntimeAutomationController } from '../runtime-automation-controller'
@@ -277,7 +277,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     }
     const pty = this.ptysById.get(ptyId)
     const agent = pty?.launchAgent ?? pty?.foregroundAgent ?? null
-    return isTuiAgent(agent) ? agent : null
+    return resolveAgentReadinessIdentity(agent)
   }
 
   /** One-shot delivery retries, keyed by leaf. See checkDeliverySettledAndArmRecheck. */
