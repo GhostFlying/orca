@@ -80,6 +80,33 @@ describe('readTuiIdleHookTurn', () => {
     resolveBlockedText: () => null
   }
 
+  it.each(['trae', 'traex'])(
+    'joins %s hooks through the shared Trae readiness identity',
+    (agentType) => {
+      const receivedAt = Date.now()
+      const read = { ...base, agent: 'trae' as const }
+      expect(readTuiIdleHookTurn({ ...read, hookRows: [row({ agentType, receivedAt })] })).toEqual(
+        DONE
+      )
+      expect(
+        readTuiIdleHookTurn({
+          ...read,
+          hookRows: [row({ agentType, receivedAt })],
+          lastInputAt: receivedAt + 1
+        })
+      ).toBeNull()
+      expect(
+        readTuiIdleHookTurn({ ...read, hookRows: [row({ agentType, state: 'working' })] })
+      ).toEqual(WORKING)
+      expect(
+        readTuiIdleHookTurn({ ...read, hookRows: [row({ agentType, state: 'waiting' })] })
+      ).toEqual({ state: 'permission', blockedReason: 'agent-interactive-prompt' })
+      expect(
+        readTuiIdleHookTurn({ ...base, agent: 'codex', hookRows: [row({ agentType })] })
+      ).toBeNull()
+    }
+  )
+
   it('reads a fresh row joined on the pane key', () => {
     expect(readTuiIdleHookTurn({ ...base, hookRows: [row()] })).toEqual(DONE)
   })

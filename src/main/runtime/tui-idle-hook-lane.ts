@@ -1,3 +1,4 @@
+import { resolveAgentReadinessIdentity } from '../../shared/agent-readiness-identity'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -82,7 +83,11 @@ export type TuiIdleHookTurnRead = {
 /** Read the freshest pane/handle-joined hook row for this agent and process; unjoinable, stale or foreign rows leave other lanes to decide. */
 export function readTuiIdleHookTurn(read: TuiIdleHookTurnRead): TuiIdleHookTurn | null {
   const row = selectFreshExplicitAgentStatusRow(read)
-  if (!row || row.agentType !== read.agent || row.receivedAt < (read.respawnedAt ?? -1)) {
+  if (
+    !row ||
+    resolveAgentReadinessIdentity(row.agentType) !== read.agent ||
+    row.receivedAt < (read.respawnedAt ?? -1)
+  ) {
     return null
   }
   const state = hookLeadTurnState(row)
