@@ -272,6 +272,24 @@ describe('Canonical hook status readiness', () => {
   })
 
   describe('tui-idle hook lane through the runtime', () => {
+    it('settles a Trae launcher on its TraeX completed hook without a ready title', async () => {
+      expect(
+        await waitOutcome({ launchAgent: 'trae', rows: () => [row({ agentType: 'traex' })] })
+      ).toBe('ready')
+    })
+
+    it('does not treat a working TraeX hook or a different agent as Trae completion', async () => {
+      expect(
+        await waitOutcome({
+          launchAgent: 'trae',
+          rows: () => [row({ agentType: 'traex', state: 'working' })]
+        })
+      ).toBe('timeout')
+      expect(
+        await waitOutcome({ launchAgent: 'trae', rows: () => [row({ agentType: 'codex' })] })
+      ).toBe('timeout')
+    })
+
     it('joins a row on the terminal handle when its pane key is not the pane', async () => {
       expect(
         await waitOutcome({
