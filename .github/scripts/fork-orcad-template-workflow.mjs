@@ -15,7 +15,7 @@ function hasReadOnlyPermissions(source) {
     }
     const body = source.slice(match.index + match[0].length + 1)
     const block = /^((?: {6}[^\n]+\n)+)/.exec(body)?.[1]
-    if (block?.trim() !== 'contents: read') {
+    if (!/^contents: read(?:\n {6}actions: read)?$/.test(block?.trim() ?? '')) {
       return false
     }
   }

@@ -63,9 +63,21 @@ describe('fork server template workflow', () => {
     const next = parse(generateTemplateWorkflow(compatible, 'a'.repeat(40)))
     expect(next.on.workflow_call.inputs.fast_runners).toMatchObject({
       type: 'boolean',
-      default: false
+      default: parse(compatible).on.workflow_call.inputs.fast_runners.default
     })
     expect(next.jobs.persistence.permissions).toEqual({ contents: 'read' })
+  })
+
+  it('preserves read-only artifact access for template qualification', () => {
+    const compatible = upstream.replace(
+      /(^  desktop_template:\n[\s\S]*?^    permissions:\n)      contents: read\n(?:      actions: read\n)?/m,
+      '$1      contents: read\n      actions: read\n'
+    )
+    const next = parse(generateTemplateWorkflow(compatible, upstreamSha))
+    expect(next.jobs.desktop_template.permissions).toEqual({ contents: 'read', actions: 'read' })
+    expect(() =>
+      generateTemplateWorkflow(compatible.replace('actions: read', 'actions: write'), upstreamSha)
+    ).toThrow('read-only contents permission')
   })
 
   it.each([
@@ -94,11 +106,12 @@ describe('fork server template workflow', () => {
   it('binds the template to the exact candidate without publishing credentials', () => {
     expect(build.jobs['orcad-template']).toEqual({
       needs: 'candidate',
-      permissions: { contents: 'read' },
+      permissions: { contents: 'read', actions: 'read' },
       uses: './.github/workflows/fork-orcad-template.yml',
       with: {
         ref: expression('needs.candidate.outputs.candidate_sha'),
-        build_template: true
+        build_template: true,
+        fast_runners: false
       }
     })
     const checks = template.jobs.persistence.steps.filter((step) =>

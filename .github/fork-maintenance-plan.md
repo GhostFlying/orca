@@ -49,6 +49,8 @@ cut` or `ci: sync workflows with main for the vX.Y.Z cut` commit, the gate
 restores the workflows from before that sync, because the synced definitions
 come from a newer `main` than the Release's tests. Add a per-Release fixture
 repair only for a mismatch that remains after that.
+The test job installs system ripgrep when absent because upstream release-audit
+fixtures execute the dependency-audit shell action, which invokes `rg`.
 
 ## Invariants
 
@@ -151,6 +153,12 @@ even for maintenance-only pushes. The upstream sync regenerates it from
 copy. The maintenance gate checks reproducibility against the exact upstream SHA;
 an unsupported input interface or change-detection shape fails closed.
 
+Qualification jobs may request `contents: read` and `actions: read` for artifact
+inspection. The template caller grants both read scopes; the generator rejects
+write permissions and other job permission shapes.
+The caller sets `fast_runners: false` so qualification uses GitHub hosted
+runners even when the upstream workflow defaults to its own Blacksmith pool.
+
 For a same-version maintenance repair (including the v1.4.229 template omission),
 capture fresh production/protected refs and verify the already adopted published
 upstream Release. Reproduce the safe-anchor and business-patch replay transaction
@@ -177,7 +185,7 @@ Release discovery:
    for the source branch and all production refs, rejects merges and maintenance
    path changes in the hotfix range, and constructs `candidate/fork-hotfix` as
    `upstream-release + existing business patches + hotfix patches + one final
-maintenance snapshot`.
+   maintenance snapshot`.
 4. Only the leased `candidate/fork-hotfix` push starts the same full release
    build and finalizer used by upstream sync. A direct dispatch at a `fix/...`
    ref fails the canonical-candidate check.
