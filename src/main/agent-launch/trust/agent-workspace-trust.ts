@@ -102,9 +102,11 @@ export async function applyAgentWorkspaceTrust(
       codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome, context.codexHome),
       kimiHome: context.env?.KIMI_CODE_HOME || process.env.KIMI_CODE_HOME,
       agentEnv: { ...process.env, ...context.env },
-      // Codex shares its config lock queue with hook installs.
+      // Both TOML writers share the config lock queue with hook installs.
       deadlineMs:
-        preset === 'codex' ? AGENT_TRUST_WRITE_DEADLINE_MS : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
+        preset === 'codex' || preset === 'trae'
+          ? AGENT_TRUST_WRITE_DEADLINE_MS
+          : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
     }
   })
   return {}

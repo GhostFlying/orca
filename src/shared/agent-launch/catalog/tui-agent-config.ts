@@ -1,3 +1,4 @@
+import { TRAE_TUI_CONFIG } from './trae-tui-config'
 import type { TuiAgent } from './tui-agent'
 import {
   getOrcaCliCommandNameForPlatform,
@@ -74,13 +75,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: `ante --prompt` is headless (runs once and exits), so launch the bare TUI and inject after startup.
     promptInjectionMode: 'stdin-after-start'
   },
-  trae: {
-    // Use TRAE CN’s unique traecli alias; unrelated bytedance/trae-agent also installs trae-cli.
-    detectCmd: 'traecli',
-    promptInjectionMode: 'argv',
-    // Cobra’s -- stops subcommands and flags from consuming prompt text such as help/config/-….
-    argvPromptSeparator: '--'
-  },
+  trae: TRAE_TUI_CONFIG,
   opencode: {
     detectCmd: 'opencode',
     promptInjectionMode: 'flag-prompt',

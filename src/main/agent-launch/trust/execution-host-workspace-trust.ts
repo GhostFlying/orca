@@ -18,6 +18,8 @@ import {
   type ClaudeTrustConfigTarget,
   grantClaudeWorkspaceTrust
 } from '../../claude/configuration/claude-folder-trust-file'
+import { resolveTraeHomePaths } from '../../trae/trae-home-paths'
+import { getTraeConfigTomlPath } from '../../trae/trae-hook-definition'
 import { isTooBroadToPreTrust } from '../../../shared/agent-launch/permissions/workspace-pretrust-scope'
 
 /** Resolve trust on the agent’s execution host, including WSL guests and SSH relays. */
@@ -34,7 +36,7 @@ export type WorkspaceTrustHost = {
   guestWorkspacePath?: string
   /** KIMI_CODE_HOME for the launched Kimi; unset means `<agentHome>/.kimi-code`. */
   kimiHome?: string
-  /** The launched agent's env, for agents whose config root an env var moves (Qwen). */
+  /** The launched agent's env, for agents whose config root an env var moves (Qwen, Trae). */
   agentEnv?: Record<string, string | undefined>
   deadlineMs: number
 }
@@ -50,6 +52,7 @@ export function launchedAgentHome(
 export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean> = {
   claude: true,
   codex: false,
+  trae: false,
   cursor: false,
   copilot: true,
   qoder: true,
@@ -66,6 +69,7 @@ const AGENT_TRUST_UNSAFE_AT_A_HOME: ReadonlySet<AgentTrustPreset> = new Set(['ki
 export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean> = {
   claude: false,
   codex: true,
+  trae: true,
   cursor: false,
   copilot: false,
   qoder: false,
@@ -105,6 +109,10 @@ async function writePreset(
     }
     case 'codex':
       return markCodexProjectTrusted(storedPath, host.codexConfigFiles())
+    case 'trae': {
+      const paths = resolveTraeHomePaths({ homeDir: host.agentHome, env: host.agentEnv })
+      return markCodexProjectTrusted(storedPath, [getTraeConfigTomlPath(paths.traeHomeDir)])
+    }
     case 'cursor':
       return markCursorWorkspaceTrusted(storedPath, host.agentHome)
     case 'copilot':
