@@ -34,13 +34,16 @@ type DraftPasteReadySignalSpec = {
 }
 
 // Signals that read the screen's structure, not one marker; a Record so none lacks its scanner.
-type StructuralSignal = 'opencode-agent-row' | 'codex-composer-prompt'
+type StructuralSignal = 'opencode-agent-row' | 'codex-composer-prompt' | 'trae-composer-prompt'
 const STRUCTURAL_SCANNERS: Record<
   StructuralSignal,
   () => { observe: (data: string) => { ready: boolean; readyAfterMs?: number | null } }
 > = {
   'opencode-agent-row': createOpenCodeAgentRowScanner,
-  'codex-composer-prompt': createCodexComposerReadyScanner
+  'codex-composer-prompt': createCodexComposerReadyScanner,
+  // TraeX draws a provisional inline composer before trust; only the final one has a footer.
+  'trae-composer-prompt': () =>
+    createCodexComposerReadyScanner({ promptGlyph: '❯', requireFooter: true })
 }
 
 type SingleSignal = Exclude<DraftPasteReadySignal, StructuralSignal>
@@ -130,8 +133,16 @@ export function createDraftPasteReadyScanner(
     return createSingleSignalScanner(readySignal)
   }
   const scanner = STRUCTURAL_SCANNERS[readySignal]()
+  // Preserve Trae's existing quiet path when optional footer content is hidden or truncated.
+  const fallback =
+    readySignal === 'trae-composer-prompt'
+      ? createSingleSignalScanner('render-quiet-after-bracketed-paste')
+      : null
   return {
-    observe: (data) => ({ ...scanner.observe(data), armQuietTimer: false })
+    observe: (data) => ({
+      ...scanner.observe(data),
+      armQuietTimer: fallback?.observe(data).armQuietTimer ?? false
+    })
   }
 }
 

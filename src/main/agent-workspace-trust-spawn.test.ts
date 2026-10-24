@@ -124,7 +124,7 @@ describe('applyAgentWorkspaceTrustToSpawn', () => {
     expect(spawnOptions).toEqual({ agentWorkspaceTrust: { workspacePath: '/srv/wt' } })
   })
 
-  it.each(['codex', 'kimi'])(
+  it.each(['codex', 'kimi', 'trae'] as const)(
     'trusts %s in a floating terminal at the folder it starts in',
     async (agent) => {
       await applyAgentWorkspaceTrustToSpawn(
@@ -134,7 +134,7 @@ describe('applyAgentWorkspaceTrustToSpawn', () => {
     }
   )
 
-  it.each(['codex', 'kimi'])(
+  it.each(['codex', 'kimi', 'trae'] as const)(
     'trusts %s at a subfolder it starts in, which its lookup keys on',
     async (agent) => {
       await applyAgentWorkspaceTrustToSpawn(
@@ -144,7 +144,7 @@ describe('applyAgentWorkspaceTrustToSpawn', () => {
     }
   )
 
-  it.each(PRESET_AGENTS.filter((agent) => agent !== 'codex' && agent !== 'kimi'))(
+  it.each(PRESET_AGENTS.filter((agent) => !['codex', 'kimi', 'trae'].includes(agent)))(
     'trusts the workspace root for %s, whose trust covers its subfolders or matches the root',
     async (agent) => {
       await applyAgentWorkspaceTrustToSpawn(
