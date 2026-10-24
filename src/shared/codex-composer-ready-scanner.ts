@@ -1,7 +1,10 @@
 import { createTerminalEscapeScanner } from './terminal-escape-scanner'
 
 /** The fullscreen loading frame has a composer too; only the live chat paints its footer. */
-export function createCodexComposerReadyScanner(): {
+export function createCodexComposerReadyScanner({
+  promptGlyph = '›',
+  requireFooter = false
+}: { promptGlyph?: '›' | '❯'; requireFooter?: boolean } = {}): {
   observe: (data: string) => { ready: boolean }
 } {
   let bracketedPaste = false
@@ -13,7 +16,11 @@ export function createCodexComposerReadyScanner(): {
   let promptRow: number | null = null
   let footerRow: number | null = null
   let hintRow: number | null = null
+  let permissionHintRow: number | null = null
+  let textRow: number | null = null
+  let textTail = ''
   let row: number | null = null
+  let savedRow: number | null = null
   let cursorShown = false
   const paintedRows = new Set<number>()
 
@@ -22,7 +29,11 @@ export function createCodexComposerReadyScanner(): {
     promptRow = null
     footerRow = null
     hintRow = null
+    permissionHintRow = null
+    textRow = null
+    textTail = ''
     row = null
+    savedRow = null
     cursorShown = false
     paintedRows.clear()
   }
@@ -53,14 +64,33 @@ export function createCodexComposerReadyScanner(): {
         resetLayout()
       }
     },
+    onEscape: (final) => {
+      // TraeX animates its logo with DECSC/DECRC while leaving the composer cursor in place.
+      if (requireFooter && final === '7') {
+        savedRow = row
+      }
+      if (requireFooter && final === '8') {
+        row = savedRow
+      }
+    },
     onText: (text) => {
       for (const char of text) {
+        if (requireFooter && row !== null && promptRow !== null && row > promptRow) {
+          if (textRow !== row) {
+            textRow = row
+            textTail = ''
+          }
+          textTail = (textTail + char).slice(-9)
+          if (textTail === 'shift+tab') {
+            permissionHintRow = row
+          }
+        }
         if (row !== null && !/\s/.test(char) && paintedRows.size < 128) {
           paintedRows.add(row)
         }
         if (char === '\n' && row !== null) {
           row += 1
-        } else if (char === '›' && (bracketedPaste || altScreen)) {
+        } else if (char === promptGlyph && (bracketedPaste || altScreen)) {
           promptSeen = true
           promptRow = row
         } else if (char === '·' && promptRow !== null && row !== null && row > promptRow) {
@@ -76,18 +106,26 @@ export function createCodexComposerReadyScanner(): {
     observe: (data) => {
       scanner.observe(data)
       const liveFullscreenComposer =
-        altScreen &&
+        (altScreen || requireFooter) &&
         !synchronized &&
         cursorShown &&
         promptRow !== null &&
         row !== null &&
         row >= promptRow &&
-        hintRow !== null &&
-        // Single-item status lines have no separator; their reserved row is below the input padding.
-        ((footerRow !== null && footerRow === hintRow - 1 && row < footerRow) ||
-          (row + 2 < hintRow && paintedRows.has(hintRow - 1)))
+        (requireFooter
+          ? // Status plus a painted footer also covers truncated hints and read-only mode.
+            (permissionHintRow !== null && row < permissionHintRow) ||
+            (footerRow !== null &&
+              footerRow > promptRow + 1 &&
+              row < footerRow &&
+              paintedRows.has(footerRow + 1))
+          : hintRow !== null &&
+            // Single-item status lines have no separator; their reserved row is below the input padding.
+            ((footerRow !== null && footerRow === hintRow - 1 && row < footerRow) ||
+              (row + 2 < hintRow && paintedRows.has(hintRow - 1))))
       // Older inline builds do not paint synchronized fullscreen frames.
-      const legacyComposer = promptSeen && !leftAltScreen && (!altScreen || !sawSynchronizedFrame)
+      const legacyComposer =
+        !requireFooter && promptSeen && !leftAltScreen && (!altScreen || !sawSynchronizedFrame)
       return {
         ready: bracketedPaste && (liveFullscreenComposer || legacyComposer)
       }

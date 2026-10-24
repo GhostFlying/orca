@@ -1,0 +1,17 @@
+{
+  "agent": "TraeX 0.211.1",
+  "platform": "Linux",
+  "capture": "Isolated HOME and PTY, 120 columns, --no-daemon --no-alt-screen; no model request submitted",
+  "sanitization": "Temporary root replaced with /workspace/probe",
+  "plain-exact": "Exact cwd trusted: provisional composer followed by final footer; logo keeps repainting",
+  "plain-parent": "Only parent trusted: provisional composer followed by folder trust menu",
+  "footer-empty": "80 columns, tui.status_line=[], animation enabled",
+  "narrow-36": "36 columns, default status line, animation enabled",
+  "noanim-empty": "80 columns, tui.status_line=[], tui.animations=false",
+  "noanim-narrow": "36 columns, default status line, tui.animations=false",
+  "width20": "width20 columns, animation enabled",
+  "width24": "width24 columns, animation enabled",
+  "readonly80": "Read-only mode, animation enabled",
+  "width20-noanim": "width20 columns, animation disabled",
+  "readonly-noanim": "Read-only mode, animation disabled"
+}
