@@ -30,6 +30,7 @@ import {
 const PRESETS: readonly AgentTrustPreset[] = [
   'claude',
   'codex',
+  'trae',
   'cursor',
   'copilot',
   'qoder',
@@ -38,6 +39,7 @@ const PRESETS: readonly AgentTrustPreset[] = [
 const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder']
 const EXACT_OR_SELF_LIMITING_PRESETS: readonly AgentTrustPreset[] = [
   'codex',
+  'trae',
   'cursor',
   'antigravity'
 ]
@@ -59,6 +61,7 @@ function thisHost(overrides: Partial<WorkspaceTrustHost> = {}): () => WorkspaceT
   return () => ({
     homes: [state.home],
     agentHome: state.home,
+    launchEnv: {},
     claudeConfig: () => ({ configFile: join(state.home, '.claude.json'), keyStyle: 'posix' }),
     codexConfigFiles: () => [join(state.home, '.codex', 'config.toml')],
     deadlineMs: 1_500,
@@ -197,4 +200,25 @@ describe('applyWorkspaceTrustOnThisHost', () => {
     expect(warn).toHaveBeenCalledTimes(2)
     warn.mockRestore()
   })
+})
+
+it('preserves unrelated Trae settings while trusting a linked worktree at its own path', async () => {
+  const main = join(root, 'source')
+  const linked = join(root, 'linked')
+  linkGitWorktree(main, linked)
+  const configDir = join(root, 'custom-trae')
+  mkdirSync(configDir)
+  const configFile = join(configDir, 'traecli.toml')
+  const before = 'model = "example"\n[features]\nhooks = true\n'
+  writeFileSync(configFile, before)
+  await applyWorkspaceTrustOnThisHost(
+    'trae',
+    linked,
+    thisHost({ launchEnv: { TRAE_HOME: configDir } })
+  )
+  const after = readFileSync(configFile, 'utf8')
+  expect(after).toContain(before)
+  expect(after).toContain(`[projects.${JSON.stringify(realpathSync(linked))}]`)
+  expect(after).toContain('trust_level = "trusted"')
+  expect(after).not.toContain(JSON.stringify(main))
 })

@@ -70,10 +70,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadyTimeoutMs: 20_000,
     submitRetryDelayMs: 1200
   },
-  autohand: {
-    detectCmd: 'autohand',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  autohand: { detectCmd: 'autohand', promptInjectionMode: 'stdin-after-start' },
   ante: {
     detectCmd: 'ante',
     // Why: `ante --prompt` is headless (runs once and exits), so launch the bare TUI and inject after startup.
@@ -87,7 +84,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'argv',
     // Why: separator so prompts starting with `help`/`config`/`-…` aren't parsed as a
     // Trae subcommand or flag — `--` stops both in its Cobra parser.
-    argvPromptSeparator: '--'
+    argvPromptSeparator: '--',
+    preflightTrust: 'trae',
+    draftPasteReadySignal: 'trae-composer-prompt'
   },
   opencode: {
     detectCmd: 'opencode',
