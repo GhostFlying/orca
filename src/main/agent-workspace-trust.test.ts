@@ -294,3 +294,14 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
     }
   )
 })
+
+describe('Trae launch trust targets', () => {
+  it('uses the final launch HOME and TRAE_HOME without touching Codex config', async () => {
+    await applyAgentWorkspaceTrust('trae', WORKSPACE, {
+      ...local,
+      env: { HOME: '/home/agent', USERPROFILE: '/home/agent', TRAE_HOME: '/custom/trae' }
+    })
+    expect(mocks.codex).toHaveBeenCalledWith(WORKSPACE, [join('/custom/trae', 'traecli.toml')])
+    expect(mocks.codexConfigFiles).not.toHaveBeenCalled()
+  })
+})

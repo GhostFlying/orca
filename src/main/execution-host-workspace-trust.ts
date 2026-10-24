@@ -14,6 +14,8 @@ import {
   type ClaudeTrustConfigTarget,
   grantClaudeWorkspaceTrust
 } from './claude/claude-folder-trust-file'
+import { resolveTraeHomePaths } from './trae/trae-home-paths'
+import { getTraeConfigTomlPath } from './trae/trae-hook-definition'
 import { isTooBroadToPreTrust } from '../shared/home-or-filesystem-root'
 
 /**
@@ -29,6 +31,8 @@ export type WorkspaceTrustHost = {
   claudeConfig: () => ClaudeTrustConfigTarget | null
   /** Every config.toml the launched Codex may read, in the hook installer's lock order. */
   codexConfigFiles: () => readonly string[]
+  /** Final launch environment for providers with configurable homes. */
+  launchEnv?: Record<string, string | undefined>
   deadlineMs: number
 }
 
@@ -49,6 +53,7 @@ export function launchedAgentHome(
 export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean> = {
   claude: true,
   codex: false,
+  trae: false,
   cursor: false,
   copilot: true,
   qoder: true,
@@ -64,6 +69,7 @@ export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean>
 export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean> = {
   claude: false,
   codex: true,
+  trae: true,
   cursor: false,
   copilot: false,
   qoder: false,
@@ -104,6 +110,10 @@ async function writePreset(
     }
     case 'codex':
       return markCodexProjectTrusted(storedPath, host.codexConfigFiles())
+    case 'trae': {
+      const paths = resolveTraeHomePaths({ homeDir: host.agentHome, env: host.launchEnv })
+      return markCodexProjectTrusted(storedPath, [getTraeConfigTomlPath(paths.traeHomeDir)])
+    }
     case 'cursor':
       return markCursorWorkspaceTrusted(storedPath, host.agentHome)
     case 'copilot':
