@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readFreshComposerHold } from './launched-agent-composer-readiness'
 import { OPENCODE_AGENT_ROW_GRACE_MS } from '../../shared/opencode-agent-row-scanner'
 import {
   deliverStartupFollowupPrompt,
@@ -480,5 +481,80 @@ describe('OpenCode submit readiness', () => {
       await vi.advanceTimersByTimeAsync(1)
       expect(result.value).toBe('pty-1')
     })
+  })
+})
+
+describe('TraeX captured startup through the host readiness gate', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it.each(['clear', 'dialog', 'shell'])(
+    'preserves the old quiet path and its settle vetoes: %s',
+    async (screen) => {
+      vi.useFakeTimers()
+      const host: WorktreeStartupReadinessHost = {
+        getPtyId: () => 'pty-trae',
+        getForegroundProcess: async () => 'traex',
+        subscribeToData: () => () => {},
+        readRecentOutput: () => '\x1b[?2004h❯',
+        write: vi.fn()
+      }
+      let settled = false
+      const pending = waitForWorktreeStartupDraft(host, 'term-trae', 'trae', {
+        timeoutMs: 8_000,
+        isShellInFront: async () => screen === 'shell',
+        accept: () => screen !== 'dialog'
+      }).then((result) => {
+        settled = true
+        return result
+      })
+      await vi.advanceTimersByTimeAsync(1_499)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(settled).toBe(screen === 'clear')
+      await vi.advanceTimersByTimeAsync(6_500)
+      await expect(pending).resolves.toBe(screen === 'clear' ? 'pty-trae' : null)
+      expect(host.write).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
+  it.each([
+    'plain-exact',
+    'plain-parent',
+    'shell',
+    'footer-empty',
+    'narrow-36',
+    'noanim-empty',
+    'noanim-narrow',
+    'width20',
+    'width24',
+    'readonly80',
+    'width20-noanim',
+    'readonly-noanim'
+  ] as const)('settles only the final composer with the agent in front: %s', async (name) => {
+    vi.useFakeTimers()
+    const data = readFileSync(
+      join(__dirname, '__fixtures__', `traex-${name === 'shell' ? 'plain-exact' : name}.txt`),
+      'utf8'
+    )
+    const host: WorktreeStartupReadinessHost = {
+      getPtyId: () => 'pty-trae',
+      getForegroundProcess: async () => (name === 'shell' ? 'zsh' : 'traex'),
+      subscribeToData: () => () => {},
+      readRecentOutput: () => data,
+      write: vi.fn()
+    }
+    const pending = waitForWorktreeStartupDraft(host, 'term-trae', 'trae', {
+      timeoutMs: 8_000,
+      submit: true,
+      isShellInFront: async () => name === 'shell',
+      accept: () => readFreshComposerHold(data, null) === null
+    })
+    await vi.advanceTimersByTimeAsync(8_000)
+    await expect(pending).resolves.toBe(
+      name === 'plain-parent' || name === 'shell' ? null : 'pty-trae'
+    )
+    expect(host.write).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

@@ -8,6 +8,8 @@ export function workspaceTrustWritten(home: string, preset: AgentTrustPreset): b
       return 'projects' in JSON.parse(readFileSync(join(home, '.claude.json'), 'utf-8'))
     case 'codex':
       return existsSync(join(home, '.codex', 'config.toml'))
+    case 'trae':
+      return existsSync(join(home, '.trae', 'traecli.toml'))
     case 'cursor': {
       const projects = join(home, '.cursor', 'projects')
       return existsSync(projects) && readdirSync(projects).length > 0
