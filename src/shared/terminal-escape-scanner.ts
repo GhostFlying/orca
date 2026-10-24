@@ -13,6 +13,7 @@ const STRING_END_RE = /\x07|\x1b\\/
 type TerminalEscapeObserver = {
   onCsi: (privateMarker: string, params: string, final: string) => void
   onText: (text: string) => void
+  onEscape?: (final: string) => void
 }
 
 /** Incremental painted-text/CSI reader; terminal string payloads are never painted text. */
@@ -60,6 +61,7 @@ export function createTerminalEscapeScanner(observer: TerminalEscapeObserver): {
           carry = rest
           break
         }
+        observer.onEscape?.(input[escapeAt + 1])
         index = escapeAt + 2
       }
     }
