@@ -1,0 +1,35 @@
+WARNING: proceeding, even though we could not update PATH: Refusing to create helper binaries under temporary dir "/tmp" (cli_home: AbsolutePathBuf("/workspace/probe/width20/home/.trae/cli"))
+[6n]10;?\]11;?\[?u[c[?2004h[?1004h[?2026h[1;1H[J[?25l[1;1H[0m[m[K[2;10H[0m[m[K[4;10H[0m[m[K[8;20H[0m[m[K[10;18H[0m[m[K[2;1H  [1m[;m▄▄▄▄▄▄▄[3;1H[22m[;m  [1m[;m█[22m[;m [1m[;m◆[22m[;m [1m[;m◆[22m[;m [1m[;m█[22m[;m  [1m[;mTRAE CLI…[4;1H[22m[;m   [1m[;m▀▀▀▀▀▀[5;1H[22m[;m  /tmp/…/…/workspace[6;1H  [2mpermissions: [22m[1m[;mYOLO…[7;1H[22m[;m────────────────────[8;1H[1m[;m❯[22m[;m [2mAsk TRAE CLI to d[9;1H[22m────────────────────[10;1H  [1m?[22m for shortcuts[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l[?2026h[?25l[m[m[0m[1;1H[0 q[8;3H[?25h[?2026l]0;tmp[?2026h[1;1H[J[1;1H[J[1;1H[;m[K[;m⚠ Project-local[m[m[0m
+[;m[K  [;mconfig, hooks, and[m[m[0m
+[;m[K  [;mexec policies are[m[m[0m
+[;m[K  [;mdisabled in the[m[m[0m
+[;m[K  [;mfollowing folders[m[m[0m
+[;m[K  [;muntil the project[m[m[0m
+[;m[K  [;mis trusted, but[m[m[0m
+[;m[K  [;mskills still load.[m[m[0m
+[;m[K  [;m    1. /tmp/.trae[m[m[0m
+[;m[K  [;m       To load[m[m[0m
+[;m[K  [;mproject-local[m[m[0m
+[;m[K  [;mconfig, hooks, and[m[m[0m
+[;m[K  [;mexec policies,[m[m[0m
+[;m[K  [;madd /tmp as a[m[m[0m
+[;m[K  [;mtrusted project[m[m[0m
+[;m[K  [;min /tmp/orca-[m[m[0m
+[;m[K  [;mindependent-[m[m[0m
+[;m[K  [;mreview-trae-[m[m[0m
+[;m[K  [;mhbf6gm7p/width20/[m[m[0m
+[;m[K  [;mhome/.trae/[m[m[0m
+[;m[K  [;mtraecli.toml.[m[m[0m
+[;m[K[m[m[0m
+[;m[K[m[m[0m
+[;m[K  [1m[;m▄▄▄▄▄▄▄[m[m[0m
+[;m[K  [1m[;m█[22m[;m [1m[;m◆[22m[;m [1m[;m◆[22m[;m [1m[;m█[22m[;m  [1m[;mTRAE CLI…[m[m[0m
+[;m[K   [1m[;m▀▀▀▀▀▀[m[m[0m
+[;m[K  /tmp/…/…/workspace[m[m[0m
+[;m[K  [2mpermissions: [22m[1m[;mYOLO…[m[m[0m
+[;m[K[m[m[0m
+[;m[K  [1mTip:[22m Type / to[m[m[0m
+[;m[K  open the command[m[m[0m
+[;m[K  popup; Tab[m[m[0m
+[;m[K  autocompletes[m[m[0m
+[;m[K  slash commands.[m[m[0m[8;3H[?25l[35;1H[0m[m[K[37;20H[0m[m[K[36;1H────────────────────[37;1H[1m[;m❯[22m[;m [2mUse /skills to li[38;1H[22m────────────────────[39;1H  probe[2m · [22m/tmp/orca…[40;1H  [;m☢ Full Access[;m ([1mshi[m[m[0m[35;1H[0 q[37;3H[?25h[?2026l[?2026h[?25l[m[m[0m[35;1H[0 q[37;3H[?25h7[25;5H[m[1m─[0m[25;7H[m[1m─[0m8[?2026l[?2026h[?25l[m[m[0m[35;1H[0 q[37;3H[?25h7[25;5H[m[1m─[0m[25;7H[m[1m─[0m8[?2026l[?2026h[?25l[m[m[0m[35;1H[0 q[37;3H[?25h7[25;5H[m[1m─[0m[25;7H[m[1m─[0m8[?2026l[?2026h[?25l[m[m[0m[35;1H[0 q[37;3H[?25h7[25;5H[m[1m─[0m[25;7H[m[1m─[0m8[?2026l[?2026h[?25l[m[m[0m[35;1H[0 q[37;3H[?25h7[25;5H[m[1m◆[0m[25;7H[m[1m◆[0m8[?2026l[?2026h[?25l[m[m[0m[35;1H[0 q[37;3H[?25h7[25;5H[m[1m─[0m[25;7H[m[1m─[0m8[?2026l[?2026h[?25l[m[m[0m[35;1H[0 q[37;3H[?25h7[25;5H[m[1m◆[0m[25;7H[m[1m◆[0m8[?2026l
