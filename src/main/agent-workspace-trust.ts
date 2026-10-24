@@ -67,6 +67,7 @@ export async function applyAgentWorkspaceTrust(
     return {
       homes: localHomePaths(workspacePath, context),
       agentHome,
+      launchEnv: { ...process.env, ...context.env },
       claudeConfig: () =>
         resolveLocalClaudeTrustConfig({
           workspacePath,
@@ -75,9 +76,11 @@ export async function applyAgentWorkspaceTrust(
           wslDistro: context.wslDistro
         }),
       codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome),
-      // Why: Codex queues behind a config lane it shares with Orca's hook installs.
+      // Both TOML writers serialize trust mutations through the Codex config lane.
       deadlineMs:
-        preset === 'codex' ? AGENT_TRUST_WRITE_DEADLINE_MS : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
+        preset === 'codex' || preset === 'trae'
+          ? AGENT_TRUST_WRITE_DEADLINE_MS
+          : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
     }
   })
   return {}

@@ -42,13 +42,16 @@ type DraftPasteReadySignalSpec = {
 }
 
 // Signals that read the screen's structure, not one marker; a Record so none lacks its scanner.
-type StructuralSignal = 'opencode-agent-row' | 'codex-composer-prompt'
+type StructuralSignal = 'opencode-agent-row' | 'codex-composer-prompt' | 'trae-composer-prompt'
 const STRUCTURAL_SCANNERS: Record<
   StructuralSignal,
   () => { observe: (data: string) => { ready: boolean; readyAfterMs?: number | null } }
 > = {
   'opencode-agent-row': createOpenCodeAgentRowScanner,
-  'codex-composer-prompt': createCodexComposerReadyScanner
+  'codex-composer-prompt': createCodexComposerReadyScanner,
+  // TraeX draws a provisional inline composer before trust; only the final one has a footer.
+  'trae-composer-prompt': () =>
+    createCodexComposerReadyScanner({ promptGlyph: '❯', requireFooter: true })
 }
 
 type SingleSignal = Exclude<DraftPasteReadySignal, StructuralSignal>
@@ -146,6 +149,9 @@ export function resolvePasteReadySignal(
  * Per agent signal:
  *   - `codex-composer-prompt`: fullscreen waits for the live footer and composer
  *     cursor at a completed frame; older inline builds keep their glyph signal.
+ *   - `trae-composer-prompt`: the final footer and composer cursor, including inline mode;
+ *     the provisional composer before trust never produces a marker. The previous
+ *     quiet-window fallback remains available for other layouts, with caller vetoes.
  *   - `render-cursor-after-bracketed-paste`: ready when DECTCEM show-cursor
  *     (`\x1b[?25h`) renders while DECSET 2004 is held; `\x1b[?2004l` revokes it.
  *     Like Codex it does NOT arm the quiet window: opencode stays silent for up
@@ -196,8 +202,16 @@ export function createDraftPasteReadyScanner(
     return createSingleSignalScanner(readySignal)
   }
   const scanner = STRUCTURAL_SCANNERS[readySignal]()
+  // Preserve Trae's existing quiet path when optional footer content is hidden or truncated.
+  const fallback =
+    readySignal === 'trae-composer-prompt'
+      ? createSingleSignalScanner('render-quiet-after-bracketed-paste')
+      : null
   return {
-    observe: (data) => ({ ...scanner.observe(data), armQuietTimer: false })
+    observe: (data) => ({
+      ...scanner.observe(data),
+      armQuietTimer: fallback?.observe(data).armQuietTimer ?? false
+    })
   }
 }
 
