@@ -5,23 +5,44 @@ import { dirname, resolve } from 'node:path'
 export const TEMPLATE_WORKFLOW_PATH = '.github/workflows/fork-orcad-template.yml'
 const UPSTREAM_WORKFLOW_PATH = '.github/workflows/node-server-tests.yml'
 
+function hasReadOnlyPermissions(source) {
+  if (!/^permissions:\n  contents: read\n(?=\n)/m.test(source)) {
+    return false
+  }
+  for (const match of source.matchAll(/^    permissions:(.*)$/gm)) {
+    if (match[1] !== '') {
+      return false
+    }
+    const body = source.slice(match.index + match[0].length + 1)
+    const block = /^((?: {6}[^\n]+\n)+)/.exec(body)?.[1]
+    if (block?.trim() !== 'contents: read') {
+      return false
+    }
+  }
+  return true
+}
+
 export function generateTemplateWorkflow(source, upstreamSha) {
   if (!/^[a-f0-9]{40}$/.test(upstreamSha)) {
     throw new Error('Template workflow source must be a full upstream commit SHA')
   }
   const triggers = /^on:\n[\s\S]*?(?=^\S)/m.exec(source)
   const call = triggers?.[0].match(/^  workflow_call:\n(?:^ {4}.*\n|^\s*\n)*/m)?.[0]
+  const inputNames = call
+    ? [...call.matchAll(/^      ([a-z_]+):$/gm)].map((match) => match[1]).join(',')
+    : ''
   if (
     !call ||
-    [...call.matchAll(/^      ([a-z_]+):$/gm)].map((match) => match[1]).join(',') !==
-      'ref,build_template' ||
+    !['ref,build_template', 'ref,build_template,fast_runners'].includes(inputNames) ||
     /^    secrets:/m.test(call) ||
     !/^      ref:\n(?:^ {8}.*\n)*?^        type: string$/m.test(call) ||
-    !/^      build_template:\n(?:^ {8}.*\n)*?^        type: boolean$/m.test(call)
+    !/^      build_template:\n(?:^ {8}.*\n)*?^        type: boolean$/m.test(call) ||
+    (inputNames.includes('fast_runners') &&
+      !/^      fast_runners:\n(?:^ {8}.*\n)*?^        type: boolean$/m.test(call))
   ) {
     throw new Error('Upstream template workflow_call interface changed; inspect before adapting')
   }
-  if (!/^permissions:\n  contents: read\n(?=\n)/m.test(source) || /^    permissions:/m.test(source)) {
+  if (!hasReadOnlyPermissions(source)) {
     throw new Error('Upstream template workflow must use read-only contents permission')
   }
   // A maintenance-only push must not let change detection skip release qualification.
