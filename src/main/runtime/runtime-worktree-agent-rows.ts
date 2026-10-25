@@ -51,6 +51,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
       toolInput: source.toolInput,
       interrupted: source.interrupted,
       ...(source.mainAgent ? { mainAgent: source.mainAgent } : {}),
+      ...(source.providerSession ? { providerSession: source.providerSession } : {}),
       stateStartedAt: source.stateStartedAt,
       updatedAt: source.updatedAt,
       ...(source.children !== undefined ? { children: source.children } : {}),
