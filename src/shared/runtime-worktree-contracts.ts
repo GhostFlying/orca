@@ -1,3 +1,4 @@
+import type { AgentProviderSessionMetadata } from './agent-session/lifecycle/agent-session-resume'
 import type { SmartTier } from './sidebar-list/sort-stamps'
 import type {
   AgentStatusState,
@@ -47,6 +48,7 @@ export type RuntimeWorktreeAgentRow = {
   mainAgent?: AgentMainAgentStatus
   /** Same as `terminal show`, only when requested: null is "looked, no wait"; absent is not evaluated (structured workers, old hosts). */
   agentWait?: RuntimeTerminalInteractiveWait | null
+  providerSession?: AgentProviderSessionMetadata
   stateStartedAt: number
   updatedAt: number
   /** Native canonical views win over the CLI roster, including an explicit empty list. */
