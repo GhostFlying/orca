@@ -1,3 +1,4 @@
+import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 import type { StructuredHostStatus } from '../../shared/agent-hook-listener/listener-event'
 import type {
   AgentStatusIpcPayload,
@@ -25,6 +26,7 @@ export type RuntimeWorktreeAgentSource = Pick<AgentStatusIpcPayload, 'subagents'
   toolInput: string | null
   interrupted: boolean
   mainAgent?: AgentMainAgentStatus
+  providerSession?: AgentProviderSessionMetadata
   stateStartedAt: number
   updatedAt: number
   /** Projected by the structured session host; `owned` rows stay fresh past the staleness window. */
