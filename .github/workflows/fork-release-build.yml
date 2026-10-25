@@ -233,6 +233,12 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+      - name: Install release-audit tooling
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
       - name: Restore upstream workflow fixtures
         env:
           UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
@@ -995,10 +1001,12 @@ jobs:
     needs: candidate
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/fork-orcad-template.yml
     with:
       ref: ${{ needs.candidate.outputs.candidate_sha }}
       build_template: true
+      fast_runners: false
 
   desktop:
     needs: [candidate, orcad-template]
