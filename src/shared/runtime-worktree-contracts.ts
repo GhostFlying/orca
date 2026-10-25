@@ -1,3 +1,4 @@
+import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { SmartTier } from './sidebar-list/sort-stamps'
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
@@ -39,6 +40,7 @@ export type RuntimeWorktreeAgentRow = {
    *  while subagents hold the row `working`. Optional on the wire: old hosts never send it, and a
    *  reader without it falls back to `interrupted`. */
   mainAgent?: AgentMainAgentStatus
+  providerSession?: AgentProviderSessionMetadata
   stateStartedAt: number
   updatedAt: number
   /** Native canonical views win over the CLI roster, including an explicit empty list. */
