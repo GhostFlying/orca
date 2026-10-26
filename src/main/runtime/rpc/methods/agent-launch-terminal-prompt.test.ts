@@ -676,3 +676,25 @@ describe('terminal readiness failure classifications', () => {
     expect(stub.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 })
+
+it('classifies production readiness terminal_exited rejections without retrying', async () => {
+  const stub = runtimeStub({})
+  stub.waitForTerminal.mockRejectedValue(new Error('terminal_exited'))
+  const onDiagnostic = vi.fn()
+  await deliverTerminalAgentLaunchPrompt({
+    runtime: stub.runtime,
+    handle: 'term_1',
+    agent: 'claude',
+    freshLaunch: false,
+    text: 'test',
+    onDiagnostic
+  })
+  expect(onDiagnostic).toHaveBeenCalledWith(
+    expect.objectContaining({
+      code: 'process_exited',
+      phase: 'readiness',
+      promptWriteState: 'none'
+    })
+  )
+  expect(stub.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+})

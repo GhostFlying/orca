@@ -267,7 +267,7 @@ async function executeAdmittedAgentLaunch(
   // Bookkeeping: a failure leaves the first write, whose owed prompt replays as `unconfirmed` (or as
   // `unknown` to a caller that cannot read it), never as `not-delivered`.
   await settleQuietly(admission.settle(result))
-  return presentLaunchResult(result, context)
+  return result
 }
 
 function runReplaySafeAgentLaunch(
@@ -283,7 +283,7 @@ function runReplaySafeAgentLaunch(
     if (active.fingerprint !== fingerprint) {
       return Promise.reject(new Error('agent_session_operation_conflict'))
     }
-    return active.promise
+    return active.promise.then((result) => presentLaunchResult(result, context))
   }
 
   let promise: Promise<AgentLaunchResult>
@@ -293,7 +293,7 @@ function runReplaySafeAgentLaunch(
     }
   })
   activeAgentLaunches.set(key, { fingerprint, promise })
-  return promise
+  return promise.then((result) => presentLaunchResult(result, context))
 }
 
 export const AGENT_LAUNCH_METHODS = [

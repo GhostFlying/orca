@@ -584,3 +584,48 @@ describe('live uncertain launch replies', () => {
     expect(deliverTerminalPrompt).toHaveBeenCalledOnce()
   })
 })
+
+describe('concurrent launch caller capabilities', () => {
+  it.each([true, false])(
+    'presents each caller independently, first upgraded = %s',
+    async (firstUpgraded) => {
+      let markStarted = (): void => {}
+      const started = new Promise<void>((resolve) => {
+        markStarted = resolve
+      })
+      let release = (): void => {}
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      deliverTerminalPrompt.mockImplementationOnce(async ({ onDiagnostic }) => {
+        markStarted()
+        await gate
+        onDiagnostic?.({
+          code: 'delivery_unknown',
+          phase: 'write',
+          promptWriteState: 'possible',
+          elapsedMs: 800,
+          terminalHandle: 'term_1'
+        })
+        return false
+      })
+      const runtime = hostRuntime()
+      const first = launch(runtime, PROMPTED_LAUNCH, firstUpgraded ? UPGRADED_PHONE : PHONE)
+      await started
+      const second = launch(runtime, PROMPTED_LAUNCH, firstUpgraded ? PHONE : UPGRADED_PHONE)
+      release()
+      const results = await Promise.allSettled([first, second])
+      const supported = results[firstUpgraded ? 0 : 1]
+      const legacy = results[firstUpgraded ? 1 : 0]
+      expect(supported).toMatchObject({
+        status: 'fulfilled',
+        value: { prompt: { outcome: 'unconfirmed' } }
+      })
+      expect(legacy).toMatchObject({
+        status: 'rejected',
+        reason: new Error('agent_session_operation_unknown')
+      })
+      expect(deliverTerminalPrompt).toHaveBeenCalledOnce()
+    }
+  )
+})
