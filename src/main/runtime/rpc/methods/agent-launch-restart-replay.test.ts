@@ -1,5 +1,4 @@
 import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
-import type { AgentLaunchPromptDiagnostic } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import '../unused-default-rpc-methods.test-fixture'
 /** Reopen the real ledger with no in-flight launches to test both surface and prompt writes across restart.
  * A recorded surface replays the surviving agent under its current pane handle; an unrecorded outcome remains unknown, never relaunched. */
@@ -14,7 +13,8 @@ import {
 } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   isAgentLaunchResult,
-  type AgentLaunchResult
+  type AgentLaunchResult,
+  type AgentLaunchPromptDiagnostic
 } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
