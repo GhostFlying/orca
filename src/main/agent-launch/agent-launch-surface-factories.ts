@@ -8,7 +8,8 @@ import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtim
 import type {
   AgentLaunchIntent,
   AgentLaunchPrompt,
-  AgentLaunchMode
+  AgentLaunchMode,
+  AgentLaunchPromptDiagnostic
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
@@ -67,6 +68,7 @@ export type AgentLaunchSurfaceFactory = {
     prompt: AgentLaunchPrompt
     /** Abort readiness waits and refuse pending pastes. */
     signal?: AbortSignal
+    onDiagnostic?: (diagnostic: AgentLaunchPromptDiagnostic) => void
   }): Promise<boolean>
 }
 
