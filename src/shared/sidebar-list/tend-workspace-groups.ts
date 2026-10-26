@@ -7,7 +7,10 @@ import type { ProjectGroup } from '../project/groups/project-group-types'
 import type { OrderedGroupEntry } from './sections/worktree-group-entry'
 import { buildOrderedGroups } from './sections/worktree-grouping'
 import { appendOrderedGroups, type SectionAppendContext } from './sections/group-sections'
-import type { RenderableFolderWorkspace } from './folders/folder-workspace-lanes'
+import {
+  compareFolderWorkspacesForDisplay,
+  type RenderableFolderWorkspace
+} from './folders/folder-workspace-lanes'
 import { getLaneHostWorktreeCounts, getLaneHostWorktreeIds } from './hosts/host-labels'
 
 export function prepareTendWorkspaceGroups(
@@ -42,7 +45,9 @@ export function prepareTendWorkspaceGroups(
         label: 'Directories',
         items: [],
         repoIds: new Set(),
-        folderWorkspaces: directories
+        folderWorkspaces: directories.sort((left, right) =>
+          compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
+        )
       }
     ])
   }
