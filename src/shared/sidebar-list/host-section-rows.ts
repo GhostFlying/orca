@@ -69,6 +69,9 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
     case 'folder-workspace':
       return getFolderWorkspaceHostId(row.folderWorkspace, row.projectGroup, defaultHostId)
     case 'header':
+      if (row.presentationOnly) {
+        return null
+      }
       return row.repo ? getRepoHostId(row.repo, defaultHostId) : null
   }
 }
@@ -113,6 +116,12 @@ function countWorkspaceRows(rows: readonly Row[]): number {
   }
   for (const row of rows) {
     if (row.type === 'header') {
+      if (
+        pendingHeader?.presentationOnly &&
+        (row.projectGroupDepth ?? 0) > (pendingHeader.projectGroupDepth ?? 0)
+      ) {
+        pendingHeaderHadWorkspaces = true
+      }
       flushHeader()
       pendingHeader = row
       continue
@@ -163,7 +172,7 @@ function getPendingRowKey(row: Extract<Row, { type: 'header' }>): string {
 
 /** A project group's header (it names no host itself): its nesting depth, else null. */
 function getProjectGroupHeaderDepth(row: Row): number | null {
-  return row.type === 'header' && row.projectGroup && !row.repo
+  return row.type === 'header' && (row.presentationOnly || (row.projectGroup && !row.repo))
     ? (row.projectGroupDepth ?? 0)
     : null
 }

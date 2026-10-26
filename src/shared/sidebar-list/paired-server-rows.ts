@@ -37,6 +37,7 @@ const PairedServerWorkspaceRowSchema = z
     // What the list sorts, groups and filters by, as the server stamped it; older desktops omit them.
     // `lineage` is the edge the server's own check kept, not its stored record.
     WorkspaceRowSchema.pick({
+      comment: true,
       isMainWorktree: true,
       isUnread: true,
       instanceId: true,
@@ -105,6 +106,7 @@ export function pairedServerRowOfWorktree(
     path: worktree.path,
     branch: worktree.branch,
     displayName: worktree.displayName,
+    comment: worktree.comment,
     isArchived: worktree.isArchived,
     isPinned: worktree.isPinned,
     isMainWorktree: worktree.isMainWorktree,
@@ -160,6 +162,7 @@ const ServerWorktreePsRowSchema = z.object({
   path: z.string().catch(''),
   branch: z.string().catch(''),
   displayName: z.string().catch(''),
+  comment: z.string().optional().catch(undefined),
   isArchived: z.boolean().catch(false),
   isPinned: z.boolean().catch(false),
   isMainWorktree: z.boolean().catch(false),

@@ -22,6 +22,11 @@ import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/sidebar-list/folder-workspace-host-id'
 import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/host-section-collapse'
+import {
+  isTendWorkspaceComment,
+  TEND_DIRECTORY_GROUP_KEY,
+  TEND_WORKSPACE_GROUP_KEY
+} from '../../../../../../shared/tend-workspace-comment'
 
 function findFolderWorkspaceByKey(
   worktreeId: string,
@@ -101,6 +106,16 @@ export function getFolderWorkspaceRevealGroupKeys(
   )
   if (!folderWorkspace) {
     return []
+  }
+  if (isTendWorkspaceComment(folderWorkspace.comment)) {
+    const group = projectGroups.find((candidate) => candidate.id === folderWorkspace.projectGroupId)
+    return [
+      TEND_WORKSPACE_GROUP_KEY,
+      TEND_DIRECTORY_GROUP_KEY,
+      ...(group && options?.defaultHostId
+        ? [`host:${getFolderWorkspaceHostId(folderWorkspace, group, options.defaultHostId)}`]
+        : [])
+    ]
   }
 
   const groupsById = new Map(
