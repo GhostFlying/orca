@@ -93,8 +93,9 @@ export function renderWorktreeSectionHeaderRow(args: {
 }): React.JSX.Element {
   const { ctx, row, vItem, isActiveStickyHeader } = args
   const { headerDrag } = ctx
-  const isRepoHeader = ctx.groupBy === 'repo' && row.repo !== undefined
-  const isProjectGroupHeader = ctx.groupBy === 'repo' && row.projectGroup !== undefined
+  const isRepoHeader = !row.presentationOnly && ctx.groupBy === 'repo' && row.repo !== undefined
+  const isProjectGroupHeader =
+    !row.presentationOnly && ctx.groupBy === 'repo' && row.projectGroup !== undefined
   // Drag keys on the project's anchor and skips copies an earlier host section already drew.
   const headerRepo = isRepoHeader ? getHeaderDragRepo(row) : undefined
   const projectIdForHeader = headerRepo?.id
@@ -179,7 +180,11 @@ export function renderWorktreeSectionHeaderRow(args: {
   // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
   const showHeaderCollapseAffordance =
     row.count > 0 &&
-    (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader)
+    (row.presentationOnly ||
+      isRepoHeader ||
+      isProjectGroupHeader ||
+      headerWorkspaceStatus !== null ||
+      isPinnedHeader)
   return (
     <div
       key={vItem.key}
@@ -253,7 +258,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           style={{
             // Why: non-project headers like "All" are flat-list labels; don't reserve project hierarchy indent.
             paddingLeft:
-              isRepoHeader || isProjectGroupHeader
+              row.presentationOnly || isRepoHeader || isProjectGroupHeader
                 ? getProjectGroupHeaderPaddingLeft(row.projectGroupDepth ?? 0)
                 : WORKTREE_SECTION_HEADER_PADDING_LEFT
           }}
@@ -382,7 +387,7 @@ export function renderWorktreeSectionHeaderRow(args: {
               />
             ) : null}
 
-            {row.repo && ctx.groupBy === 'repo' ? (
+            {isRepoHeader && row.repo ? (
               <RepoHeaderProjectActionsMenu
                 repo={row.repo}
                 label={label}
@@ -391,7 +396,7 @@ export function renderWorktreeSectionHeaderRow(args: {
               />
             ) : null}
 
-            {row.repo && ctx.groupBy === 'repo' ? (
+            {isRepoHeader && row.repo ? (
               <RepoHeaderCreateWorkspaceButton
                 key={`${row.repo.executionHostId ?? 'local'}:${row.repo.connectionId ?? ''}`}
                 repo={row.repo}
