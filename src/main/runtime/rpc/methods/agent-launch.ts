@@ -19,7 +19,11 @@ import {
 } from '../../../agent-launch/agent-launch-not-started'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
-import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
+import {
+  admitAgentLaunchOperation,
+  agentLaunchOperationCallerKey,
+  presentLaunchResult
+} from './agent-launch-replay'
 import {
   AgentLaunchExecutionError,
   agentLaunchRefusalError,
@@ -105,10 +109,7 @@ async function runAgentLaunch(
 
 /** Legacy unnamed launches retain the 60-second create dedupe cache (repo/mutation id, no caller partition).
  * Named operations bypass it: durable admission alone decides execution, including existing-workspace launches. */
-function runLegacyAgentLaunch(
-  params: AgentLaunchParams,
-  context: RpcContext
-): Promise<AgentLaunchResult> {
+function runLegacyAgentLaunch(params: AgentLaunchParams, context: RpcContext) {
   // No early tab, as before: only a replay-safe launch shows its tab before its agent exists.
   const execute = async () =>
     runAgentLaunch(
@@ -123,13 +124,15 @@ function runLegacyAgentLaunch(
     )
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
     const { repo, repoHostId } = params.target.create
-    return context.runtime.dedupeWorktreeCreate(
-      repoHostId ? { repo, repoHostId } : repo,
-      `agent.launch:${params.target.create.clientMutationId}`,
-      execute
-    )
+    return context.runtime
+      .dedupeWorktreeCreate(
+        repoHostId ? { repo, repoHostId } : repo,
+        `agent.launch:${params.target.create.clientMutationId}`,
+        execute
+      )
+      .then((result) => presentLaunchResult(result, context))
   }
-  return execute()
+  return execute().then((result) => presentLaunchResult(result, context))
 }
 
 type ActiveAgentLaunch = {
@@ -234,7 +237,7 @@ async function executeAdmittedAgentLaunch(
   }
   // Failed settlement leaves the provisional prompt unconfirmed (unknown for older callers), never not-delivered that invites duplication.
   await settleQuietly(admission.settle(result))
-  return result
+  return presentLaunchResult(result, context)
 }
 
 function runReplaySafeAgentLaunch(
