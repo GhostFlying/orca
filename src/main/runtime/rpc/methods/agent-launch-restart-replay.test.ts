@@ -1,3 +1,4 @@
+import type { AgentLaunchPromptDiagnostic } from '../../../../shared/agent-launch-intent'
 import '../unused-default-rpc-methods.test-fixture'
 /** Reopen the real ledger with no in-flight launches to test both surface and prompt writes across restart.
  * A recorded surface replays the surviving agent under its current pane handle; an unrecorded outcome remains unknown, never relaunched. */
@@ -28,7 +29,12 @@ import {
 } from './agent-launch.test-fixture'
 
 const deliverTerminalPrompt = vi.hoisted(() =>
-  vi.fn(async (_args: { handle: string }): Promise<boolean> => true)
+  vi.fn(
+    async (_args: {
+      handle: string
+      onDiagnostic?: (diagnostic: AgentLaunchPromptDiagnostic) => void
+    }): Promise<boolean> => true
+  )
 )
 vi.mock('./agent-launch-terminal-prompt', () => ({
   deliverTerminalAgentLaunchPrompt: deliverTerminalPrompt
@@ -541,5 +547,27 @@ describe('one row per launch, with no limit on how many a caller holds', () => {
       outcome: { kind: 'terminal' }
     })
     expect(host.createTerminal).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('live uncertain launch replies', () => {
+  it('refuses an older client while preserving an uncertain receipt for replay', async () => {
+    const diagnostic: AgentLaunchPromptDiagnostic = {
+      code: 'delivery_unknown',
+      phase: 'write',
+      promptWriteState: 'possible',
+      elapsedMs: 800,
+      terminalHandle: 'term_1'
+    }
+    deliverTerminalPrompt.mockImplementationOnce(async ({ onDiagnostic }) => {
+      onDiagnostic?.(diagnostic)
+      return false
+    })
+    const runtime = hostRuntime()
+    await expect(launch(runtime)).rejects.toThrow('agent_session_operation_unknown')
+    await expect(launch(runtime, PROMPTED_LAUNCH, UPGRADED_PHONE)).resolves.toMatchObject({
+      prompt: { outcome: 'unconfirmed', diagnostic }
+    })
+    expect(deliverTerminalPrompt).toHaveBeenCalledOnce()
   })
 })

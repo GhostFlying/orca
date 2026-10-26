@@ -18,7 +18,11 @@ import {
 } from '../../../agent-launch/agent-launch-not-started'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
-import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
+import {
+  admitAgentLaunchOperation,
+  agentLaunchOperationCallerKey,
+  presentLaunchResult
+} from './agent-launch-replay'
 import {
   AgentLaunchExecutionError,
   agentLaunchRefusalError,
@@ -38,12 +42,12 @@ import {
   launchFailureWithoutEffectsCode
 } from './agent-launch-failure-code'
 import {
+  callerRendersLaunchedChat,
   agentLaunchCallerNavigationId,
   selectAgentLaunchTabForCaller
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
 import { assertAgentLaunchTargetAuthorized } from './agent-launch-target-authorization'
-import { clientRendersStructuredAgent } from './structured-agent-session-policy'
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
 import {
   publishEarlyTab,
@@ -58,19 +62,6 @@ export function supportsAgentLaunch(
   return (
     context.clientKind === undefined ||
     context.clientCapabilities?.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY) === true
-  )
-}
-
-/** v2 covers Claude/Codex chats; other agents require the same explicit rendering capability used by tabs and restart offers, else use terminal. */
-function callerRendersLaunchedChat(
-  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>,
-  agent: string
-): boolean {
-  return (
-    context.clientKind === undefined ||
-    agent === 'claude' ||
-    agent === 'codex' ||
-    clientRendersStructuredAgent(context.clientCapabilities, agent)
   )
 }
 
@@ -129,13 +120,15 @@ function runLegacyAgentLaunch(
     })
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
     const { repo, repoHostId } = params.target.create
-    return context.runtime.dedupeWorktreeCreate(
-      repoHostId ? { repo, repoHostId } : repo,
-      `agent.launch:${params.target.create.clientMutationId}`,
-      execute
-    )
+    return context.runtime
+      .dedupeWorktreeCreate(
+        repoHostId ? { repo, repoHostId } : repo,
+        `agent.launch:${params.target.create.clientMutationId}`,
+        execute
+      )
+      .then((result) => presentLaunchResult(result, context))
   }
-  return execute()
+  return execute().then((result) => presentLaunchResult(result, context))
 }
 
 type ActiveAgentLaunch = {
@@ -238,7 +231,7 @@ async function executeAdmittedAgentLaunch(
   }
   // Failed settlement leaves the provisional prompt unconfirmed (unknown for older callers), never not-delivered that invites duplication.
   await settleQuietly(admission.settle(result))
-  return result
+  return presentLaunchResult(result, context)
 }
 
 function runReplaySafeAgentLaunch(

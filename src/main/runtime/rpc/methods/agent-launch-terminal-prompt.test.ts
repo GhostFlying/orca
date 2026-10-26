@@ -527,7 +527,7 @@ describe('cancelling a launch prompt', () => {
     ).resolves.toBe(false)
   })
 
-  it('passes no signal or acceptance hook when the caller gave no signal', async () => {
+  it('observes submit acknowledgements even without an abort signal', async () => {
     const stub = runtimeStub({})
 
     await deliverTerminalAgentLaunchPrompt({
@@ -540,7 +540,7 @@ describe('cancelling a launch prompt', () => {
 
     const options = stub.sendTerminalAgentPrompt.mock.calls[0]![2]
     expect(options).not.toHaveProperty('signal')
-    expect(options).not.toHaveProperty('onSubmitWritten')
+    expect(options.onSubmitWritten).toBeTypeOf('function')
     expect(stub.waitForTerminal.mock.calls[0]![1]).not.toHaveProperty('signal')
   })
 })
@@ -554,3 +554,111 @@ function fakeClock() {
     }
   }
 }
+
+describe('launch diagnostic write certainty', () => {
+  it('reports readiness timeout without leaking errors or entering the writer', async () => {
+    const stub = runtimeStub({})
+    stub.waitForTerminal.mockRejectedValue(new Error('timeout'))
+    const onDiagnostic = vi.fn()
+    await deliverTerminalAgentLaunchPrompt({
+      runtime: stub.runtime,
+      handle: 'term_1',
+      agent: 'claude',
+      freshLaunch: false,
+      text: 'private prompt',
+      onDiagnostic
+    })
+    expect(stub.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    expect(onDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'readiness_timeout',
+        phase: 'readiness',
+        promptWriteState: 'none',
+        terminalHandle: 'term_1'
+      })
+    )
+    expect(JSON.stringify(onDiagnostic.mock.calls)).not.toContain('private prompt')
+  })
+
+  it('reports partial paste as unknown instead of safe to retry', async () => {
+    const stub = runtimeStub({
+      send: async (_handle, _text, options) => {
+        const beforeWrite = options.beforeWrite
+        if (typeof beforeWrite === 'function') {
+          await beforeWrite('pty-1')
+        }
+        throw new Error('transport lost after paste; secret=private')
+      }
+    })
+    const onDiagnostic = vi.fn()
+    await deliverTerminalAgentLaunchPrompt({
+      runtime: stub.runtime,
+      handle: 'term_1',
+      agent: 'claude',
+      freshLaunch: false,
+      text: 'private prompt',
+      onDiagnostic
+    })
+    expect(onDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'delivery_unknown',
+        phase: 'write',
+        promptWriteState: 'possible'
+      })
+    )
+    expect(JSON.stringify(onDiagnostic.mock.calls)).not.toContain('secret')
+  })
+
+  it('preserves submit proof when a later error occurs without an abort signal', async () => {
+    const stub = runtimeStub({
+      send: async (_handle, _text, options) => {
+        const acknowledged = options.onSubmitWritten
+        if (typeof acknowledged === 'function') {
+          acknowledged()
+        }
+        throw new Error('transport lost after submit')
+      }
+    })
+    const onDiagnostic = vi.fn()
+    await expect(
+      deliverTerminalAgentLaunchPrompt({
+        runtime: stub.runtime,
+        handle: 'term_1',
+        agent: 'claude',
+        freshLaunch: false,
+        text: 'private prompt',
+        onDiagnostic
+      })
+    ).resolves.toBe(true)
+    expect(onDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'submitted', phase: 'submit', promptWriteState: 'submitted' })
+    )
+  })
+})
+
+describe('terminal readiness failure classifications', () => {
+  it.each([
+    { wait: { satisfied: true, status: 'exited' }, code: 'process_exited' },
+    {
+      wait: { satisfied: false, status: 'running', blockedReason: 'agent-trust-workspace' },
+      code: 'interactive_prompt'
+    }
+  ])('distinguishes $code from a retryable timeout', async ({ wait, code }) => {
+    const stub = runtimeStub({ wait })
+    const clock = fakeClock()
+    const onDiagnostic = vi.fn()
+    await deliverTerminalAgentLaunchPrompt({
+      runtime: stub.runtime,
+      handle: 'term_1',
+      agent: 'claude',
+      freshLaunch: false,
+      text: 'do the thing',
+      onDiagnostic,
+      clock
+    })
+    expect(onDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({ code, promptWriteState: 'none' })
+    )
+    expect(stub.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+})

@@ -1,5 +1,6 @@
 import type {
   AgentLaunchIntent,
+  AgentLaunchPromptDiagnostic,
   AgentLaunchPromptDisposal,
   AgentLaunchResult
 } from '../../shared/agent-launch-intent'
@@ -58,7 +59,7 @@ async function deliverStructuredLaunchPrompt(
 
 /** PTY writes prove handoff, not consumption; drafts remain undelivered because acceptance is unobservable. */
 export async function deliverTerminalLaunchPrompt(
-  execution: AgentLaunchSurfaceExecution,
+  execution: Pick<AgentLaunchSurfaceExecution, 'intent' | 'surfaces' | 'signal'>,
   handle: string,
   { freshLaunch }: { freshLaunch: boolean }
 ): Promise<AgentLaunchPromptDisposal> {
@@ -66,14 +67,21 @@ export async function deliverTerminalLaunchPrompt(
   if (!intent.prompt || intent.prompt.delivery !== 'submit' || signal?.aborted) {
     return NOT_DELIVERED
   }
+  const diagnostics: AgentLaunchPromptDiagnostic[] = []
   const delivered = await surfaces.deliverTerminalPrompt?.({
     handle,
     agent: intent.agent,
     freshLaunch,
     prompt: intent.prompt,
+    onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
     ...(signal ? { signal } : {})
   })
-  return delivered ? HANDED_TO_TERMINAL : NOT_DELIVERED
+  const diagnostic = diagnostics.at(-1)
+  if (diagnostic?.promptWriteState === 'possible') {
+    return { ...UNCONFIRMED, diagnostic }
+  }
+  const disposal = delivered ? HANDED_TO_TERMINAL : NOT_DELIVERED
+  return diagnostic ? { ...disposal, diagnostic } : disposal
 }
 
 function launchSubmitText(intent: AgentLaunchIntent): string | undefined {
