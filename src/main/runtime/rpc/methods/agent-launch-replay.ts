@@ -280,3 +280,13 @@ function refusal(
     refusal: { code, message: `Launch operation ${operationId} ${detail}.` }
   }
 }
+
+export function presentLaunchResult(
+  result: AgentLaunchResult,
+  context: RpcContext
+): AgentLaunchResult {
+  if (result.prompt?.outcome === 'unconfirmed' && !readsUnconfirmedLaunchPrompt(context)) {
+    throw new Error('agent_session_operation_unknown')
+  }
+  return result
+}

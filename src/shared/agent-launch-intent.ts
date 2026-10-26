@@ -159,33 +159,49 @@ export type AgentLaunchOutcome =
  *
  * An enum rather than a boolean because "not delivered" and "handed to a surface that delivers it
  * out of band" are different answers, and a caller deciding whether to resend needs to tell them
- * apart. A receipt may under-claim — reporting a delivery it cannot vouch for as `not-delivered` is
- * a wasted resend, while over-claiming loses the text silently.
+ * apart. An uncertain write is `unconfirmed`, never `not-delivered`: resending it can duplicate a turn.
  */
 export type AgentLaunchPromptOutcome = AgentLaunchPromptDisposal['outcome']
 
-/** `messageId` hangs off the `journaled` arm rather than sitting optional beside all three: a
- *  producer must not be able to claim the text was committed and then not say where. */
-export type AgentLaunchPromptDisposal =
+/** Bounded evidence; arbitrary error messages and terminal content are never copied verbatim. */
+export type AgentLaunchPromptDiagnostic = {
+  code:
+    | 'readiness_timeout'
+    | 'interactive_prompt'
+    | 'process_exited'
+    | 'readiness_failed'
+    | 'write_failed'
+    | 'delivery_unknown'
+    | 'submitted'
+  phase: 'readiness' | 'write' | 'submit'
+  promptWriteState: 'none' | 'possible' | 'submitted'
+  elapsedMs: number
+  terminalHandle: string
+  blockedReason?: string
+  terminalSnapshot?: { status: string; tail: string[] }
+}
+
+export type AgentLaunchPromptDisposal = { diagnostic?: AgentLaunchPromptDiagnostic } &
   /** Committed to the session's transcript, which `messageId` names. */
-  | { outcome: 'journaled'; messageId: string }
-  /**
-   * Handed to a terminal agent, either on the launch command that started it or as a bracketed
-   * paste into its live PTY. No `messageId`, because a terminal keeps no transcript to name a row
-   * in: what the agent does with the text is observable only in the pane. The caller must NOT
-   * resend — a second paste arrives as a second turn, which is worse than the wasted resend
-   * `not-delivered` costs.
-   */
-  | { outcome: 'handed-to-terminal' }
-  /** Not delivered by this call; the caller still owns the text. */
-  | { outcome: 'not-delivered' }
-  /**
-   * Only ever replayed, never a live answer: the host recorded the running agent, then stopped
-   * before the delivery reported back, so the text may or may not have arrived. The caller must not
-   * resend. Sent only to a caller advertising `agent.launch.prompt-unconfirmed.v1`; every other
-   * caller is refused with `agent_session_operation_unknown` instead.
-   */
-  | { outcome: 'unconfirmed' }
+  (
+    | { outcome: 'journaled'; messageId: string }
+    /**
+     * Handed to a terminal agent, either on the launch command that started it or as a bracketed
+     * paste into its live PTY. No `messageId`, because a terminal keeps no transcript to name a row
+     * in: what the agent does with the text is observable only in the pane. The caller must NOT
+     * resend — a second paste arrives as a second turn, which is worse than the wasted resend
+     * `not-delivered` costs.
+     */
+    | { outcome: 'handed-to-terminal' }
+    /** Not delivered by this call; the caller still owns the text. */
+    | { outcome: 'not-delivered' }
+    /**
+     * Delivery became uncertain during a write or before its final receipt was recorded. The caller must not
+     * resend. Sent only to a caller advertising `agent.launch.prompt-unconfirmed.v1`; every other
+     * caller is refused with `agent_session_operation_unknown` instead.
+     */
+    | { outcome: 'unconfirmed' }
+  )
 
 export type AgentLaunchPromptReceipt = {
   delivery: AgentLaunchPromptDelivery

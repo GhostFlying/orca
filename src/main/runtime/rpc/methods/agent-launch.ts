@@ -35,7 +35,11 @@ import {
 } from '../../../agent-launch/agent-launch-not-started'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
-import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
+import {
+  admitAgentLaunchOperation,
+  agentLaunchOperationCallerKey,
+  presentLaunchResult
+} from './agent-launch-replay'
 import {
   AgentLaunchExecutionError,
   agentLaunchRefusalError,
@@ -55,12 +59,12 @@ import {
   launchFailureWithoutEffectsCode
 } from './agent-launch-failure-code'
 import {
+  callerRendersLaunchedChat,
   agentLaunchCallerNavigationId,
   selectAgentLaunchTabForCaller
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
 import { assertAgentLaunchTargetAuthorized } from './agent-launch-target-authorization'
-import { clientRendersStructuredAgent } from './structured-agent-session-policy'
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
 import {
   publishEarlyTab,
@@ -82,23 +86,6 @@ export function supportsAgentLaunch(
   return (
     context.clientKind === undefined ||
     context.clientCapabilities?.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY) === true
-  )
-}
-
-/**
- * `agent.launch.v2` was defined when Claude and Codex were the only chats, so it vouches for those
- * two. Any other agent's chat needs the client to say it reads it, by the rule tabs and restart
- * offers use; a client that does not gets that agent as a terminal.
- */
-function callerRendersLaunchedChat(
-  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>,
-  agent: string
-): boolean {
-  return (
-    context.clientKind === undefined ||
-    agent === 'claude' ||
-    agent === 'codex' ||
-    clientRendersStructuredAgent(context.clientCapabilities, agent)
   )
 }
 
@@ -167,13 +154,15 @@ function runLegacyAgentLaunch(
     })
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
     const { repo, repoHostId } = params.target.create
-    return context.runtime.dedupeWorktreeCreate(
-      repoHostId ? { repo, repoHostId } : repo,
-      `agent.launch:${params.target.create.clientMutationId}`,
-      execute
-    )
+    return context.runtime
+      .dedupeWorktreeCreate(
+        repoHostId ? { repo, repoHostId } : repo,
+        `agent.launch:${params.target.create.clientMutationId}`,
+        execute
+      )
+      .then((result) => presentLaunchResult(result, context))
   }
-  return execute()
+  return execute().then((result) => presentLaunchResult(result, context))
 }
 
 type ActiveAgentLaunch = {
@@ -278,7 +267,7 @@ async function executeAdmittedAgentLaunch(
   // Bookkeeping: a failure leaves the first write, whose owed prompt replays as `unconfirmed` (or as
   // `unknown` to a caller that cannot read it), never as `not-delivered`.
   await settleQuietly(admission.settle(result))
-  return result
+  return presentLaunchResult(result, context)
 }
 
 function runReplaySafeAgentLaunch(
