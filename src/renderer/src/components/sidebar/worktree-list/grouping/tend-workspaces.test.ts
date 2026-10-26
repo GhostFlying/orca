@@ -261,4 +261,80 @@ describe('tend workspace grouping', () => {
     )
     expect(rows.find((row) => row.type === 'item')).toMatchObject({ sectionKey: `repo:${repo.id}` })
   })
+  it.each(['local', 'ssh:worker'] as const)(
+    'reveals an unstamped directory under its rendered owner %s',
+    (hostId) => {
+      const remoteGroup = { ...group, executionHostId: 'ssh:worker' as const }
+      const localGroup = { ...group, executionHostId: 'local' as const }
+      const groups = hostId === 'local' ? [remoteGroup, localGroup] : [localGroup, remoteGroup]
+      const rows = planSidebarRows(inputs({ worktrees: [], projectGroups: groups })).render(
+        new Set()
+      )
+      expect(rows.find((row) => row.type === 'folder-workspace')).toMatchObject({
+        projectGroup: groups[1]
+      })
+      expect(
+        getFolderWorkspaceRevealGroupKeys(`folder:${directory.id}`, [directory], groups, {
+          defaultHostId: 'local',
+          executionHostId: hostId,
+          hostScopedGroups: true
+        })
+      ).toEqual([TEND_WORKSPACE_GROUP_KEY, TEND_DIRECTORY_GROUP_KEY, `host:${hostId}`])
+      expect(
+        getFolderWorkspaceRevealGroupKeys(`folder:${directory.id}`, [directory], groups, {
+          defaultHostId: 'local',
+          executionHostId: hostId === 'local' ? 'ssh:worker' : 'local'
+        })
+      ).toEqual([])
+    }
+  )
+
+  it.each(['manualOrder', 'sortOrder'] as const)('preserves saved directory %s', (field) => {
+    const folders = [
+      { ...directory, id: 'first', [field]: 0 },
+      { ...directory, id: 'second', [field]: 10 }
+    ]
+    const rows = planSidebarRows(inputs({ worktrees: [], folderWorkspaces: folders })).render(
+      new Set()
+    )
+    expect(
+      rows.flatMap((row) => (row.type === 'folder-workspace' ? [row.folderWorkspace.id] : []))
+    ).toEqual(['second', 'first'])
+  })
+
+  it.each([false, true])(
+    'retains each host ancestor path when repository subgroups are collapsed (both=%s)',
+    (both) => {
+      const remoteTask = { ...otherTask, hostId: 'ssh:worker' as const }
+      const localSection = `${TEND_WORKSPACE_GROUP_KEY}:repo:${repo.id}`
+      const remoteSection = `${TEND_WORKSPACE_GROUP_KEY}:repo:${otherRepo.id}`
+      const collapsed = new Set([localSection, ...(both ? [remoteSection] : [])])
+      const rows = planSidebarRows(
+        inputs({ worktrees: [task, remoteTask], folderWorkspaces: [], projectGroups: [] })
+      ).render(collapsed)
+      const sections = addHostSectionRows({
+        rows,
+        hostOptions: [
+          { id: 'local', kind: 'local', label: 'Local', detail: '', health: 'local' },
+          { id: 'ssh:worker', kind: 'ssh', label: 'Worker', detail: '', health: 'available' }
+        ],
+        workspaceHostScope: 'all',
+        visibleWorkspaceHostIds: ['local', 'ssh:worker'],
+        defaultHostId: 'local',
+        localHostLabel: 'Local'
+      })
+      expect(sections.flatMap((row) => (row.type === 'header' ? [row.key] : []))).toEqual([
+        TEND_WORKSPACE_GROUP_KEY,
+        localSection,
+        TEND_WORKSPACE_GROUP_KEY,
+        remoteSection
+      ])
+      expect(sections.flatMap((row) => (row.type === 'host-header' ? [row.count] : []))).toEqual([
+        1, 1
+      ])
+      expect(sections.flatMap((row) => (row.type === 'item' ? [row.worktree.id] : []))).toEqual(
+        both ? [] : [remoteTask.id]
+      )
+    }
+  )
 })
