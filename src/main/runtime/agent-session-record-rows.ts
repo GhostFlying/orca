@@ -2,6 +2,10 @@
 // Unreadable records remain present and immutable; every mutation of their ids is refused.
 
 import {
+  agentSessionOperationKey,
+  isAgentSessionOperationRow
+} from '../../shared/agent-session-operation-ledger'
+import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   isPersistedAgentSessionRecord,
   type AgentSessionLease
@@ -13,7 +17,6 @@ import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { AgentSessionStoreRowWrites } from './agent-session-store-draft'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
-  isReadableAgentSessionStoreOperation,
   isReadableAgentSessionStoreRecord,
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
@@ -115,12 +118,18 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
     }
   }
   for (const row of db
-    .prepare('SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid')
+    .prepare(
+      'SELECT hex(operation_key) AS operation_key_hex, row_json FROM agent_session_operations ORDER BY rowid'
+    )
     .all()) {
-    const key = text(row, 'operation_key')
+    const keyHex = text(row, 'operation_key_hex')
     const parsed = parseJson(text(row, 'row_json'))
-    if (key !== null && parsed.ok && isReadableAgentSessionStoreOperation(key, parsed.value)) {
-      state.operations.set(key, parsed.value)
+    if (keyHex !== null && parsed.ok && isAgentSessionOperationRow(parsed.value)) {
+      const key = agentSessionOperationKey(parsed.value.callerKey, parsed.value.operationId)
+      // node:sqlite exposes TEXT only through the first NUL, so compare its stored bytes instead.
+      if (keyHex === Buffer.from(key).toString('hex').toUpperCase()) {
+        state.operations.set(key, parsed.value)
+      }
     }
   }
   for (const row of db

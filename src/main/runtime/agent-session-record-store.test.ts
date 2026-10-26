@@ -670,6 +670,22 @@ describe('restart reconciliation', () => {
     expect(replayed.disposition).toBe('replayed')
     expect(replayed.record.sessionId).toBe('session-alpha')
   })
+
+  it('reloads distinct operation keys for the same caller', async () => {
+    const first = await open()
+    const operationIds = [operationId(), operationId()]
+    for (const [index, operationId_] of operationIds.entries()) {
+      await first.admitOperation({
+        callerKey: 'client-1',
+        operationId: operationId_,
+        fingerprint: `fp-${index + 1}`,
+        now: NOW
+      })
+    }
+
+    const reopened = await open()
+    expect(reopened.listOperationRows().map((row) => row.operationId)).toEqual(operationIds)
+  })
 })
 
 describe('host and workspace isolation', () => {
