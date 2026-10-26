@@ -214,9 +214,11 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
         ? 'delivery_unknown'
         : writerEntered
           ? 'write_failed'
-          : error instanceof Error && error.message === 'timeout'
-            ? 'readiness_timeout'
-            : 'readiness_failed'
+          : error instanceof Error && error.message === 'terminal_exited'
+            ? 'process_exited'
+            : error instanceof Error && error.message === 'timeout'
+              ? 'readiness_timeout'
+              : 'readiness_failed'
     )
     const startupFailure = readTerminalStartFailure(error)
     console.warn(
