@@ -204,7 +204,8 @@ export function agentLaunchSurfaceFactory(
       freshLaunch,
       terminalCreation,
       prompt,
-      signal
+      signal,
+      onDiagnostic
     }) => {
       const { runtime } = context
       // A stdin-after-start prompt cannot ride a Windows launch line, so it needs the startup path's Windows proof (#10336).
@@ -222,6 +223,7 @@ export function agentLaunchSurfaceFactory(
         freshLaunch,
         terminalCreation,
         text: prompt.text,
+        onDiagnostic,
         ...(signal ? { signal } : {})
       })
     }

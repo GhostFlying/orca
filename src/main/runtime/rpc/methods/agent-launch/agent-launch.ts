@@ -18,7 +18,8 @@ import { defineMethod, type RpcContext } from '../../core'
 import {
   admitAgentLaunchOperation,
   agentLaunchOperationCallerKey,
-  type ReplaySafeLaunch
+  type ReplaySafeLaunch,
+  presentLaunchResult
 } from './agent-launch-replay'
 import {
   AgentLaunchExecutionError,
@@ -117,13 +118,15 @@ function runLegacyAgentLaunch(
     )
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
     const { repo, repoHostId } = params.target.create
-    return context.runtime.dedupeWorktreeCreate(
-      repoHostId ? { repo, repoHostId } : repo,
-      `agent.launch:${params.target.create.clientMutationId}`,
-      execute
-    )
+    return context.runtime
+      .dedupeWorktreeCreate(
+        repoHostId ? { repo, repoHostId } : repo,
+        `agent.launch:${params.target.create.clientMutationId}`,
+        execute
+      )
+      .then((result) => presentLaunchResult(result, context))
   }
-  return execute()
+  return execute().then((result) => presentLaunchResult(result, context))
 }
 
 type ActiveAgentLaunch = {
@@ -229,7 +232,7 @@ async function executeAdmittedAgentLaunch(
   }
   // Failed settlement leaves the provisional prompt unconfirmed (unknown for older callers), never not-delivered that invites duplication.
   await settleQuietly(admission.settle(result))
-  return handedOff(result)
+  return presentLaunchResult(handedOff(result), context)
 }
 
 function runReplaySafeAgentLaunch(

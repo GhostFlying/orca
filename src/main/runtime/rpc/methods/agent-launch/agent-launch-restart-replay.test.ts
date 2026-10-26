@@ -1,4 +1,5 @@
 import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import '../../unused-default-rpc-methods.test-fixture'
 /** Reopen the real ledger with no in-flight launches to test both surface and prompt writes across restart.
  * A recorded surface replays the surviving agent under its current pane handle; an unrecorded outcome remains unknown, never relaunched. */
 
@@ -12,6 +13,7 @@ import {
 } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   isAgentLaunchResult,
+  type AgentLaunchPromptDiagnostic,
   type AgentLaunchResult
 } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentSessionOperationRow } from '../../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
@@ -31,7 +33,12 @@ import {
 } from './agent-launch.test-fixture'
 
 const deliverTerminalPrompt = vi.hoisted(() =>
-  vi.fn(async (_args: { handle: string }): Promise<boolean> => true)
+  vi.fn(
+    async (_args: {
+      handle: string
+      onDiagnostic?: (diagnostic: AgentLaunchPromptDiagnostic) => void
+    }): Promise<boolean> => true
+  )
 )
 vi.mock('./agent-launch-terminal-prompt', () => ({
   deliverTerminalAgentLaunchPrompt: deliverTerminalPrompt
@@ -403,5 +410,27 @@ describe('a caller cannot claim an identity', () => {
 
     expect(JSON.parse(response)).toMatchObject({ ok: true })
     expect(store.listOperationRows().map((entry) => entry.callerKey)).toEqual(['device-1'])
+  })
+})
+
+describe('live uncertain launch replies', () => {
+  it('refuses an older client while preserving an uncertain receipt for replay', async () => {
+    const diagnostic: AgentLaunchPromptDiagnostic = {
+      code: 'delivery_unknown',
+      phase: 'write',
+      promptWriteState: 'possible',
+      elapsedMs: 800,
+      terminalHandle: 'term_1'
+    }
+    deliverTerminalPrompt.mockImplementationOnce(async ({ onDiagnostic }) => {
+      onDiagnostic?.(diagnostic)
+      return false
+    })
+    const runtime = hostRuntime()
+    await expect(launch(runtime)).rejects.toThrow('agent_session_operation_unknown')
+    await expect(launch(runtime, PROMPTED_LAUNCH, UPGRADED_PHONE)).resolves.toMatchObject({
+      prompt: { outcome: 'unconfirmed', diagnostic }
+    })
+    expect(deliverTerminalPrompt).toHaveBeenCalledOnce()
   })
 })
