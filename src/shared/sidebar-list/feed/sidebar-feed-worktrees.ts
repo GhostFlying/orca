@@ -203,5 +203,7 @@ export function readFeedPairedServerRow(
   row: PairedServerWorkspaceRow
 ): SidebarFeedWorkspace | null {
   const owner = parseExecutionHostId(getExecutionHostIdFromWorktreeHostIdentity(row.key))
-  return owner?.kind === 'runtime' ? readFeedRow(row.key, row.worktreeId, owner.id, row) : null
+  return owner?.kind === 'runtime'
+    ? readFeedRow(row.key, row.worktreeId, owner.id, row, { comment: row.comment ?? '' })
+    : null
 }
