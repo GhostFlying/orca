@@ -3,6 +3,7 @@ import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { getLineagePlacementRows } from '../worktree-occurrence-plan'
 import { getSidebarLineageParentsByIdentity } from './worktree-lineage-projection'
+import { isTendWorkspaceComment } from '../tend-workspace-comment'
 
 export function getSidebarLineageRowsByIdentity(
   worktrees: readonly Worktree[],
@@ -30,6 +31,8 @@ export function getSidebarLineageChildren(
     const parent = parentByIdentity.get(childIdentity)
     if (
       !parent ||
+      isTendWorkspaceComment(child.comment) !== isTendWorkspaceComment(parent.comment) ||
+      (isTendWorkspaceComment(child.comment) && child.repoId !== parent.repoId) ||
       (allowedRepoIds && (!allowedRepoIds.has(child.repoId) || !allowedRepoIds.has(parent.repoId)))
     ) {
       continue
@@ -52,7 +55,7 @@ export function getPinnedSectionWorktrees(
 ): Worktree[] {
   return getLineagePlacementRows({
     rows: worktrees,
-    isPinned: (worktree) => worktree.isPinned === true,
+    isPinned: (worktree) => worktree.isPinned === true && !isTendWorkspaceComment(worktree.comment),
     childrenByParentIdentity: getSidebarLineageChildren(
       worktrees,
       lineageById,
@@ -71,6 +74,9 @@ export function isPinnedSectionWorktree(
   worktreeMap: ReadonlyMap<string, Worktree>,
   filterRepoIds: readonly string[] = []
 ): boolean {
+  if (isTendWorkspaceComment(worktree.comment)) {
+    return false
+  }
   if (worktree.isPinned) {
     return true
   }
