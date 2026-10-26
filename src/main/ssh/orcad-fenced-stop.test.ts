@@ -37,6 +37,16 @@ describe('runFencedStop', () => {
     expect(steps.releaseIncumbentAdmission).toHaveBeenCalledOnce()
   })
 
+  it('preserves unconfirmed remote census termination for the enclosing activation lock', async () => {
+    const failure = Object.assign(new Error('remote census may still run'), {
+      sshChannelCloseConfirmed: false
+    })
+    const { steps } = fence({ recountCensus: () => Promise.reject(failure) })
+    await expect(runFencedStop(steps)).rejects.toBe(failure)
+    expect(steps.stop).not.toHaveBeenCalled()
+    expect(steps.releaseIncumbentAdmission).not.toHaveBeenCalled()
+  })
+
   it('reopens and rethrows when the step before the stop fails', async () => {
     const { steps } = fence({ prepare: () => Promise.reject(new Error('disk full')) })
     await expect(runFencedStop(steps)).rejects.toThrow('disk full')

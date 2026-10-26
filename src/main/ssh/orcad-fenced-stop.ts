@@ -4,6 +4,7 @@ import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../shared/orcad-terminal-census'
+import { isUnconfirmedSshCommandTermination } from './remote-exec/remote-exec-command'
 import type { OrcadTerminalCensusRequestOptions } from './orcad-terminal-census-client'
 
 /**
@@ -60,7 +61,13 @@ export async function runFencedStop<Stopped, Refused>(
   const stopBy = fence.now() + ORCAD_UPDATE_ADMISSION_STOP_BY_MS
   const reopen = (): Promise<void> => fence.releaseIncumbentAdmission().catch(() => {})
   const refusal = fence.refuse(
-    await fence.recountCensus().catch(() => UNVERIFIABLE_ORCAD_TERMINAL_CENSUS)
+    await fence.recountCensus().catch((error: unknown) => {
+      // The remote census may still change admission; let the activation lock retain ownership.
+      if (isUnconfirmedSshCommandTermination(error)) {
+        throw error
+      }
+      return UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
+    })
   )
   if (refusal !== null) {
     await reopen()
