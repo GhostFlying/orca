@@ -25,6 +25,8 @@ The executable sources of truth are:
   source-range extraction, and maintenance snapshot validation.
 - `.github/scripts/fork-release-assets.mjs`: required asset set, checksums,
   metadata, and Release tag derivation.
+- `.github/scripts/fork-localization-coverage.mjs`: localization coverage against
+  the exact published Release, preserving its allowlist and candidate counts.
 - `.github/scripts/verify-fork-macos-signatures.mjs`: complete ad-hoc signatures
   in both unpacked macOS applications and their final ZIP/DMG artifacts.
 
@@ -41,6 +43,11 @@ ratchets, while debt-sensitive code-quality and React Doctor checks compare the
 fork patch stack against its generated upstream anchor. A newly adopted Release
 must not be blocked only because its unchanged upstream tree already carries a
 warning that upstream's own PR gate treats as baseline debt.
+Localization coverage also uses the exact published Release as its baseline:
+existing renderer candidates and reviewed exclusions are counted by file, kind,
+text, and dynamic status. Fork additions, changed text, and extra occurrences
+remain failures. The generated comparison allowlist is temporary; the product's
+checked-in localization allowlist is unchanged.
 
 The release test gate restores upstream workflow definitions as fixtures for
 upstream's workflow contract tests. When the Release commit's parent is an

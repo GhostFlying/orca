@@ -194,7 +194,7 @@ jobs:
           pnpm run verify:localization-catalog
           pnpm run verify:localization-runtime-catalog
           pnpm run verify:localization-extraction
-          pnpm run verify:localization-coverage
+          node .github/scripts/fork-localization-coverage.mjs
 
   typecheck:
     needs: candidate
