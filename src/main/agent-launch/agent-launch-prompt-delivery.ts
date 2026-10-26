@@ -5,6 +5,7 @@ import { structuredAgentSessionSendBody } from '../../shared/agent-session/reque
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import type {
   AgentLaunchIntent,
+  AgentLaunchPromptDiagnostic,
   AgentLaunchPromptDisposal,
   AgentLaunchResult
 } from '../../shared/agent-launch-intent'
@@ -75,7 +76,7 @@ export async function settleLaunchPromptDisposal(
 
 /** PTY writes prove handoff, not consumption; drafts remain undelivered because acceptance is unobservable. */
 export async function deliverTerminalLaunchPrompt(
-  execution: AgentLaunchSurfaceExecution,
+  execution: Pick<AgentLaunchSurfaceExecution, 'intent' | 'surfaces' | 'signal'>,
   handle: string,
   {
     freshLaunch,
@@ -86,15 +87,22 @@ export async function deliverTerminalLaunchPrompt(
   if (!intent.prompt || intent.prompt.delivery !== 'submit' || signal?.aborted) {
     return NOT_DELIVERED
   }
+  const diagnostics: AgentLaunchPromptDiagnostic[] = []
   const delivered = await surfaces.deliverTerminalPrompt?.({
     handle,
     agent: intent.agent,
     freshLaunch,
     terminalCreation,
     prompt: intent.prompt,
+    onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
     ...(signal ? { signal } : {})
   })
-  return delivered ? HANDED_TO_TERMINAL : NOT_DELIVERED
+  const diagnostic = diagnostics.at(-1)
+  if (diagnostic?.promptWriteState === 'possible') {
+    return { ...UNCONFIRMED, diagnostic }
+  }
+  const disposal = delivered ? HANDED_TO_TERMINAL : NOT_DELIVERED
+  return diagnostic ? { ...disposal, diagnostic } : disposal
 }
 
 function launchSubmitText(intent: AgentLaunchIntent): string | undefined {

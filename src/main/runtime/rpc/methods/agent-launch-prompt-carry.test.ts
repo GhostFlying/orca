@@ -54,7 +54,11 @@ describe('an argv agent’s launch prompt, by what the runtime reports about its
 
     const result = await launch({ ...EXISTING, prompt: SUBMIT }, runtime)
 
-    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(result.prompt).toMatchObject({
+      delivery: 'submit',
+      outcome: 'handed-to-terminal',
+      diagnostic: { code: 'submitted', promptWriteState: 'submitted', terminalHandle: 'term_1' }
+    })
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith('term_1', SUBMIT.text, expect.anything())
   })
 
@@ -83,7 +87,15 @@ describe('an argv agent’s launch prompt, by what the runtime reports about its
       runtime
     )
 
-    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(result.prompt).toMatchObject({
+      delivery: 'submit',
+      outcome: 'handed-to-terminal',
+      diagnostic: {
+        code: 'submitted',
+        promptWriteState: 'submitted',
+        terminalHandle: 'term_agent_first'
+      }
+    })
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_agent_first',
       SUBMIT.text,
@@ -163,7 +175,8 @@ describe('actual startup creation across internal launch projections', () => {
         )
         const error = warn.mock.calls.flat().find((item) => item instanceof Error)
         expect(formatTerminalStartFailure(error) !== undefined).toBe(context === 'fresh')
-        expect(sendTerminalAgentPrompt.mock.calls.length).toBe(context === 'fresh' ? 0 : 1)
+        expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
+        expect(receipt.prompt?.diagnostic?.promptWriteState).toBe('none')
         expect(receipt).not.toHaveProperty('terminalCreation')
         expect(receipt).not.toHaveProperty('startupTerminalCreation')
       } finally {

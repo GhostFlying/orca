@@ -504,6 +504,7 @@ describe('delivering a launch prompt to a terminal agent', () => {
 
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
     expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
+      onDiagnostic: expect.any(Function),
       handle: 'term_1',
       agent: 'aider',
       freshLaunch: true,
@@ -537,6 +538,7 @@ describe('delivering a launch prompt to a terminal agent', () => {
       startupPrompt: 'do the thing'
     })
     expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
+      onDiagnostic: expect.any(Function),
       handle: 'term_1',
       agent: 'claude',
       freshLaunch: true,
@@ -550,6 +552,7 @@ describe('delivering a launch prompt to a terminal agent', () => {
 
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
     expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
+      onDiagnostic: expect.any(Function),
       handle: 'term_agent_first',
       agent: 'claude',
       freshLaunch: true,
@@ -568,6 +571,7 @@ describe('delivering a launch prompt to a terminal agent', () => {
 
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
     expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
+      onDiagnostic: expect.any(Function),
       handle: 'term_existing',
       agent: 'claude',
       freshLaunch: false,
