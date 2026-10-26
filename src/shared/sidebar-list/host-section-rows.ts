@@ -216,6 +216,28 @@ export function addHostSectionRows(args: {
   const usedPendingRows = new Set<Row>()
   // Each host's last emitted header path, so a sibling group repeats only what differs.
   const emittedPathByHostId = new Map<ExecutionHostId, string[]>()
+  const appendPendingPathForHost = (
+    pending: readonly Extract<Row, { type: 'header' }>[],
+    hostId: ExecutionHostId
+  ): Row[] => {
+    const hostRows = rowsByHostId.get(hostId) ?? []
+    const localized = localizePendingRowsForHost(pending, hostId)
+    const path = localized.map(getPendingRowKey)
+    const emitted = emittedPathByHostId.get(hostId) ?? []
+    let shared = 0
+    while (shared < path.length && path[shared] === emitted[shared]) {
+      shared += 1
+    }
+    hostRows.push(...localized.slice(shared))
+    emittedPathByHostId.set(hostId, path)
+    for (const row of pending) {
+      if (!row.hostWorktreeCounts || (row.hostWorktreeCounts.get(hostId) ?? 0) > 0) {
+        usedPendingRows.add(row)
+      }
+    }
+    rowsByHostId.set(hostId, hostRows)
+    return hostRows
+  }
   const flushUnusedPendingRows = (rows: readonly Extract<Row, { type: 'header' }>[]): void => {
     const unused = rows.filter((row) => !usedPendingRows.has(row))
     if (unused.length === 0) {
@@ -231,15 +253,8 @@ export function addHostSectionRows(args: {
         if (count <= 0) {
           continue
         }
-        const hostRows = rowsByHostId.get(hostId) ?? []
-        const hostIds = row.hostWorktreeIds?.get(hostId)
-        hostRows.push({
-          ...row,
-          count,
-          hostId,
-          worktreeIds: hostIds ?? row.worktreeIds
-        })
-        rowsByHostId.set(hostId, hostRows)
+        const end = pendingRows.indexOf(row)
+        appendPendingPathForHost(end === -1 ? [row] : pendingRows.slice(0, end + 1), hostId)
       }
     }
   }
@@ -247,21 +262,7 @@ export function addHostSectionRows(args: {
   for (const row of args.rows) {
     const rowHostId = getRowHostId(row, args.defaultHostId)
     if (rowHostId) {
-      const hostRows = rowsByHostId.get(rowHostId) ?? []
-      const localizedPendingRows = localizePendingRowsForHost(pendingRows, rowHostId)
-      const path = localizedPendingRows.map(getPendingRowKey)
-      const emitted = emittedPathByHostId.get(rowHostId) ?? []
-      let shared = 0
-      while (shared < path.length && path[shared] === emitted[shared]) {
-        shared += 1
-      }
-      if (shared < path.length || path.length !== emitted.length) {
-        hostRows.push(...localizedPendingRows.slice(shared))
-        emittedPathByHostId.set(rowHostId, path)
-      }
-      if (localizedPendingRows.length > 0) {
-        pendingRows.forEach((pendingRow) => usedPendingRows.add(pendingRow))
-      }
+      const hostRows = appendPendingPathForHost(pendingRows, rowHostId)
       hostRows.push(row)
       rowsByHostId.set(rowHostId, hostRows)
       continue

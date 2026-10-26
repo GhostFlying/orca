@@ -16,6 +16,7 @@ import {
 import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
 import {
   getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list/folder-workspace-lanes'
@@ -99,16 +100,23 @@ export function getFolderWorkspaceRevealGroupKeys(
     executionHostId?: ExecutionHostId
   }
 ): string[] {
-  const folderWorkspace = findFolderWorkspaceByKey(
-    worktreeId,
-    folderWorkspaces,
-    options?.executionHostId
-  )
+  const renderedGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const ownerFolders = options?.executionHostId
+    ? folderWorkspaces.filter(
+        (workspace) =>
+          getFolderWorkspaceHostId(
+            workspace,
+            renderedGroupsById.get(workspace.projectGroupId) ?? {},
+            options.defaultHostId ?? LOCAL_EXECUTION_HOST_ID
+          ) === options.executionHostId
+      )
+    : folderWorkspaces
+  const folderWorkspace = findFolderWorkspaceByKey(worktreeId, ownerFolders)
   if (!folderWorkspace) {
     return []
   }
   if (isTendWorkspaceComment(folderWorkspace.comment)) {
-    const group = projectGroups.find((candidate) => candidate.id === folderWorkspace.projectGroupId)
+    const group = renderedGroupsById.get(folderWorkspace.projectGroupId)
     return [
       TEND_WORKSPACE_GROUP_KEY,
       TEND_DIRECTORY_GROUP_KEY,
@@ -128,7 +136,6 @@ export function getFolderWorkspaceRevealGroupKeys(
   )
   // Why unfiltered: same-id host copies render under the last copy's parents, whichever host's row
   // the folder is (getDistinctProjectGroups); header keys carry no host.
-  const renderedGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
   const keys: string[] = []
   const seen = new Set<string>()
   let groupId: string | null = groupsById.has(folderWorkspace.projectGroupId)
