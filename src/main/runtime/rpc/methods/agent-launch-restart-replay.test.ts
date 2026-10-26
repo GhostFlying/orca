@@ -1,4 +1,3 @@
-import type { AgentLaunchPromptDiagnostic } from '../../../../shared/agent-launch-intent'
 import '../unused-default-rpc-methods.test-fixture'
 /**
  * A launch's record across a host restart, against the real durable ledger.
@@ -19,7 +18,11 @@ import {
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY
 } from '../../../../shared/agent-launch-runtime-capability'
-import { isAgentLaunchResult, type AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import {
+  isAgentLaunchResult,
+  type AgentLaunchResult,
+  type AgentLaunchPromptDiagnostic
+} from '../../../../shared/agent-launch-intent'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session-operation-ledger'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
