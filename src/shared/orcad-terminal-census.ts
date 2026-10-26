@@ -11,6 +11,8 @@ export const OrcadTerminalCensusSchema = z.object({
   startedSinceActivation: CountSchema,
   /** Protocol of the daemon that owns those sessions. */
   daemonProtocolVersion: z.number().int().positive().nullable(),
+  /** Complete protocol set from authenticated inventories of all live daemon generations. */
+  daemonProtocolVersions: z.array(z.number().int().positive()).optional(),
   /** In-process fallback sessions end with orcad, unlike daemon sessions; absent on older hosts. */
   inProcessSessions: CountSchema.optional(),
   /** Admission-fence expiry, epoch ms; 0 means reopened. Absence never proves older servers fenced admission. */
