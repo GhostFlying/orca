@@ -30,6 +30,8 @@ export type SidebarPRGroupReader = (worktree: Worktree) => PRGroupKey
 
 export type GroupHeaderRow = {
   type: 'header'
+  /** Computed grouping with no repository or project-group management actions. */
+  presentationOnly?: boolean
   collapseKey?: string
   key: string
   /** Data label (project, project group, status); absent when the client names the header from its icon. */
