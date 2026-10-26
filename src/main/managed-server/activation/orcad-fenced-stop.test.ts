@@ -21,6 +21,16 @@ function fence(overrides: Partial<FencedStop<string, string>> = {}) {
 }
 
 describe('runFencedStop', () => {
+  it('preserves unconfirmed remote census termination for the enclosing activation lock', async () => {
+    const failure = Object.assign(new Error('remote census may still run'), {
+      sshChannelCloseConfirmed: false
+    })
+    const { steps } = fence({ recountCensus: () => Promise.reject(failure) })
+    await expect(runFencedStop(steps)).rejects.toBe(failure)
+    expect(steps.stop).not.toHaveBeenCalled()
+    expect(steps.releaseIncumbentAdmission).not.toHaveBeenCalled()
+  })
+
   it('stops nothing once the count may have outlived its fence', async () => {
     const box: { advance?: (ms: number) => void } = {}
     const made = fence({
