@@ -191,7 +191,7 @@ export function agentLaunchSurfaceFactory(
         ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {})
       }
     },
-    deliverTerminalPrompt: async ({ handle, agent, freshLaunch, prompt, signal }) => {
+    deliverTerminalPrompt: async ({ handle, agent, freshLaunch, prompt, signal, onDiagnostic }) => {
       const { runtime } = context
       // A stdin-after-start prompt cannot ride a Windows launch line, so it needs the startup path's Windows proof (#10336).
       if (freshLaunch && typeof runtime.deliverStartupFollowup === 'function') {
@@ -207,6 +207,7 @@ export function agentLaunchSurfaceFactory(
         agent,
         freshLaunch,
         text: prompt.text,
+        onDiagnostic,
         ...(signal ? { signal } : {})
       })
     }

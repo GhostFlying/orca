@@ -1,6 +1,8 @@
 /** Deliver text the startup command cannot carry: stdin prompts, long/multiline text and reused terminals.
  * Reuse worker readiness and sendTerminalAgentPrompt for serialized, generation-fenced bracketed paste and per-agent Enter timing across local, WSL and SSH. */
 
+import type { AgentLaunchPromptDiagnostic } from '../../../../shared/agent-launch-intent'
+import { readLaunchDiagnosticSnapshot } from './agent-launch-diagnostic-snapshot'
 import { randomUUID } from 'node:crypto'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
@@ -24,7 +26,8 @@ const BLOCKED_RECHECK_MS = 1_000
 
 export type TerminalPromptRuntime = LaunchedAgentReadinessRuntime &
   LaunchedAgentWriteGuardRuntime &
-  Pick<OrcaRuntimeService, 'sendTerminalAgentPrompt'>
+  Pick<OrcaRuntimeService, 'sendTerminalAgentPrompt'> &
+  Partial<Pick<OrcaRuntimeService, 'readTerminal'>>
 
 type ReadinessClock = { now: () => number; sleep: (ms: number) => Promise<void> }
 
@@ -73,8 +76,7 @@ export function waitForStartedAgentReady(
   return waitThroughBlockingPrompts(runtime, handle, agent, true, REAL_CLOCK, signal)
 }
 
-/** Report whether text reached the pane without failing an already-running launch.
- * A stalled post-write verification still means delivered; reporting not-delivered invites a duplicate turn. */
+/** Reports write certainty separately: a failed paste may have partially reached the terminal. */
 export async function deliverTerminalAgentLaunchPrompt(args: {
   runtime: TerminalPromptRuntime
   handle: string
@@ -87,6 +89,7 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   clock?: ReadinessClock
   /** Aborting ends the readiness wait and refuses the paste; text already handed over stays so. */
   signal?: AbortSignal
+  onDiagnostic?: (diagnostic: AgentLaunchPromptDiagnostic) => void
 }): Promise<boolean> {
   if (args.text.trim().length === 0) {
     return false
@@ -97,50 +100,104 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   })
   // Once Enter left, a later throw (an abort during verification) cannot unsend the text.
   let submitted = false
+  let writerEntered = false
+  let writePossible = false
+  const clock = args.clock ?? REAL_CLOCK
+  const startedAt = clock.now()
+  const report = async (
+    code: AgentLaunchPromptDiagnostic['code'],
+    blockedReason?: string
+  ): Promise<void> => {
+    if (!args.onDiagnostic) {
+      return
+    }
+    const elapsedMs = Math.max(0, clock.now() - startedAt)
+    const terminalSnapshot =
+      code !== 'submitted' && args.runtime.readTerminal
+        ? await readLaunchDiagnosticSnapshot(
+            { readTerminal: args.runtime.readTerminal.bind(args.runtime) },
+            args.handle
+          )
+        : undefined
+    args.onDiagnostic?.({
+      code,
+      phase: submitted ? 'submit' : writerEntered ? 'write' : 'readiness',
+      promptWriteState: submitted ? 'submitted' : writePossible ? 'possible' : 'none',
+      elapsedMs,
+      ...(terminalSnapshot ? { terminalSnapshot } : {}),
+      terminalHandle: args.handle,
+      ...(blockedReason ? { blockedReason } : {})
+    })
+  }
   try {
     const wait = await waitThroughBlockingPrompts(
       args.runtime,
       args.handle,
       args.agent,
       args.freshLaunch,
-      args.clock ?? REAL_CLOCK,
+      clock,
       args.signal
     )
     // An unsatisfied wait does not authorize pasting into a dialog, dead process or unready agent.
-    if (wait && !wait.satisfied) {
+    if (wait && (!wait.satisfied || wait.status === 'exited')) {
+      await report(
+        wait.blockedReason
+          ? 'interactive_prompt'
+          : wait.status === 'exited'
+            ? 'process_exited'
+            : 'readiness_failed',
+        wait.blockedReason
+      )
       console.warn(
         `[agent-launch] the terminal agent did not become ready (${wait.status}); its launch prompt was not delivered`
       )
       return false
     }
+    writerEntered = true
     const sent = await args.runtime.sendTerminalAgentPrompt(args.handle, args.text, {
       inputKind: 'launch',
       // A fresh launch's composer was just seen ready; a reused pane's state is only inferred.
       composerReady: args.freshLaunch,
-      beforeWrite: guard.beforeWrite,
+      beforeWrite: async (ptyId) => {
+        await guard.beforeWrite(ptyId)
+        writePossible = true
+      },
       // Both fields enable queued acceptance; without requestId a slow first turn throws despite written input.
       acceptQueued: true,
       requestId: randomUUID(),
       // Once handed over, let the pane show progress; the launch receipt does not claim turn observation.
       observationTimeoutMs: 0,
-      ...(args.signal
-        ? {
-            signal: args.signal,
-            onSubmitWritten: () => {
-              submitted = true
-            }
-          }
-        : {})
+      onSubmitWritten: () => {
+        submitted = true
+      },
+      ...(args.signal ? { signal: args.signal } : {})
     })
+    if (sent.accepted) {
+      submitted = true
+      await report('submitted')
+    } else {
+      await report(writePossible ? 'delivery_unknown' : 'write_failed')
+    }
     return sent.accepted
   } catch (error) {
     if (isAgentPromptStalledError(error) || submitted) {
+      submitted = true
+      await report('submitted')
       return true
     }
-    console.warn(
-      '[agent-launch] the terminal agent started, its launch prompt was not delivered',
-      error
+    await report(
+      writePossible
+        ? 'delivery_unknown'
+        : writerEntered
+          ? 'write_failed'
+          : error instanceof Error && error.message === 'timeout'
+            ? 'readiness_timeout'
+            : 'readiness_failed'
     )
+    console.warn('[agent-launch] launch prompt delivery did not complete', {
+      phase: writerEntered ? 'write' : 'readiness',
+      promptWriteState: writePossible ? 'possible' : 'none'
+    })
     return false
   } finally {
     guard.dispose()

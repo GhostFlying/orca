@@ -1,4 +1,8 @@
-import type { AgentLaunchIntent, AgentLaunchPrompt } from '../../shared/agent-launch-intent'
+import type {
+  AgentLaunchIntent,
+  AgentLaunchPrompt,
+  AgentLaunchPromptDiagnostic
+} from '../../shared/agent-launch-intent'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -49,6 +53,7 @@ export type AgentLaunchSurfaceFactory = {
     prompt: AgentLaunchPrompt
     /** Abort readiness waits and refuse pending pastes. */
     signal?: AbortSignal
+    onDiagnostic?: (diagnostic: AgentLaunchPromptDiagnostic) => void
   }): Promise<boolean>
 }
 

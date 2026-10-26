@@ -1,3 +1,4 @@
+import { clientRendersStructuredAgent } from './structured-agent-session-policy'
 /** Paired launches move only the requesting connection's view.
  * Existing/folder targets select the tab; worktree creates provision setup/default tabs in the background.
  * In-process callers retain host navigation; folder creation activates nothing. */
@@ -48,4 +49,21 @@ export function selectAgentLaunchTabForCaller(
   } catch (error) {
     console.warn('[agent-launch] the launch ran; selecting its tab for the caller did not', error)
   }
+}
+
+/**
+ * `agent.launch.v2` was defined when Claude and Codex were the only chats, so it vouches for those
+ * two. Any other agent's chat needs the client to say it reads it, by the rule tabs and restart
+ * offers use; a client that does not gets that agent as a terminal.
+ */
+export function callerRendersLaunchedChat(
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>,
+  agent: string
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    agent === 'claude' ||
+    agent === 'codex' ||
+    clientRendersStructuredAgent(context.clientCapabilities, agent)
+  )
 }
