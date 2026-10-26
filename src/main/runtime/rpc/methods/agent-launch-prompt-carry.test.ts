@@ -53,7 +53,11 @@ describe('an argv agent’s launch prompt, by what the runtime reports about its
 
     const result = await launch({ ...EXISTING, prompt: SUBMIT }, runtime)
 
-    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(result.prompt).toMatchObject({
+      delivery: 'submit',
+      outcome: 'handed-to-terminal',
+      diagnostic: { code: 'submitted', promptWriteState: 'submitted', terminalHandle: 'term_1' }
+    })
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith('term_1', SUBMIT.text, expect.anything())
   })
 
@@ -82,7 +86,15 @@ describe('an argv agent’s launch prompt, by what the runtime reports about its
       runtime
     )
 
-    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(result.prompt).toMatchObject({
+      delivery: 'submit',
+      outcome: 'handed-to-terminal',
+      diagnostic: {
+        code: 'submitted',
+        promptWriteState: 'submitted',
+        terminalHandle: 'term_agent_first'
+      }
+    })
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_agent_first',
       SUBMIT.text,

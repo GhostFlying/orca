@@ -7,7 +7,8 @@
 import type {
   AgentLaunchIntent,
   AgentLaunchPrompt,
-  AgentLaunchMode
+  AgentLaunchMode,
+  AgentLaunchPromptDiagnostic
 } from '../../shared/agent-launch-intent'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
@@ -63,6 +64,7 @@ export type AgentLaunchSurfaceFactory = {
     prompt: AgentLaunchPrompt
     /** Abort readiness waits and refuse pending pastes. */
     signal?: AbortSignal
+    onDiagnostic?: (diagnostic: AgentLaunchPromptDiagnostic) => void
   }): Promise<boolean>
 }
 
