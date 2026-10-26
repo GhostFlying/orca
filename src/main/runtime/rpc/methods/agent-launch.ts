@@ -146,11 +146,8 @@ const activeAgentLaunchesByRuntime = new WeakMap<
 >()
 
 function activeAgentLaunchesFor(runtime: OrcaRuntimeService): Map<string, ActiveAgentLaunch> {
-  let active = activeAgentLaunchesByRuntime.get(runtime)
-  if (!active) {
-    active = new Map()
-    activeAgentLaunchesByRuntime.set(runtime, active)
-  }
+  const active = activeAgentLaunchesByRuntime.get(runtime) ?? new Map<string, ActiveAgentLaunch>()
+  activeAgentLaunchesByRuntime.set(runtime, active)
   return active
 }
 
@@ -237,7 +234,7 @@ async function executeAdmittedAgentLaunch(
   }
   // Failed settlement leaves the provisional prompt unconfirmed (unknown for older callers), never not-delivered that invites duplication.
   await settleQuietly(admission.settle(result))
-  return presentLaunchResult(result, context)
+  return result
 }
 
 function runReplaySafeAgentLaunch(
@@ -253,7 +250,7 @@ function runReplaySafeAgentLaunch(
     if (active.fingerprint !== fingerprint) {
       return Promise.reject(new Error('agent_session_operation_conflict'))
     }
-    return active.promise
+    return active.promise.then((result) => presentLaunchResult(result, context))
   }
 
   let promise: Promise<AgentLaunchResult>
@@ -263,7 +260,7 @@ function runReplaySafeAgentLaunch(
     }
   })
   activeAgentLaunches.set(key, { fingerprint, promise })
-  return promise
+  return promise.then((result) => presentLaunchResult(result, context))
 }
 
 export const AGENT_LAUNCH_METHODS = [
