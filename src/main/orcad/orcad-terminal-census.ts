@@ -34,6 +34,9 @@ export async function collectOrcadTerminalCensus(
   )
   const protocols = new Set(sessions.map((session) => session.protocolVersion))
   const [protocol] = protocols
+  const knownProtocols = [...protocols].filter(
+    (value): value is number => value !== undefined && Number.isSafeInteger(value) && value > 0
+  )
   return {
     liveSessions: sessions.length + inProcess,
     // In-process terminals carry no creation time to compare against activation.
@@ -41,9 +44,11 @@ export async function collectOrcadTerminalCensus(
       timestampsKnown && inProcess === 0
         ? sessions.filter((session) => session.createdAt >= activatedAt).length
         : null,
-    // Why one protocol only: sessions split across daemon generations have no single owner to
-    // check an incoming build against, so that reads as unverifiable.
+    // Old readers still treat mixed generations as unknown.
     daemonProtocolVersion: protocols.size === 1 && protocol !== undefined ? protocol : null,
+    ...(knownProtocols.length === protocols.size
+      ? { daemonProtocolVersions: knownProtocols.sort((a, b) => a - b) }
+      : {}),
     inProcessSessions: inProcess
   }
 }

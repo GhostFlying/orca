@@ -47,6 +47,20 @@ export function assessOrcadLiveDaemonCrossing(
   if (census.liveSessions === 0) {
     return 'no-live-terminals'
   }
+  const versions = census.daemonProtocolVersions
+  if (versions !== undefined) {
+    if (
+      versions.length === 0 ||
+      versions.some((version) => !Number.isSafeInteger(version) || version <= 0) ||
+      (census.daemonProtocolVersion !== null &&
+        (versions.length !== 1 || versions[0] !== census.daemonProtocolVersion))
+    ) {
+      return 'unverifiable'
+    }
+    return versions.every((version) => orcadBuildCanAttachDaemon(incoming, version))
+      ? 'attachable'
+      : 'strands-live-terminals'
+  }
   if (census.daemonProtocolVersion === null) {
     return 'unverifiable'
   }
