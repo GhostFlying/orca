@@ -8,12 +8,22 @@ describe('readWindowPairedServerRows', () => {
       {
         worktreesByRepo: {
           'repo-1': [
-            makeWorktree('same', 'On the server', { hostId: 'runtime:box', isPinned: true }),
+            makeWorktree('same', 'On the server', {
+              hostId: 'runtime:box',
+              isPinned: true,
+              comment: 'tend workspace git-resource'
+            }),
             makeWorktree('same', 'Local', { hostId: 'local' }),
             makeWorktree('other', 'Unlisted server', { hostId: 'runtime:gone' })
           ]
         },
-        folderWorkspaces: [makeFolderWorkspace({ executionHostId: 'runtime:box', name: 'Notes' })],
+        folderWorkspaces: [
+          makeFolderWorkspace({
+            executionHostId: 'runtime:box',
+            name: 'Notes',
+            comment: 'tend workspace folder-resource'
+          })
+        ],
         repos: [],
         worktreeLineageById: {}
       },
@@ -28,6 +38,7 @@ describe('readWindowPairedServerRows', () => {
         path: '/tmp/same',
         branch: 'refs/heads/main',
         displayName: 'On the server',
+        comment: 'tend workspace git-resource',
         isArchived: false,
         isPinned: true,
         isMainWorktree: false,
@@ -41,7 +52,8 @@ describe('readWindowPairedServerRows', () => {
       'runtime:box|folder:folder-1': expect.objectContaining({
         kind: 'folder',
         worktreeId: 'folder:folder-1',
-        displayName: 'Notes'
+        displayName: 'Notes',
+        comment: 'tend workspace folder-resource'
       })
     })
   })
