@@ -80,3 +80,23 @@ export class TraexRootObserver {
     void this.reader.stop()
   }
 }
+
+export function traexRootPollHook(
+  owner: TraexRootOwner,
+  row: { paneKey: string; launchToken?: string; tabId?: string; worktreeId?: string },
+  env: string
+) {
+  return {
+    paneKey: row.paneKey,
+    launchToken: row.launchToken,
+    tabId: row.tabId,
+    worktreeId: row.worktreeId,
+    observedAgent: 'traex',
+    env,
+    payload: {
+      session_id: owner.sessionId,
+      turn_id: owner.turnId,
+      transcript_path: owner.transcriptPath
+    }
+  }
+}

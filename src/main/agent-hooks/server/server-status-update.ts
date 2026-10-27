@@ -7,10 +7,6 @@ import {
   readHookProcessVerdict
 } from '../../../shared/agent-hook-owner-presence'
 import {
-  isCodexCompatibleAgentType,
-  markCodexLeadTurnInterrupted
-} from '../../../shared/agent-hook-listener/providers/codex-state'
-import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../shared/agent-status-identity'
@@ -28,13 +24,21 @@ import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
-import { reconcileCodexCompatibleStatus } from './server-codex-status-rules'
+import {
+  reconcileCodexCompatibleStatus,
+  interruptCodexCompatibleTurn
+} from './server-codex-status-rules'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
     this.state
   )
   protected readonly relaySessions = new RelaySessionGenerations()
+
+  /** Call as each relay link starts, before its first envelope. */
+  beginRemoteRelaySession(connectionId: string): void {
+    this.relaySessions.begin(connectionId)
+  }
 
   // Every row mutation passes here, including cancellation and pane moves.
   protected override commitStatusRowMutation(
@@ -227,16 +231,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         // A refused late hook already mutated the local producer; keep its idle lease clock.
         setClaudeMainAgentTurnState(this.state, attachedPayload.paneKey, previous.payload.mainAgent)
       }
-      if (
-        isCodexCompatibleAgentType(attachedPayload.payload.agentType) &&
-        attachedPayload.payload.state === 'working'
-      ) {
-        markCodexLeadTurnInterrupted(
-          this.state,
-          attachedPayload.paneKey,
-          attachedPayload.payload.agentType
-        )
-      }
+      interruptCodexCompatibleTurn(this.state, attachedPayload)
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
