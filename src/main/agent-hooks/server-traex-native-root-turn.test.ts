@@ -164,4 +164,96 @@ describe('host native root observation with empty JSONL', () => {
       rmSync(directory, { recursive: true, force: true })
     }
   })
+  it('keeps unknown-read availability separate from the execution evidence clock', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']
+    })
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    native.read.mockResolvedValue({
+      version: 1,
+      source: 'native-api',
+      sessionId: 'session',
+      turnId: 'turn',
+      startedAt: 0,
+      observedAt: Date.now(),
+      state: 'unknown',
+      operations: 'unknown',
+      retryable: false
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody(
+          {
+            hook_event_name: 'UserPromptSubmit',
+            session_id: 'session',
+            turn_id: 'turn',
+            prompt: 'Do work',
+            transcript_path: '/missing/sessions/2026/10/27/root.jsonl'
+          },
+          { observedAgent: 'traex', launchToken: 'launch' }
+        ),
+        '/hook/trae'
+      )
+      const before = server.getStatusSnapshot()[0]
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        evidenceObservedAt: before.evidenceObservedAt,
+        rootTurn: { state: 'unknown' }
+      })
+    } finally {
+      server.stop()
+    }
+  })
+  it('continues observing cancelled-root operations until they settle', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']
+    })
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    const fact = {
+      version: 1,
+      source: 'native-api',
+      sessionId: 'session',
+      turnId: 'turn',
+      startedAt: Date.now(),
+      observedAt: Date.now(),
+      completedAt: Date.now() + 1,
+      state: 'cancelled',
+      operations: 'pending',
+      retryable: false
+    }
+    native.read.mockResolvedValue(fact)
+    try {
+      await postHookEvent(
+        server,
+        buildBody(
+          {
+            hook_event_name: 'UserPromptSubmit',
+            session_id: 'session',
+            turn_id: 'turn',
+            prompt: 'Do work',
+            transcript_path: '/missing/sessions/2026/10/27/root.jsonl'
+          },
+          { observedAgent: 'traex', launchToken: 'launch' }
+        ),
+        '/hook/trae'
+      )
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        mainAgent: { outcome: 'cancellation' },
+        rootTurn: { operations: 'pending' }
+      })
+      native.read.mockResolvedValue({ ...fact, operations: 'settled' })
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        mainAgent: { outcome: 'cancellation' },
+        rootTurn: { operations: 'settled' }
+      })
+      expect(native.read).toHaveBeenCalledTimes(2)
+    } finally {
+      server.stop()
+    }
+  })
 })

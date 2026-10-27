@@ -29,6 +29,7 @@ import {
 import { isValidPiProviderSessionOnly } from './server-status-identity'
 import {
   normalizeRemoteEnvelopeFields,
+  remoteRootFields,
   type RemoteAgentStatusEnvelope
 } from './server-remote-envelope-normalization'
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
@@ -113,7 +114,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       toolAgentId,
       teammateName,
       toolAgentType,
-      providerSession
+      providerSession,
+      rootTurn
     } = normalizeRemoteEnvelopeFields(envelope)
     const source = wireSource ? resolveObservedHookSource(wireSource, envelope) : undefined
     if (envelope.statusUnavailable === true && envelope.payload === null) {
@@ -276,6 +278,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       teammateName,
       toolAgentType,
       providerSession,
+      ...remoteRootFields(envelope, { rootTurn, providerSession }, source, paneKey),
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
       ...(isTurnEndedAt(envelope.turnEndedAt) ? { turnEndedAt: envelope.turnEndedAt } : {}),

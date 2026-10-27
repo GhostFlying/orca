@@ -1,5 +1,12 @@
-import { TraexRootObserver, type TraexRootOwner } from '../../trae/traex-root-observer'
-import type { RootTurnObservation } from '../../../shared/root-turn-observation'
+import {
+  TraexRootObserver,
+  traexRootPollHook,
+  type TraexRootOwner
+} from '../../trae/traex-root-observer'
+import {
+  mergeRootTurnObservation,
+  type RootTurnObservation
+} from '../../../shared/root-turn-observation'
 import {
   isCodexCompatibleAgentType,
   codexCompatibleStateKey,
@@ -16,6 +23,7 @@ import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import { pickHostTurnEnd } from '../../../shared/agent-status-types'
 import {
   shouldPollHookTranscript,
+  transcriptPollKey,
   hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
@@ -32,10 +40,6 @@ type TranscriptPoll = {
   source: AgentHookSource
   body: unknown
   original: EnrichedAgentHookEventPayload
-}
-
-function transcriptPollKey(paneKey: string, source: AgentHookSource): string {
-  return source === 'codex' ? paneKey : `${paneKey}\0${source}`
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
@@ -73,7 +77,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (
       !lead?.turnId ||
       lead.sessionId !== row.providerSession.id ||
-      lead.outcome === 'cancellation'
+      (lead.outcome === 'cancellation' && row.rootTurn?.state !== 'cancelled')
     ) {
       return undefined
     }
@@ -104,6 +108,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (!lead) {
       return
     }
+    rootTurn = mergeRootTurnObservation(row.rootTurn, rootTurn)
     if (lead.state === 'done' && rootTurn.state === 'running') {
       return
     }
@@ -136,37 +141,34 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (!payload) {
       return
     }
-    const next = this.applyNormalizedStatus({
-      ...row,
-      rootTurn: {
-        ...rootTurn,
-        hostStartedAt:
-          'turnStartedAt' in row && typeof row.turnStartedAt === 'number'
-            ? row.turnStartedAt
-            : undefined
-      },
-      payload,
-      hookEventName: undefined,
-      hasExplicitPrompt: undefined
-    })
-    if (next) {
-      this.scheduleTranscriptPoll(
-        'traex',
-        {
-          paneKey: next.paneKey,
-          launchToken: next.launchToken,
-          tabId: next.tabId,
-          worktreeId: next.worktreeId,
-          observedAgent: 'traex',
-          env: this.env,
-          payload: {
-            session_id: owner.sessionId,
-            turn_id: owner.turnId,
-            transcript_path: owner.transcriptPath
-          }
+    const next = this.applyNormalizedStatus(
+      {
+        ...row,
+        toolAgentId: undefined,
+        teammateName: undefined,
+        toolAgentType: undefined,
+        toolUseId: undefined,
+        rootTurn: {
+          ...rootTurn,
+          hostStartedAt:
+            'turnStartedAt' in row && typeof row.turnStartedAt === 'number'
+              ? row.turnStartedAt
+              : undefined
         },
-        next
-      )
+        payload,
+        hookEventName: undefined,
+        hasExplicitPrompt: undefined
+      },
+      undefined,
+      'hook',
+      (!ended || lead.state === 'done') &&
+        'evidenceObservedAt' in row &&
+        typeof row.evidenceObservedAt === 'number'
+        ? row.evidenceObservedAt
+        : undefined
+    )
+    if (next) {
+      this.scheduleTranscriptPoll('traex', traexRootPollHook(owner, next, this.env), next)
     }
   }
 
@@ -205,7 +207,6 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     const pollKey = transcriptPollKey(original.paneKey, source)
     this.transcriptPollScheduler.clear(pollKey)
     if (!shouldPollHookTranscript(this.state, source, original)) {
-      this.transcriptPollScheduler.clear(pollKey)
       return
     }
     this.transcriptPollScheduler.schedule(
