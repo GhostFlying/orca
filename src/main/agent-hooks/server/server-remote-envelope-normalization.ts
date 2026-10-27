@@ -1,15 +1,27 @@
+import { createHash } from 'node:crypto'
+import {
+  normalizeRootTurnObservation,
+  type RootTurnObservation
+} from '../../../shared/root-turn-observation'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import { resolveObservedHookSource } from '../../../shared/agent-hook-observed-agent'
 import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
-import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import {
+  isAgentHookSource,
+  restoreShedStatusFields,
+  type AgentHookSource
+} from '../../../shared/agent-hook-relay'
 import {
   readClaudeSettledRequests,
   type ClaudeSettledRequest
 } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 
 export type RemoteAgentStatusEnvelope = {
+  rootTurn?: unknown
   paneKey: string
   tabId?: string
   worktreeId?: string
@@ -47,6 +59,7 @@ export type RemoteAgentStatusEnvelope = {
 }
 
 export type RemoteEnvelopeFields = {
+  rootTurn?: RootTurnObservation
   hookEventName?: string
   source?: AgentHookSource
   providerPromptId?: string
@@ -63,6 +76,7 @@ export type RemoteEnvelopeFields = {
 }
 
 export function normalizeRemoteEnvelopeFields(envelope: {
+  rootTurn?: unknown
   hookEventName?: string
   source?: unknown
   providerPromptId?: unknown
@@ -78,7 +92,8 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   toolAgentType?: string
   providerSession?: unknown
 }): RemoteEnvelopeFields {
-  const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
+  const wireSource = isAgentHookSource(envelope.source) ? envelope.source : undefined
+  const source = wireSource ? resolveObservedHookSource(wireSource, envelope) : undefined
   return {
     hookEventName:
       typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
@@ -128,6 +143,36 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolAgentType === 'string' && envelope.toolAgentType.trim().length > 0
         ? envelope.toolAgentType.trim()
         : undefined,
+    rootTurn: normalizeRootTurnObservation(envelope.rootTurn),
     providerSession: normalizeAgentProviderSession(envelope.providerSession) ?? undefined
   }
+}
+
+export function normalizeRemoteStatusPayload(
+  payload: ParsedAgentStatusPayload,
+  shedFields: unknown,
+  previous: ParsedAgentStatusPayload | undefined,
+  source: AgentHookSource | undefined
+): ParsedAgentStatusPayload {
+  const restored = restoreShedStatusFields(payload, shedFields, previous)
+  return source === 'traex' && restored.agentType === 'trae'
+    ? { ...restored, agentType: 'traex' }
+    : restored
+}
+
+export function remoteRootFields(
+  envelope: RemoteAgentStatusEnvelope,
+  fields: Pick<RemoteEnvelopeFields, 'rootTurn' | 'providerSession'>,
+  source: AgentHookSource | undefined,
+  paneKey: string
+): { rootTurn?: RootTurnObservation } {
+  const { rootTurn, providerSession } = fields
+  return source === 'traex' &&
+    rootTurn &&
+    rootTurn.paneKey === envelope.paneKey.trim() &&
+    rootTurn.sessionId === providerSession?.id &&
+    envelope.launchToken &&
+    rootTurn.launchId === createHash('sha256').update(envelope.launchToken).digest('hex')
+    ? { rootTurn: { ...rootTurn, paneKey } }
+    : {}
 }
