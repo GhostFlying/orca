@@ -1,3 +1,8 @@
+import { createHash } from 'node:crypto'
+import {
+  normalizeRootTurnObservation,
+  type RootTurnObservation
+} from '../../../shared/root-turn-observation'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import {
   normalizeClaudePromptId,
@@ -10,6 +15,7 @@ import {
 } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 
 export type RemoteAgentStatusEnvelope = {
+  rootTurn?: unknown
   paneKey: string
   tabId?: string
   worktreeId?: string
@@ -47,6 +53,7 @@ export type RemoteAgentStatusEnvelope = {
 }
 
 export type RemoteEnvelopeFields = {
+  rootTurn?: RootTurnObservation
   hookEventName?: string
   source?: AgentHookSource
   providerPromptId?: string
@@ -63,6 +70,7 @@ export type RemoteEnvelopeFields = {
 }
 
 export function normalizeRemoteEnvelopeFields(envelope: {
+  rootTurn?: unknown
   hookEventName?: string
   source?: unknown
   providerPromptId?: unknown
@@ -128,6 +136,24 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolAgentType === 'string' && envelope.toolAgentType.trim().length > 0
         ? envelope.toolAgentType.trim()
         : undefined,
+    rootTurn: normalizeRootTurnObservation(envelope.rootTurn),
     providerSession: normalizeAgentProviderSession(envelope.providerSession) ?? undefined
   }
+}
+
+export function remoteRootFields(
+  envelope: RemoteAgentStatusEnvelope,
+  fields: Pick<RemoteEnvelopeFields, 'rootTurn' | 'providerSession'>,
+  source: AgentHookSource | undefined,
+  paneKey: string
+): { rootTurn?: RootTurnObservation } {
+  const { rootTurn, providerSession } = fields
+  return source === 'traex' &&
+    rootTurn &&
+    rootTurn.paneKey === envelope.paneKey.trim() &&
+    rootTurn.sessionId === providerSession?.id &&
+    envelope.launchToken &&
+    rootTurn.launchId === createHash('sha256').update(envelope.launchToken).digest('hex')
+    ? { rootTurn: { ...rootTurn, paneKey } }
+    : {}
 }

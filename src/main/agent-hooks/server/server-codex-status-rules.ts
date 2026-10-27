@@ -1,7 +1,7 @@
+import { retainCodexRootObservation } from '../../../shared/agent-hook-listener/providers/codex-root-observation'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { HookListenerState } from '../../../shared/agent-hook-listener/listener-state'
 import {
-  codexCompatibleStateKey,
   isCodexCompatibleAgentType,
   reconcileRemoteCodexState
 } from '../../../shared/agent-hook-listener/providers/codex-state'
@@ -16,20 +16,7 @@ export function reconcileCodexCompatibleStatus(
   const agentType = isCodexCompatibleAgentType(next.payload.agentType)
     ? next.payload.agentType
     : undefined
-  const priorRoot = previous?.rootTurn
-  if (
-    !next.rootTurn &&
-    priorRoot &&
-    agentType &&
-    next.launchToken === previous.launchToken &&
-    next.connectionId === previous.connectionId &&
-    (next.providerSession?.id ?? (next.toolAgentId ? previous.providerSession?.id : undefined)) ===
-      priorRoot.sessionId &&
-    state.codexLeadStateByPaneKey.get(codexCompatibleStateKey(next.paneKey, agentType))?.turnId ===
-      priorRoot.turnId
-  ) {
-    next = { ...next, rootTurn: priorRoot }
-  }
+  next = retainCodexRootObservation(state, next, previous)
   const reconciled =
     (next.connectionId || !next.hookEventName) &&
     agentType &&

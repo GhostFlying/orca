@@ -22,6 +22,7 @@ export function buildRelayHookEnvelope(
       ? { evidenceAgeMs: Math.max(0, Date.now() - event.hostEvidenceObservedAt) }
       : {}),
     agentPresence: event.agentPresence,
+    ...(event.rootTurn ? { rootTurn: event.rootTurn } : {}),
     ...(source === 'traex' ? { observedAgent: 'traex' as const } : {}),
     paneKey: event.paneKey,
     ...(event.hostTurnRevision ? { hostTurnRevision: event.hostTurnRevision } : {}),
