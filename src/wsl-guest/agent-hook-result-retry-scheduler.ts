@@ -1,3 +1,4 @@
+import { RelayTraexRootObserver } from './agent-hook-native-root-observer'
 import { isCodexCompatibleAgentType } from '../shared/agent-hook-listener/providers/codex-state'
 import { pollCodexTranscriptStatus } from '../shared/agent-hook-listener/providers/codex-transcript-poll'
 // Retry late transcript results against the same cached event; one owner cancels both timer families before cache teardown.
@@ -48,6 +49,7 @@ export type AgentHookResultRetryHost = {
 }
 
 export class AgentHookResultRetryScheduler {
+  private readonly nativeRoots: RelayTraexRootObserver
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private transcriptPollScheduler: AgentTranscriptPollScheduler<TranscriptPoll>
   private host: AgentHookResultRetryHost
@@ -55,6 +57,9 @@ export class AgentHookResultRetryScheduler {
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
+    this.nativeRoots = new RelayTraexRootObserver(host, (source, body, next, env) =>
+      this.scheduleTranscriptPoll(source, body, next, env)
+    )
     this.claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(host.state)
     this.transcriptPollScheduler = new AgentTranscriptPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
@@ -63,6 +68,7 @@ export class AgentHookResultRetryScheduler {
   }
 
   clearAll(): void {
+    this.nativeRoots.clear()
     for (const timer of this.assistantMessageRetryTimers.values()) {
       clearTimeout(timer)
     }
@@ -108,6 +114,10 @@ export class AgentHookResultRetryScheduler {
     env?: string,
     version?: string
   ): void {
+    if (source === 'trae' && original.payload.agentType === 'traex') {
+      source = 'traex'
+    }
+    this.nativeRoots.schedule(original)
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
     if (source !== 'codex' && source !== 'trae' && source !== 'traex' && source !== 'muse') {
       return
