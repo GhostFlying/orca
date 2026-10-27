@@ -62,6 +62,7 @@ export type ClearedStatusTiming = Pick<
 // Persist non-agent work too: mainAgent cannot describe shell/cron/notification work that affects hydration.
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
+  | 'rootTurn'
   | 'authorityRestartId'
   | 'launchToken'
   | 'hostTurnRevision'
