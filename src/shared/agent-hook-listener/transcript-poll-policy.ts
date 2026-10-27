@@ -76,3 +76,7 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
     hookEventName: replayedStop ? 'Stop' : undefined
   }
 }
+
+export function transcriptPollKey(paneKey: string, source: AgentHookSource): string {
+  return source === 'codex' ? paneKey : `${paneKey}\0${source}`
+}
