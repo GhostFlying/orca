@@ -1,3 +1,4 @@
+import type { RootTurnObservation } from './root-turn-observation'
 // Keep transport envelopes separate from status vocabulary; re-export through agent-status-types for existing consumers.
 
 import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
@@ -30,6 +31,7 @@ export type MigrationUnsupportedPtyEntry = {
 }
 
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
+  rootTurn?: RootTurnObservation
   /** Optional run-aware identity; absent on legacy hosts and compatibility projections. */
   runId?: AgentStatusRunId
   /** Host-owned process-incarnation attachment for the run-aware row. */
