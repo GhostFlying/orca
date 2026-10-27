@@ -1,20 +1,10 @@
 import type { RootTurnObservation } from '../../shared/root-turn-observation'
-
-type RootHistoryRpc = {
-  request: (method: string, params: Record<string, unknown>) => Promise<unknown>
-}
-
-type RootHistoryIdentity = {
-  sessionId: string
-  turnId: string
-  observedAt: number
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : undefined
-}
+import {
+  record,
+  readTraexOperationSettlement,
+  type RootHistoryIdentity,
+  type RootHistoryRpc
+} from './traex-root-operations'
 
 function milliseconds(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value * 1000 : undefined
@@ -58,109 +48,6 @@ function errorFact(value: unknown): { errorCode: string; retryable: boolean } {
     }
   }
   return { errorCode: 'other', retryable: false }
-}
-
-const informationalItems = new Set([
-  'functionCallOutput',
-  'userMessage',
-  'taskNotification',
-  'hookPrompt',
-  'agentMessage',
-  'sessionPeerMessage',
-  'plan',
-  'reasoning',
-  'webSearch',
-  'imageView',
-  'enteredReviewMode',
-  'exitedReviewMode',
-  'worktreeSessionEntered',
-  'worktreeSessionExited',
-  'contextCompaction',
-  'sleep'
-])
-
-const operationItems = new Set([
-  'commandExecution',
-  'fileChange',
-  'mcpToolCall',
-  'dynamicToolCall',
-  'collabAgentToolCall',
-  'imageGeneration'
-])
-
-async function operationSettlement(
-  rpc: RootHistoryRpc,
-  identity: RootHistoryIdentity
-): Promise<RootTurnObservation['operations']> {
-  let cursor: string | null = null
-  let settlement: RootTurnObservation['operations'] = 'settled'
-  const cursors = new Set<string>()
-  const terminalProcesses = new Set<string>()
-  const settledProcesses = new Set<string>()
-  for (let pages = 0; pages < 100; pages++) {
-    const page = record(
-      await rpc.request('thread/items/list', {
-        threadId: identity.sessionId,
-        turnId: identity.turnId,
-        cursor,
-        limit: 100,
-        sortDirection: 'asc'
-      })
-    )
-    if (!Array.isArray(page?.data)) {
-      return 'unknown'
-    }
-    for (const value of page.data) {
-      const entry = record(value)
-      if (entry?.turnId !== identity.turnId) {
-        return 'unknown'
-      }
-      const item = record(entry.item)
-      if (!item || typeof item.type !== 'string') {
-        return 'unknown'
-      }
-      if (item.type === 'terminalInteraction') {
-        if (typeof item.processId !== 'string' || !item.processId) {
-          settlement = 'unknown'
-        } else {
-          terminalProcesses.add(item.processId)
-        }
-        continue
-      }
-      if (
-        item.type === 'commandExecution' &&
-        typeof item.processId === 'string' &&
-        ['completed', 'failed', 'declined', 'cancelled'].includes(String(item.status))
-      ) {
-        settledProcesses.add(item.processId)
-      }
-      if (informationalItems.has(item.type)) {
-        continue
-      }
-      if (!operationItems.has(item.type)) {
-        settlement = 'unknown'
-        continue
-      }
-      if (item.status === 'inProgress' || item.status === 'in_progress') {
-        return 'pending'
-      }
-      if (!['completed', 'failed', 'declined', 'cancelled'].includes(String(item.status))) {
-        settlement = 'unknown'
-      }
-    }
-    if (page.nextCursor === null) {
-      if ([...terminalProcesses].some((id) => !settledProcesses.has(id))) {
-        return 'unknown'
-      }
-      return settlement
-    }
-    if (typeof page.nextCursor !== 'string' || cursors.has(page.nextCursor)) {
-      return 'unknown'
-    }
-    cursors.add(page.nextCursor)
-    cursor = page.nextCursor
-  }
-  return 'unknown'
 }
 
 export async function readTraexRootHistory(
@@ -223,9 +110,32 @@ export async function readTraexRootHistory(
   }
   if (state !== 'running' && state !== 'unknown') {
     try {
-      result.operations = await operationSettlement(rpc, identity)
+      result.operations = await readTraexOperationSettlement(rpc, identity)
     } catch {
       result.operations = 'unknown'
+    }
+    try {
+      const finalPage = record(
+        await rpc.request('thread/turns/list', {
+          threadId: identity.sessionId,
+          limit: 1,
+          sortDirection: 'desc',
+          itemsView: 'notLoaded'
+        })
+      )
+      const finalTurn = Array.isArray(finalPage?.data) ? record(finalPage.data[0]) : undefined
+      if (!finalTurn || finalTurn.id !== identity.turnId || finalTurn.status !== turn.status) {
+        result.state = 'unknown'
+        result.operations = 'unknown'
+        result.retryable = false
+        result.errorCode =
+          finalTurn?.id !== identity.turnId ? 'ownership_changed' : 'observation_inconsistent'
+      } else if (state === 'failed') {
+        Object.assign(result, errorFact(finalTurn.error))
+      }
+    } catch {
+      result.operations = 'unknown'
+      result.retryable = false
     }
   }
   return result

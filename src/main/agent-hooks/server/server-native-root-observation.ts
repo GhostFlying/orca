@@ -1,5 +1,12 @@
-import { TraexRootObserver, type TraexRootOwner } from '../../trae/traex-root-observer'
-import type { RootTurnObservation } from '../../../shared/root-turn-observation'
+import {
+  TraexRootObserver,
+  traexRootPollHook,
+  type TraexRootOwner
+} from '../../trae/traex-root-observer'
+import {
+  mergeRootTurnObservation,
+  type RootTurnObservation
+} from '../../../shared/root-turn-observation'
 import {
   codexCompatibleStateKey,
   setCodexMainAgentTurnState
@@ -45,7 +52,7 @@ export abstract class AgentHookServerNativeRootObservation extends AgentHookServ
     if (
       !lead?.turnId ||
       lead.sessionId !== row.providerSession.id ||
-      lead.outcome === 'cancellation'
+      (lead.outcome === 'cancellation' && row.rootTurn?.state !== 'cancelled')
     ) {
       return undefined
     }
@@ -76,6 +83,7 @@ export abstract class AgentHookServerNativeRootObservation extends AgentHookServ
     if (!lead) {
       return
     }
+    rootTurn = mergeRootTurnObservation(row.rootTurn, rootTurn)
     if (lead.state === 'done' && rootTurn.state === 'running') {
       return
     }
@@ -108,37 +116,32 @@ export abstract class AgentHookServerNativeRootObservation extends AgentHookServ
     if (!payload) {
       return
     }
-    const next = this.applyRestatedStatus({
-      ...row,
-      rootTurn: {
-        ...rootTurn,
-        hostStartedAt:
-          'turnStartedAt' in row && typeof row.turnStartedAt === 'number'
-            ? row.turnStartedAt
-            : undefined
-      },
-      payload,
-      hookEventName: undefined,
-      hasExplicitPrompt: undefined
-    })
-    if (next) {
-      this.scheduleTranscriptPoll(
-        'traex',
-        {
-          paneKey: next.paneKey,
-          launchToken: next.launchToken,
-          tabId: next.tabId,
-          worktreeId: next.worktreeId,
-          observedAgent: 'traex',
-          env: this.env,
-          payload: {
-            session_id: owner.sessionId,
-            turn_id: owner.turnId,
-            transcript_path: owner.transcriptPath
-          }
+    const next = this.applyRestatedStatus(
+      {
+        ...row,
+        toolAgentId: undefined,
+        teammateName: undefined,
+        toolAgentType: undefined,
+        toolUseId: undefined,
+        rootTurn: {
+          ...rootTurn,
+          hostStartedAt:
+            'turnStartedAt' in row && typeof row.turnStartedAt === 'number'
+              ? row.turnStartedAt
+              : undefined
         },
-        next
-      )
+        payload,
+        hookEventName: undefined,
+        hasExplicitPrompt: undefined
+      },
+      (!ended || lead.state === 'done') &&
+        'evidenceObservedAt' in row &&
+        typeof row.evidenceObservedAt === 'number'
+        ? row.evidenceObservedAt
+        : undefined
+    )
+    if (next) {
+      this.scheduleTranscriptPoll('traex', traexRootPollHook(owner, next, this.env), next)
     }
   }
 }

@@ -32,6 +32,7 @@ export function buildRelayHookEnvelope(
           session: event.statusAdmissionSession
         }
       : event.agentPresence,
+    ...(event.rootTurn ? { rootTurn: event.rootTurn } : {}),
     ...(source === 'traex' ? { observedAgent: 'traex' as const } : {}),
     paneKey: event.paneKey,
     ...(event.hostTurnRevision ? { hostTurnRevision: event.hostTurnRevision } : {}),

@@ -17,6 +17,7 @@ import {
   museLogOffset,
   nextMusePollDelay,
   shouldPollHookTranscript,
+  transcriptPollKey,
   hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
@@ -38,10 +39,6 @@ type TranscriptPoll = {
   body: unknown
   original: EnrichedAgentHookEventPayload
   delayMs?: number
-}
-
-function transcriptPollKey(paneKey: string, source: AgentHookSource): string {
-  return source === 'codex' ? paneKey : `${paneKey}\0${source}`
 }
 
 export abstract class AgentHookServerStatusRetries extends AgentHookServerNativeRootObservation {
@@ -181,7 +178,6 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerNative
     const pollKey = transcriptPollKey(original.paneKey, source)
     this.transcriptPollScheduler.clear(pollKey)
     if (!shouldPollHookTranscript(this.state, source, original)) {
-      this.transcriptPollScheduler.clear(pollKey)
       return
     }
     // Codex keeps the scheduler's cadence; a Muse poll without a delay is a fresh hook's 1s poll.

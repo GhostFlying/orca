@@ -23,6 +23,7 @@ import {
 import { isValidPiProviderSessionOnly } from './server-status-identity'
 import {
   normalizeRemoteEnvelopeFields,
+  remoteRootFields,
   restoreRemotePayload,
   type RemoteAgentStatusEnvelope
 } from './server-remote-envelope-normalization'
@@ -115,7 +116,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       toolAgentId,
       teammateName,
       toolAgentType,
-      providerSession
+      providerSession,
+      rootTurn
     } = normalizeRemoteEnvelopeFields(envelope)
     if (envelope.statusUnavailable === true && envelope.payload === null) {
       const previousStatus = this.state.lastStatusByPaneKey.get(paneKey)
@@ -274,6 +276,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       teammateName,
       toolAgentType,
       providerSession,
+      ...remoteRootFields(envelope, { rootTurn, providerSession }, source, paneKey),
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
       ...hostTurnEnd,

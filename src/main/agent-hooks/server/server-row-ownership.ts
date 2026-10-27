@@ -58,7 +58,8 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
   /** Orca's own restatement of a row (an inferred settle, a timer or poll republish) carries the
    *  row's evidence; only the agent's own events may name or replace the pane's owner. */
   protected applyRestatedStatus(
-    incoming: AgentHookEventPayload
+    incoming: AgentHookEventPayload,
+    observedAt?: number
   ): EnrichedAgentHookEventPayload | undefined {
     if (
       incoming.payload.state === 'done' &&
@@ -69,7 +70,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     }
     this.restatingStatus = true
     try {
-      return this.applyNormalizedStatus(incoming)
+      return this.applyNormalizedStatus(incoming, undefined, 'hook', observedAt)
     } finally {
       this.restatingStatus = false
     }

@@ -1,4 +1,5 @@
 import { previewHookPresence } from '../../../shared/agent-hook-listener/presence/agent-hook-presence-transition'
+import { retainCodexRootObservation } from '../../../shared/agent-hook-listener/providers/codex-root-observation'
 import {
   hasOtherAgentProcessOwner,
   isSameAgentProcess
@@ -72,6 +73,9 @@ export function applyRelayHookEvent(
   version?: string,
   options: RelayHookAdmissionOptions = {}
 ): AgentHookEventPayload | undefined {
+  if (source === 'trae' && incoming.payload.agentType === 'traex') {
+    source = 'traex'
+  }
   if (host.isCanonicalPane(incoming.paneKey)) {
     return undefined
   }
@@ -98,7 +102,7 @@ export function applyRelayHookEvent(
     return previous
   }
   const preview = previewHookPresence(
-    cancellation.event,
+    retainCodexRootObservation(host.state, cancellation.event, previous),
     previous,
     true,
     false,
@@ -128,6 +132,7 @@ export function applyRelayHookEvent(
   } = revised
   const event: AgentHookEventPayload = {
     ...unflagged,
+    hostEvidenceObservedAt: unflagged.hostEvidenceObservedAt ?? Date.now(),
     ...reduceHostTurnEnd(
       previousCodexTurnContext(previous, revised),
       revised,
