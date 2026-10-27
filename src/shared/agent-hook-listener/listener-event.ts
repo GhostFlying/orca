@@ -1,3 +1,4 @@
+import type { RootTurnObservation } from '../root-turn-observation'
 import type { AgentProcessPresence } from '../agent-process-presence'
 import type { ParsedAgentStatusPayload, TurnEndDisposition } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
@@ -13,6 +14,7 @@ export type HostTurnRecord = {
 }
 
 export type AgentHookEventPayload = {
+  rootTurn?: RootTurnObservation
   paneKey: string
   agentPresence?: AgentProcessPresence
   /** Authenticated hook route that produced this event. */

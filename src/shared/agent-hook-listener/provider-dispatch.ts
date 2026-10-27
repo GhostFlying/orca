@@ -1,3 +1,4 @@
+import { isCodexCompatibleAgentType } from './providers/codex-state'
 import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
 import { normalizeQoderEvent } from './providers/qoder-events'
 import type { AgentMainAgentStatus, ParsedAgentStatusPayload } from '../agent-status-types'
@@ -56,10 +57,9 @@ export function normalizeProviderEvent(input: {
   previousOpenCodeMainAgent?: AgentMainAgentStatus
 }): ProviderDispatchResult {
   const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
-  const eventName =
-    source === 'codex'
-      ? codexHookEventForEndedTurn(state, paneKey, input.eventName, hookPayload)
-      : input.eventName
+  const eventName = isCodexCompatibleAgentType(source)
+    ? codexHookEventForEndedTurn(state, paneKey, input.eventName, hookPayload, source)
+    : input.eventName
   let resolvedPromptText = promptText
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false

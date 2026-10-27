@@ -251,7 +251,8 @@ export function codexHookEventForEndedTurn(
   state: HookListenerState,
   paneKey: string,
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  agentType: CodexCompatibleAgentType = 'codex'
 ): unknown {
   const turnId = readString(hookPayload, 'turn_id')
   if (
@@ -262,9 +263,14 @@ export function codexHookEventForEndedTurn(
   ) {
     return eventName
   }
-  if (!codexTranscriptTurnEnd(state.codexSubagentTranscriptByPaneKey.get(paneKey), turnId)) {
+  const key = codexCompatibleStateKey(paneKey, agentType)
+  const lead = state.codexLeadStateByPaneKey.get(key)
+  if (
+    !(lead?.state === 'done' && lead.turnId === turnId && eventName !== 'UserPromptSubmit') &&
+    !codexTranscriptTurnEnd(state.codexSubagentTranscriptByPaneKey.get(key), turnId)
+  ) {
     return eventName
   }
-  const leadTurnId = state.codexLeadStateByPaneKey.get(paneKey)?.turnId
+  const leadTurnId = state.codexLeadStateByPaneKey.get(key)?.turnId
   return leadTurnId && leadTurnId !== turnId ? undefined : 'Stop'
 }
