@@ -1,3 +1,4 @@
+import type { RootTurnObservation } from '../../root-turn-observation'
 // Keep transport envelopes separate from status vocabulary; re-export through agent-status-types for existing consumers.
 
 import type { StructuredHostStatus } from '../../agent-hook-listener/listener-event'
@@ -56,6 +57,7 @@ export type MigrationUnsupportedPtyEntry = {
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** The host proved this exact process stopped for sleep; the placed pane owns its Done. */
   paneSleep?: { ptyId: string; incarnationId?: string }
+  rootTurn?: RootTurnObservation
   /** Optional run-aware identity; absent on legacy hosts and compatibility projections. */
   runId?: AgentStatusRunId
   /** Host-owned process-incarnation attachment for the run-aware row. */

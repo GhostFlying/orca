@@ -1,3 +1,4 @@
+import { isCodexCompatibleAgentType } from './providers/codex/codex-state'
 import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
 
 import type { AgentMainAgentStatus } from '../agent-status/lifecycle/main-agent-status'
@@ -68,15 +69,11 @@ export function normalizeProviderEvent(input: {
   const codexCompatibleEventName =
     source === 'codex' || source === 'trae'
       ? codexHookEventForEphemeralThread(state, paneKey, input.eventName, hookPayload, source)
-      : undefined
+      : input.eventName
   let eventName =
-    source !== 'codex' && source !== 'trae'
-      ? input.eventName
-      : codexCompatibleEventName === undefined
-        ? undefined
-        : source === 'codex'
-          ? codexHookEventForEndedTurn(state, paneKey, codexCompatibleEventName, hookPayload)
-          : codexCompatibleEventName
+    codexCompatibleEventName !== undefined && isCodexCompatibleAgentType(source)
+      ? codexHookEventForEndedTurn(state, paneKey, codexCompatibleEventName, hookPayload, source)
+      : codexCompatibleEventName
   let resolvedPromptText = promptText
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false

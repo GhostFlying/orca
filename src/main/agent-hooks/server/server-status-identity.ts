@@ -70,6 +70,7 @@ export function toAgentStatusIpcPayload(
     stateStartedAt: entry.stateStartedAt,
     ...(entry.turnStartedAt !== undefined ? { turnStartedAt: entry.turnStartedAt } : {}),
     ...pickHostTurnEnd(entry),
+    ...(entry.rootTurn ? { rootTurn: entry.rootTurn } : {}),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...(cliWriterTopology(entry) === 'shared' ? { executionHost: 'shared' as const } : {}),
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),

@@ -1,4 +1,5 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
+import { isCodexCompatibleAgentType } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import {
   pollCodexTranscriptStatus,
   readCodexTranscriptPoll,
@@ -186,17 +187,18 @@ export class AgentHookResultRetryScheduler {
     if (!this.ownsTranscriptPoll(paneKey, poll)) {
       return
     }
-    if (poll.source !== 'codex') {
+    const { source } = poll
+    if (!isCodexCompatibleAgentType(source)) {
       this.applyTranscriptPoll(paneKey, poll, undefined)
       return
     }
     // Why: rollout reads stay off the event loop; the next tick waits for this one.
-    return readCodexTranscriptPoll(this.host.state, paneKey).then((reads) => {
+    return readCodexTranscriptPoll(this.host.state, poll.original.paneKey, source).then((reads) => {
       // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
       const current = this.transcriptPollScheduler.peek(paneKey)
       const owner = this.ownsTranscriptPoll(paneKey, poll)
         ? poll
-        : current?.source === 'codex' && this.ownsTranscriptPoll(paneKey, current)
+        : current?.source === source && this.ownsTranscriptPoll(paneKey, current)
           ? current
           : undefined
       try {
@@ -226,9 +228,17 @@ export class AgentHookResultRetryScheduler {
   ): void {
     const { source, body, original, env, version } = poll
     const logOffset = source === 'muse' ? museLogOffset(this.host.state, paneKey) : undefined
-    const event = codexReads
-      ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env, codexReads)
-      : normalizeHookPayload(this.host.state, source, body, this.host.env)
+    const event =
+      codexReads && isCodexCompatibleAgentType(source)
+        ? pollCodexTranscriptStatus(
+            this.host.state,
+            original,
+            body,
+            this.host.env,
+            codexReads,
+            source
+          )
+        : normalizeHookPayload(this.host.state, source, body, this.host.env)
     if (!event) {
       return
     }

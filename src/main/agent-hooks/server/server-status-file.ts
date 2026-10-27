@@ -74,6 +74,7 @@ export abstract class AgentHookServerStatusFile extends AgentHookServerHydration
         // Terminal handles belong to this runtime and cannot safely rejoin a hydrated row.
         terminalHandle: _terminalHandle,
         hostTurnRevision: _hostTurnRevision,
+        rootTurn: _rootTurn,
         // Full replies serve this runtime's run records only.
         acceptedReply: _acceptedReply,
         launchToken: _launchToken,
