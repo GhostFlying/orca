@@ -6,8 +6,6 @@ import {
   normalizeAgentStatusPayload
 } from '../../../shared/agent-status-types'
 import { isTurnEndedAt } from '../../../shared/agent-hook-turn-end-timing'
-import { restoreShedStatusFields } from '../../../shared/agent-hook-relay'
-import { resolveObservedHookSource } from '../../../shared/agent-hook-observed-agent'
 import {
   MAX_PANE_KEY_LEN,
   warnOnHookEnvOrVersionMismatch
@@ -21,7 +19,6 @@ import {
 import { launchTokenHash } from '../../../shared/agent-hook-spool'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { IncomingAgentHookEvent } from './server-types'
-import { RelaySessionGenerations } from './server-relay-sessions'
 import {
   AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
   canAdmitLegacyAgentStatus,
@@ -30,18 +27,13 @@ import {
 import { isValidPiProviderSessionOnly } from './server-status-identity'
 import {
   normalizeRemoteEnvelopeFields,
+  normalizeRemoteStatusPayload,
+  remoteRootFields,
   type RemoteAgentStatusEnvelope
 } from './server-remote-envelope-normalization'
-import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
+import { AgentHookServerRemoteRelaySessions } from './server-remote-relay-sessions'
 
-export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
-  private readonly relaySessions = new RelaySessionGenerations()
-
-  /** Call as each relay link starts, before its first envelope. */
-  beginRemoteRelaySession(connectionId: string): void {
-    this.relaySessions.begin(connectionId)
-  }
-
+export abstract class AgentHookServerIngestRemote extends AgentHookServerRemoteRelaySessions {
   /** Relay payloads cross the SSH trust boundary and require canonical validation here. */
   ingestRemote(envelope: RemoteAgentStatusEnvelope, connectionId: string | null): void {
     if (
@@ -110,7 +102,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     let tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
     const {
       hookEventName,
-      source: wireSource,
+      source,
       providerPromptId,
       grokPromptBoundary,
       compactTrigger,
@@ -121,9 +113,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       toolAgentId,
       teammateName,
       toolAgentType,
-      providerSession
+      providerSession,
+      rootTurn
     } = normalizeRemoteEnvelopeFields(envelope)
-    const source = wireSource ? resolveObservedHookSource(wireSource, envelope) : undefined
     if (envelope.statusUnavailable === true && envelope.payload === null) {
       const previous = this.state.lastStatusByPaneKey.get(paneKey)
       if (
@@ -155,14 +147,12 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       return
     }
     // Restore shed fields only against a matching digest and turn.
-    let normalizedPayload = restoreShedStatusFields(
+    let normalizedPayload = normalizeRemoteStatusPayload(
       validatedPayload,
       envelope.shedFields,
-      this.state.lastStatusByPaneKey.get(paneKey)?.payload
+      this.state.lastStatusByPaneKey.get(paneKey)?.payload,
+      source
     )
-    if (source === 'traex' && normalizedPayload.agentType === 'trae') {
-      normalizedPayload = { ...normalizedPayload, agentType: 'traex' }
-    }
     if (
       envelope.providerSessionOnly === true &&
       !readAgentProcessPresence(envelope.agentPresence)?.ended &&
@@ -284,6 +274,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       teammateName,
       toolAgentType,
       providerSession,
+      ...remoteRootFields(envelope, { rootTurn, providerSession }, source, paneKey),
       providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
       ...(isTurnEndedAt(envelope.turnEndedAt) ? { turnEndedAt: envelope.turnEndedAt } : {}),
