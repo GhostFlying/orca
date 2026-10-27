@@ -1,3 +1,4 @@
+import type { RootTurnObservation } from './root-turn-observation'
 import type { AgentProcessPresence } from './agent-process-presence'
 import type { ClaudeSettledRequest } from './agent-hook-listener/claude-settled-permission-requests'
 // Relay normalizes; main revalidates at the SSH trust boundary and routes. Wire connectionId stays null until ingestRemote stamps mux identity. CLI version/env survive forwarding; remote marks location, not build type. Keep wire envelopes separate from renderer IPC/install contracts without Electron dependencies.
@@ -59,6 +60,7 @@ export const REMOTE_AGENT_HOOK_ENV = 'remote' as const
 
 /** Wire envelope for a single hook event flowing relay → Orca. */
 export type AgentHookRelayEnvelope = {
+  rootTurn?: RootTurnObservation
   source: AgentHookSource
   /** Refines a compatibility-projected source without requiring old hosts to know it. */
   observedAgent?: AgentHookObservedAgent

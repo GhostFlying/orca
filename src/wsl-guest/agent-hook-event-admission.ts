@@ -1,4 +1,5 @@
 import { previewHookPresence } from '../shared/agent-hook-presence-transition'
+import { retainCodexRootObservation } from '../shared/agent-hook-listener/providers/codex-root-observation'
 import { hasOtherAgentProcessOwner, isSameAgentProcess } from '../shared/agent-process-presence'
 import {
   readHookProcessEvidence,
@@ -68,6 +69,9 @@ export function applyRelayHookEvent(
   version?: string,
   options: RelayHookAdmissionOptions = {}
 ): AgentHookEventPayload | undefined {
+  if (source === 'trae' && incoming.payload.agentType === 'traex') {
+    source = 'traex'
+  }
   if (host.isCanonicalPane(incoming.paneKey)) {
     return undefined
   }
@@ -94,7 +98,7 @@ export function applyRelayHookEvent(
     return previous
   }
   const preview = previewHookPresence(
-    cancellation.event,
+    retainCodexRootObservation(host.state, cancellation.event, previous),
     previous,
     true,
     false,
@@ -124,6 +128,7 @@ export function applyRelayHookEvent(
   } = revised
   const event: AgentHookEventPayload = {
     ...unflagged,
+    hostEvidenceObservedAt: unflagged.hostEvidenceObservedAt ?? Date.now(),
     ...reduceHostTurnEnd(previous, revised, Date.now(), options.isReplay !== true)
   }
   // Drop retired-pane posts and cached status so clients cannot auto-resume a ghost pane onto an orphan’s live transcript (#12447).
