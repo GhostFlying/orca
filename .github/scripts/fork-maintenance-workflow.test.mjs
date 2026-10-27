@@ -209,7 +209,15 @@ describe('fork release maintenance workflows', () => {
     expect(patchQuality.run).toContain('check:code-quality:changed -- "$FORK_PATCH_BASE"')
     expect(patchQuality.run).toContain('check:react-doctor:changed -- "$FORK_PATCH_BASE"')
     expect(repositoryQuality.run).toContain('check:reliability-gates')
-    expect(repositoryQuality.run).toContain('verify:localization-coverage')
+    expect(repositoryQuality.run).toContain('node .github/scripts/fork-localization-coverage.mjs')
+    for (const path of [
+      '.github/scripts/fork-localization-coverage.mjs',
+      '.github/scripts/fork-localization-coverage.test.mjs'
+    ]) {
+      expect(syncText).toContain(path)
+      expect(hotfixText).toContain(path)
+      expect(stateText).toContain(path)
+    }
   })
 
   it('fetches and verifies every upstream Release used by cross-version tests', () => {
