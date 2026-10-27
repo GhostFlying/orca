@@ -1,4 +1,5 @@
 import { ClaudeHelperKillPoller } from '../shared/agent-hook-listener/providers/claude-helper-kill-poller'
+import { isCodexCompatibleAgentType } from '../shared/agent-hook-listener/providers/codex-state'
 import { pollCodexTranscriptStatus } from '../shared/agent-hook-listener/providers/codex-transcript-poll'
 // Retry late transcript results against the same cached event; one owner cancels both timer families before cache teardown.
 import {
@@ -163,10 +164,9 @@ export class AgentHookResultRetryScheduler {
     ) {
       return
     }
-    const event =
-      source === 'codex'
-        ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env)
-        : normalizeHookPayload(this.host.state, source, body, this.host.env)
+    const event = isCodexCompatibleAgentType(source)
+      ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env, source)
+      : normalizeHookPayload(this.host.state, source, body, this.host.env)
     if (!event) {
       return
     }
