@@ -1,4 +1,5 @@
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { RootTurnObservation } from '../../../../shared/root-turn-observation'
 import type { StructuredHostStatus } from '../../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -28,6 +29,7 @@ export type RuntimeWorktreeAgentSource = Pick<AgentStatusIpcPayload, 'subagents'
   toolInput: string | null
   interrupted: boolean
   mainAgent?: AgentMainAgentStatus
+  rootTurn?: RootTurnObservation
   providerSession?: AgentProviderSessionMetadata
   stateStartedAt: number
   updatedAt: number
