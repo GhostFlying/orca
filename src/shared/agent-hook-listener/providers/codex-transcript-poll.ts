@@ -7,25 +7,32 @@ import { normalizeHookPayload } from '../../agent-hook-listener'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
 import { buildCodexChildDrivenStatusPayload } from './codex-events'
-import { getOrCreateCodexSubagentRoster, markCodexLeadTurnInterrupted } from './codex-state'
+import {
+  codexCompatibleStateKey,
+  getOrCreateCodexSubagentRoster,
+  markCodexLeadTurnInterrupted,
+  type CodexCompatibleAgentType
+} from './codex-state'
 
 /** Poll new host rollout records without replaying starting hooks; replay ended root turns as Stops skipped for internal subagents. */
 export function pollCodexTranscriptStatus(
   state: HookListenerState,
   original: AgentHookEventPayload,
   body: unknown,
-  env: string
+  env: string,
+  source: CodexCompatibleAgentType = 'codex'
 ): AgentHookEventPayload | undefined {
-  const transcript = state.codexSubagentTranscriptByPaneKey.get(original.paneKey)
+  const key = codexCompatibleStateKey(original.paneKey, source)
+  const transcript = state.codexSubagentTranscriptByPaneKey.get(key)
   if (!transcript?.parent.filePath) {
     return undefined
   }
   const changed = reconcileCodexSubagentTranscript(
     transcript,
-    getOrCreateCodexSubagentRoster(state, original.paneKey),
+    getOrCreateCodexSubagentRoster(state, original.paneKey, source),
     transcript.parent.filePath
   )
-  const lead = state.codexLeadStateByPaneKey.get(original.paneKey)
+  const lead = state.codexLeadStateByPaneKey.get(key)
   const interrupted = transcript.rootTurn.interrupted && lead?.state !== 'done'
   const envelope = record(body)
   if (
@@ -46,15 +53,15 @@ export function pollCodexTranscriptStatus(
         transcript_path: transcript.parent.filePath
       }
     }
-    return normalizeHookPayload(state, 'codex', stop, env) ?? undefined
+    return normalizeHookPayload(state, source, stop, env) ?? undefined
   }
   if (!changed && !interrupted) {
     return original
   }
   if (interrupted) {
-    markCodexLeadTurnInterrupted(state, original.paneKey)
+    markCodexLeadTurnInterrupted(state, original.paneKey, source)
   }
-  const payload = buildCodexChildDrivenStatusPayload(state, undefined, original.paneKey, {})
+  const payload = buildCodexChildDrivenStatusPayload(state, undefined, original.paneKey, {}, source)
   // Why: only a replayed Stop may carry an event name; this row restates the last hook's.
   return payload ? { ...original, hookEventName: undefined, payload } : undefined
 }

@@ -1,3 +1,4 @@
+import type { RootTurnObservation } from './root-turn-observation'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { SmartTier } from './sidebar-list/sort-stamps'
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
@@ -39,6 +40,7 @@ export type RuntimeWorktreeAgentRow = {
   interrupted: boolean
   /** Main-agent state/verdict/clock even while subagents keep the row working; old hosts omit it, falling back to interrupted. */
   mainAgent?: AgentMainAgentStatus
+  rootTurn?: RootTurnObservation
   providerSession?: AgentProviderSessionMetadata
   stateStartedAt: number
   updatedAt: number
