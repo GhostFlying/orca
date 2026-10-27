@@ -3,10 +3,7 @@ import {
   markClaudeLeadTurnDone,
   clearClaudeAnsweredQuestionWait
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
-import {
-  isCodexCompatibleAgentType,
-  markCodexLeadTurnInterrupted
-} from '../../../shared/agent-hook-listener/providers/codex-state'
+import { prepareMainAgentInterrupt } from './server-main-agent-interrupt'
 import {
   isAgentInterruptInputIntent,
   isNavigationEscapeIntent,
@@ -137,22 +134,8 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     ) {
       return false
     }
-    const childWorkEvidenced =
-      payload.subagents?.some((subagent) => subagent.state !== 'idle') === true ||
-      (agentType === 'claude' &&
-        (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
-          this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey)))
-    // An idle root cannot cancel child work; Codex-compatible aggregates must also keep live children.
-    if (
-      payload.mainAgent
-        ? payload.mainAgent.state !== 'working' ||
-          (isCodexCompatibleAgentType(agentType) && childWorkEvidenced)
-        : childWorkEvidenced
-    ) {
+    if (!prepareMainAgentInterrupt(this.state, existing)) {
       return false
-    }
-    if (isCodexCompatibleAgentType(agentType)) {
-      markCodexLeadTurnInterrupted(this.state, existing.paneKey, agentType)
     }
     const inferred = this.settleTurnWithoutStop(existing, 'cancellation')
     if (!inferred) {

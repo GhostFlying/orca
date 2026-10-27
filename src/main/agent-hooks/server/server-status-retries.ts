@@ -1,12 +1,5 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
-import { TraexRootObserver, type TraexRootOwner } from '../../trae/traex-root-observer'
-import type { RootTurnObservation } from '../../../shared/root-turn-observation'
-import {
-  isCodexCompatibleAgentType,
-  codexCompatibleStateKey,
-  setCodexMainAgentTurnState
-} from '../../../shared/agent-hook-listener/providers/codex-state'
-import { buildCodexChildDrivenStatusPayload } from '../../../shared/agent-hook-listener/providers/codex-events'
+import { isCodexCompatibleAgentType } from '../../../shared/agent-hook-listener/providers/codex-state'
 import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
@@ -20,6 +13,7 @@ import {
   museLogOffset,
   nextMusePollDelay,
   shouldPollHookTranscript,
+  transcriptPollKey,
   hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../../../shared/agent-hook-listener/transcript-poll-policy'
@@ -30,7 +24,7 @@ import {
   ASSISTANT_MESSAGE_RETRY_MS,
   CODEX_SUBAGENT_POLL_MS
 } from './server-constants'
-import { AgentHookServerStatusUpdate } from './server-status-update'
+import { AgentHookServerNativeRootObservation } from './server-native-root-observation'
 
 type TranscriptPoll = {
   source: AgentHookSource
@@ -39,11 +33,7 @@ type TranscriptPoll = {
   delayMs?: number
 }
 
-function transcriptPollKey(paneKey: string, source: AgentHookSource): string {
-  return source === 'codex' ? paneKey : `${paneKey}\0${source}`
-}
-
-export abstract class AgentHookServerStatusRetries extends AgentHookServerStatusUpdate {
+export abstract class AgentHookServerStatusRetries extends AgentHookServerNativeRootObservation {
   private observedLocalHook?: { accepted: boolean; receivedAt?: number }
   private readonly claudeHelperKills = new ClaudeHelperKillPoller(this.state, {
     current: (paneKey) => this.state.lastStatusByPaneKey.get(paneKey),
@@ -100,132 +90,6 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     this.claudeHelperKills.activate()
   }
 
-  private nativeRoots = this.createNativeRoots()
-
-  private createNativeRoots(): TraexRootObserver {
-    return new TraexRootObserver(
-      (paneKey) => this.nativeRootOwner(paneKey),
-      (owner, observation) => this.publishNativeRoot(owner, observation)
-    )
-  }
-
-  private nativeRootOwner(paneKey: string): TraexRootOwner | undefined {
-    const row = this.state.lastStatusByPaneKey.get(paneKey)
-    if (
-      !this.server ||
-      !row ||
-      row.connectionId !== null ||
-      row.restoredUnconfirmed ||
-      row.structuredHost ||
-      !row.launchToken ||
-      row.payload.agentType !== 'traex' ||
-      !row.providerSession?.id ||
-      !row.providerSession.transcriptPath
-    ) {
-      return undefined
-    }
-    const key = codexCompatibleStateKey(paneKey, 'traex')
-    const lead = this.state.codexLeadStateByPaneKey.get(key)
-    if (
-      !lead?.turnId ||
-      lead.sessionId !== row.providerSession.id ||
-      lead.outcome === 'cancellation'
-    ) {
-      return undefined
-    }
-    if (
-      row.rootTurn?.turnId === lead.turnId &&
-      row.rootTurn.state !== 'unknown' &&
-      row.rootTurn.state !== 'running' &&
-      row.rootTurn.operations === 'settled'
-    ) {
-      return undefined
-    }
-    return {
-      paneKey,
-      launchToken: row.launchToken,
-      sessionId: row.providerSession.id,
-      turnId: lead.turnId,
-      transcriptPath: row.providerSession.transcriptPath
-    }
-  }
-
-  private publishNativeRoot(owner: TraexRootOwner, rootTurn: RootTurnObservation): void {
-    const row = this.state.lastStatusByPaneKey.get(owner.paneKey)
-    if (!row) {
-      return
-    }
-    const key = codexCompatibleStateKey(owner.paneKey, 'traex')
-    const lead = this.state.codexLeadStateByPaneKey.get(key)
-    if (!lead) {
-      return
-    }
-    if (lead.state === 'done' && rootTurn.state === 'running') {
-      return
-    }
-    const ended =
-      rootTurn.state === 'failed' ||
-      rootTurn.state === 'completed' ||
-      rootTurn.state === 'cancelled'
-    if (ended) {
-      setCodexMainAgentTurnState(
-        this.state,
-        key,
-        {
-          model: lead.model,
-          sessionId: lead.sessionId,
-          turnId: lead.turnId,
-          state: 'done',
-          outcome:
-            rootTurn.state === 'failed'
-              ? 'failure'
-              : rootTurn.state === 'cancelled'
-                ? 'cancellation'
-                : 'success'
-        },
-        rootTurn.completedAt ?? rootTurn.observedAt
-      )
-    }
-    const payload = ended
-      ? buildCodexChildDrivenStatusPayload(this.state, undefined, owner.paneKey, {}, 'traex')
-      : row.payload
-    if (!payload) {
-      return
-    }
-    const next = this.applyRestatedStatus({
-      ...row,
-      rootTurn: {
-        ...rootTurn,
-        hostStartedAt:
-          'turnStartedAt' in row && typeof row.turnStartedAt === 'number'
-            ? row.turnStartedAt
-            : undefined
-      },
-      payload,
-      hookEventName: undefined,
-      hasExplicitPrompt: undefined
-    })
-    if (next) {
-      this.scheduleTranscriptPoll(
-        'traex',
-        {
-          paneKey: next.paneKey,
-          launchToken: next.launchToken,
-          tabId: next.tabId,
-          worktreeId: next.worktreeId,
-          observedAgent: 'traex',
-          env: this.env,
-          payload: {
-            session_id: owner.sessionId,
-            turn_id: owner.turnId,
-            transcript_path: owner.transcriptPath
-          }
-        },
-        next
-      )
-    }
-  }
-
   protected clearAllTranscriptPolls(): void {
     this.nativeRoots.stop()
     this.nativeRoots = this.createNativeRoots()
@@ -267,7 +131,6 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     const pollKey = transcriptPollKey(original.paneKey, source)
     this.transcriptPollScheduler.clear(pollKey)
     if (!shouldPollHookTranscript(this.state, source, original)) {
-      this.transcriptPollScheduler.clear(pollKey)
       return
     }
     // Codex keeps the scheduler's cadence; a Muse poll without a delay is a fresh hook's 1s poll.
