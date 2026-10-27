@@ -1,7 +1,11 @@
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
-import { hasCodexTranscriptSubagents } from './providers/codex-state'
+import {
+  codexCompatibleStateKey,
+  hasCodexTranscriptSubagents,
+  isCodexCompatibleAgentType
+} from './providers/codex-state'
 import { hasMuseSessionLog } from './providers/muse-events'
 
 export function shouldPollHookTranscript(
@@ -9,15 +13,13 @@ export function shouldPollHookTranscript(
   source: AgentHookSource,
   event: AgentHookEventPayload
 ): boolean {
-  if (source === 'codex') {
+  if (isCodexCompatibleAgentType(source)) {
+    const key = codexCompatibleStateKey(event.paneKey, source)
     return (
       hasCodexTranscriptSubagents(state, event.paneKey, source) ||
-      (state.codexLeadStateByPaneKey.get(event.paneKey)?.state !== 'done' &&
-        Boolean(state.codexSubagentTranscriptByPaneKey.get(event.paneKey)?.parent.filePath))
+      (state.codexLeadStateByPaneKey.get(key)?.state !== 'done' &&
+        Boolean(state.codexSubagentTranscriptByPaneKey.get(key)?.parent.filePath))
     )
-  }
-  if (source === 'trae' || source === 'traex') {
-    return hasCodexTranscriptSubagents(state, event.paneKey, source)
   }
   if (source === 'muse') {
     // Muse question waits/answers exist only in the session log.
@@ -32,8 +34,9 @@ export function hookTranscriptWatchPath(
   source: AgentHookSource,
   paneKey: string
 ): string | undefined {
-  return source === 'codex' && !hasCodexTranscriptSubagents(state, paneKey)
-    ? state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath
+  return isCodexCompatibleAgentType(source) && !hasCodexTranscriptSubagents(state, paneKey, source)
+    ? state.codexSubagentTranscriptByPaneKey.get(codexCompatibleStateKey(paneKey, source))?.parent
+        .filePath
     : undefined
 }
 
