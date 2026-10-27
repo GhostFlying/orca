@@ -1,3 +1,4 @@
+import type { RootTurnObservation } from './root-turn-observation'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { SmartTier } from './sidebar-list/sort-stamps'
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
@@ -42,6 +43,7 @@ export type RuntimeWorktreeAgentRow = {
   mainAgent?: AgentMainAgentStatus
   /** Same as `terminal show`, only when requested: null is "looked, no wait"; absent is not evaluated (structured workers, old hosts). */
   agentWait?: RuntimeTerminalInteractiveWait | null
+  rootTurn?: RootTurnObservation
   providerSession?: AgentProviderSessionMetadata
   stateStartedAt: number
   updatedAt: number
