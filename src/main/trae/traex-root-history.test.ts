@@ -64,6 +64,26 @@ describe('read-only native root facts', () => {
       'thread/turns/list'
     ])
   })
+  it.each(['interrupted', 'completed', 'failed'])(
+    'does not trust a %s snapshot without a durable ending clock',
+    async (status) => {
+      const rpc = rpcFor()
+      const request = rpc.request.bind(rpc)
+      rpc.request = async (method, params) => {
+        const response = await request(method, params)
+        if (method === 'thread/turns/list') {
+          return { data: [{ id: 'turn', status, startedAt: 100, completedAt: null }] }
+        }
+        return response
+      }
+      expect(await readTraexRootHistory(rpc, identity)).toMatchObject({
+        state: 'unknown',
+        operations: 'unknown',
+        errorCode: 'ending_unconfirmed',
+        retryable: false
+      })
+    }
+  )
   it('refuses a different native turn', async () => {
     expect(await readTraexRootHistory(rpcFor({ turnId: 'old' }), identity)).toMatchObject({
       state: 'unknown',
