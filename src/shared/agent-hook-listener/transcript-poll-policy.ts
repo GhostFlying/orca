@@ -1,7 +1,11 @@
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
-import { hasCodexTranscriptSubagents } from './providers/codex-state'
+import {
+  codexCompatibleStateKey,
+  hasCodexTranscriptSubagents,
+  isCodexCompatibleAgentType
+} from './providers/codex-state'
 import { hasMuseSessionLog } from './providers/muse-events'
 import { hasPendingCodexSubagentIdentity } from '../codex-subagent-roster'
 import { parseHookEnvelope } from './hook-envelope'
@@ -11,16 +15,14 @@ export function shouldPollHookTranscript(
   source: AgentHookSource,
   event: AgentHookEventPayload
 ): boolean {
-  if (source === 'codex') {
+  if (isCodexCompatibleAgentType(source)) {
+    const key = codexCompatibleStateKey(event.paneKey, source)
     return (
       hasCodexTranscriptSubagents(state, event.paneKey, source) ||
-      hasPendingCodexSubagentIdentity(state.codexSubagentRosterByPaneKey.get(event.paneKey)) ||
-      (state.codexLeadStateByPaneKey.get(event.paneKey)?.state !== 'done' &&
-        Boolean(state.codexSubagentTranscriptByPaneKey.get(event.paneKey)?.parent.filePath))
+      hasPendingCodexSubagentIdentity(state.codexSubagentRosterByPaneKey.get(key)) ||
+      (state.codexLeadStateByPaneKey.get(key)?.state !== 'done' &&
+        Boolean(state.codexSubagentTranscriptByPaneKey.get(key)?.parent.filePath))
     )
-  }
-  if (source === 'trae' || source === 'traex') {
-    return hasCodexTranscriptSubagents(state, event.paneKey, source)
   }
   if (source === 'muse') {
     // Muse question waits/answers exist only in the session log.
@@ -70,8 +72,9 @@ export function hookTranscriptWatchPath(
   source: AgentHookSource,
   paneKey: string
 ): string | undefined {
-  return source === 'codex' && !hasCodexTranscriptSubagents(state, paneKey)
-    ? state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath
+  return isCodexCompatibleAgentType(source) && !hasCodexTranscriptSubagents(state, paneKey, source)
+    ? state.codexSubagentTranscriptByPaneKey.get(codexCompatibleStateKey(paneKey, source))?.parent
+        .filePath
     : undefined
 }
 

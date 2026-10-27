@@ -128,9 +128,12 @@ export const AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY =
 // The host appends CI result lines to chats that opened or pushed to a PR; older hosts write none.
 export const AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY = 'agent-session.pr-events.v1' as const
 
+export const AGENT_ROOT_TURN_RUNTIME_CAPABILITY = 'agent-session.root-turn.v1' as const
+
 // Individual client flags must not retain the unused host capability aggregate.
 export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
+    AGENT_ROOT_TURN_RUNTIME_CAPABILITY,
     AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY,
     ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
     ...AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES,
