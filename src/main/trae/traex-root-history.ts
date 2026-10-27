@@ -105,6 +105,19 @@ export async function readTraexRootHistory(
   if (completedAt !== undefined) {
     result.completedAt = completedAt
   }
+  if (
+    state !== 'running' &&
+    state !== 'unknown' &&
+    (completedAt === undefined || completedAt < startedAt)
+  ) {
+    return {
+      ...result,
+      state: 'unknown',
+      operations: 'unknown',
+      errorCode: 'ending_unconfirmed',
+      retryable: false
+    }
+  }
   if (state === 'failed') {
     Object.assign(result, errorFact(turn.error))
   }
