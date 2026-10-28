@@ -318,12 +318,19 @@ describe('fork release maintenance workflows', () => {
     expect(currentReleaseFixtureRepair.run).toContain('3188253bf9a13b7d8dc9875cebbf94eba4835955')
     expect(currentReleaseFixtureRepair.run).toContain('96d70e46774fd6c273b07089ea3e823a24211168')
     expect(restore.run).toContain('recognized_release_sync=true')
-    expect(restore.run).toContain('[[ "$recognized_release_sync" == true ]]')
+    expect(restore.run).toContain('release_sync_fixture_compatible=true')
+    expect(restore.run).toContain(
+      '[[ "$recognized_release_sync" == true && "$release_sync_fixture_compatible" == true ]]'
+    )
     expect(restore.run).toContain(
       `git diff --name-only "$sync_sha^" "$sync_sha" -- . ':(exclude).github/workflows'`
     )
+    expect(restore.run).toContain('2d9b5957851e5bd449e179018e53759ea69e3f0b')
+    expect(restore.run).toContain('eb94767705e0f4335737f60b2b9310f9b376babe')
     expect(restore.run).toContain('fixture_sha="$sync_sha^"')
     expect(restore.run).toContain('git checkout "$fixture_sha" -- .github/workflows')
+    expect(restore.run).toContain('git rm -r --ignore-unmatch -- .github/actions')
+    expect(restore.run).toContain('git checkout "$fixture_sha" -- .github/actions')
     expect(restore.run).toContain('git cat-file -e "$UPSTREAM_SHA:$signing_contract"')
     expect(restore.run).toContain('git rm --ignore-unmatch -- "$signing_contract"')
     expect(restore.run).toContain('config/scripts/windows-signing-workflow-contract.test.mjs')

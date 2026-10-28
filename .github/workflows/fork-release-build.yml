@@ -260,12 +260,26 @@ jobs:
             "$sync_subject" == "ci: carry main's workflow files so the release tag can be pushed" ]]; then
             recognized_release_sync=true
           fi
-          if [[ "$recognized_release_sync" == true ]] &&
-            [[ -z "$(git diff --name-only "$sync_sha^" "$sync_sha" -- . ':(exclude).github/workflows')" ]]; then
+          release_sync_fixture_compatible=false
+          restore_release_sync_actions=false
+          if [[ -z "$(git diff --name-only "$sync_sha^" "$sync_sha" -- . ':(exclude).github/workflows')" ]] ||
+            [[ "$UPSTREAM_SHA" == 2d9b5957851e5bd449e179018e53759ea69e3f0b &&
+              "$sync_sha" == eb94767705e0f4335737f60b2b9310f9b376babe ]]; then
+            release_sync_fixture_compatible=true
+          fi
+          if [[ "$UPSTREAM_SHA" == 2d9b5957851e5bd449e179018e53759ea69e3f0b &&
+            "$sync_sha" == eb94767705e0f4335737f60b2b9310f9b376babe ]]; then
+            restore_release_sync_actions=true
+          fi
+          if [[ "$recognized_release_sync" == true && "$release_sync_fixture_compatible" == true ]]; then
             fixture_sha="$sync_sha^"
           fi
           echo "Upstream workflow fixtures: $fixture_sha"
           git checkout "$fixture_sha" -- .github/workflows
+          if [[ "$restore_release_sync_actions" == true ]]; then
+            git rm -r --ignore-unmatch -- .github/actions
+            git checkout "$fixture_sha" -- .github/actions
+          fi
           signing_contract=config/scripts/windows-signing-workflow-contract.test.mjs
           if git cat-file -e "$UPSTREAM_SHA:$signing_contract"; then
             git checkout "$UPSTREAM_SHA" -- "$signing_contract"
