@@ -15,7 +15,8 @@ import {
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY
 } from '../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { createStructuredAgentSessionOperationId } from '../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { parseAgentSessionOperationTimestamp } from '../shared/agent-session/agent-session-host-authority'
@@ -124,6 +125,16 @@ export async function callAgentLaunch(
   capabilities: readonly string[],
   rawArgs?: readonly string[]
 ): Promise<RuntimeRpcSuccess<AgentLaunchResult & { operationId?: string }>> {
+  if (
+    launch.agent === 'trae' &&
+    launch.sessionOptions?.model &&
+    !capabilities.includes(AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY)
+  ) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca host cannot apply Trae launch model preferences. Update Orca on the execution host.'
+    )
+  }
   const replaySupported = capabilities.includes(AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY)
   if (launch.operationId && !replaySupported) {
     throw new RuntimeClientError(
