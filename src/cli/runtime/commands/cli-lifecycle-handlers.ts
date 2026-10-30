@@ -1,4 +1,5 @@
 import { reenterPackagedElectron } from '../app-launch/packaged-cli-interpreter'
+import { AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import type { CommandHandler } from '../../dispatch/dispatch'
@@ -166,7 +167,14 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       ? await resolveCliStatusCaller(client)
       : undefined
     printResult(
-      caller === undefined ? result : { ...result, result: { ...result.result, caller } },
+      {
+        ...result,
+        result: {
+          ...result.result,
+          client: { capabilities: [AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY] },
+          ...(caller ? { caller } : {})
+        }
+      },
       json,
       formatStatus
     )

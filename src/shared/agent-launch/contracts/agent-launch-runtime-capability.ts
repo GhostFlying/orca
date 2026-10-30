@@ -67,6 +67,9 @@ export const AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY = 'agent.launch.surface.v1'
 // on its default.
 export const AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY = 'agent.launch.pi-model.v1' as const
 
+// Host-advertised: applies an explicit Trae model/effort; older hosts start Trae on its defaults.
+export const AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY = 'agent.launch.trae-model.v1' as const
+
 // Host-advertised: accepts a reserved chat ID in any Orca ID spelling; older hosts refuse one not
 // spelled `<agent>_…`.
 export const AGENT_LAUNCH_PLAIN_SESSION_ID_RUNTIME_CAPABILITY =
@@ -95,6 +98,7 @@ export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PLAIN_SESSION_ID_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SETUP_TRUST_MISMATCH_RUNTIME_CAPABILITY
 ] as const
