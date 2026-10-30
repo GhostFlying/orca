@@ -119,3 +119,21 @@ describe('a saved permission mode on terminals', () => {
     expect(result.appliedSessionOptions).toEqual({})
   })
 })
+
+describe('Trae explicit worker launch preferences', () => {
+  it.each(['high', 'xhigh'])('applies the exact catalog model and %s effort', (effort) => {
+    const result = launch({
+      agent: 'trae',
+      sessionOptions: { model: 'gpt-6.1-sol', effort },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: `-m old-model -c " model = legacy" --config 'model_reasoning_effort="low"' -c unrelated=true -- --model prompt-model`
+    })
+    expect(result.appliedSessionOptions).toEqual({ model: 'gpt-6.1-sol', effort })
+    expect(result.command).toBe(
+      `traecli '-c' 'unrelated=true' '--model' 'gpt-6.1-sol' '-c' 'model_reasoning_effort="${effort}"' '--' '--model' 'prompt-model'`
+    )
+    expect(result.resumeLaunch.agentCommand).toBe(
+      "traecli '-c' 'unrelated=true' '--' '--model' 'prompt-model'"
+    )
+  })
+})

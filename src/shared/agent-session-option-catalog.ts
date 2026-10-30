@@ -1,4 +1,5 @@
 import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
+import { TRAE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-trae'
 import { CODEBUDDY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-codebuddy'
 import type { AgentType } from './agent-status-types'
 import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
@@ -42,6 +43,7 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   cursor: CURSOR_SESSION_OPTION_CATALOG,
   grok: GROK_SESSION_OPTION_CATALOG,
   muse: MUSE_SESSION_OPTION_CATALOG,
+  trae: TRAE_SESSION_OPTION_CATALOG,
   omp: OMP_SESSION_OPTION_CATALOG
 }
 

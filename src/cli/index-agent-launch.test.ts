@@ -44,6 +44,10 @@ import { main } from './index'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
+import {
+  AGENT_LAUNCH_RUNTIME_CAPABILITIES,
+  AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY
+} from '../shared/agent-launch-runtime-capability'
 import { agentLaunchFixture, agentLaunchHostFixture } from './agent-launch-test-fixtures'
 
 const WORKTREE_ID = 'repo-1::/tmp/repo'
@@ -76,6 +80,84 @@ describe('orca cli agent launch', () => {
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
     spawnMock
+  })
+
+  it.each(['high', 'xhigh'])(
+    'passes Trae model and %s effort without substitution',
+    async (effort) => {
+      queueFixtures(callMock, agentLaunchHostFixture(), agentLaunchFixture(WORKTREE_ID))
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      await main(
+        [
+          'agent',
+          'launch',
+          '--agent',
+          'trae',
+          '--worktree',
+          `id:${WORKTREE_ID}`,
+          '--model',
+          'gpt-6.1-sol',
+          '--effort',
+          effort,
+          '--surface',
+          'terminal',
+          '--json'
+        ],
+        '/tmp/repo'
+      )
+      expect(callMock).toHaveBeenCalledWith(
+        'agent.launchReplay',
+        expect.objectContaining({
+          agent: 'trae',
+          sessionOptions: { model: 'gpt-6.1-sol', effort },
+          surface: 'terminal'
+        })
+      )
+    }
+  )
+
+  it('refuses Trae preferences on an older host before launching', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('status', {
+        capabilities: AGENT_LAUNCH_RUNTIME_CAPABILITIES.filter(
+          (capability) => capability !== AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY
+        )
+      })
+    )
+    const output = await runRefused([
+      'agent',
+      'launch',
+      '--agent',
+      'trae',
+      '--worktree',
+      `id:${WORKTREE_ID}`,
+      '--model',
+      'gpt-6.1-sol',
+      '--effort',
+      'high',
+      '--json'
+    ])
+    expect(JSON.parse(output).error.code).toBe('incompatible_runtime')
+    expect(launchCalls()).toEqual([])
+  })
+
+  it('refuses an unadvertised Trae effort before contacting the host', async () => {
+    const output = await runRefused([
+      'agent',
+      'launch',
+      '--agent',
+      'trae',
+      '--worktree',
+      `id:${WORKTREE_ID}`,
+      '--model',
+      'gpt-6.1-sol',
+      '--effort',
+      'ultra',
+      '--json'
+    ])
+    expect(JSON.parse(output).error.code).toBe('invalid_argument')
+    expect(callMock).not.toHaveBeenCalled()
   })
 
   it('starts an agent in the current worktree through agent.launch', async () => {

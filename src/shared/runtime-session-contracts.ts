@@ -109,6 +109,7 @@ export type CliRuntimeState =
   | 'stale_bootstrap'
 
 export type CliStatusResult = {
+  client?: { capabilities: RuntimeCapability[] }
   target?: { kind: 'local' } | { kind: 'environment'; environment: string }
   app: {
     running: boolean
