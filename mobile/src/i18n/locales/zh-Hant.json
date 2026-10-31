@@ -3711,6 +3711,8 @@
       "reopenDetail": "此頁面尚不支援這台主機列出工作區的方式。"
     },
     "workspaceListSections": {
+      "tendTasks": "Tend 任務",
+      "directories": "目錄",
       "all": "全部",
       "closed": "已關閉",
       "done": "已完成",

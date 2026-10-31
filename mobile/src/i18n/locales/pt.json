@@ -3812,6 +3812,8 @@
       "reopenDetail": "Este host lista os espaços de trabalho em um formato que esta página ainda não reconhece."
     },
     "workspaceListSections": {
+      "tendTasks": "Tarefas do Tend",
+      "directories": "Diretórios",
       "all": "Todos",
       "closed": "Fechados",
       "done": "Concluídos",
