@@ -22,6 +22,7 @@ import {
   type WorktreeHostContextOf
 } from './worktree-host-context-labels'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
+import { isMobileTendWorkspace } from './tend-workspace-sections'
 
 type WorktreeLineageIdentitySource = Pick<Worktree, 'worktreeId' | 'hostId'>
 
@@ -140,6 +141,8 @@ export function getMobileWorkspaceLineageChildren(
     // A folder workspace spans projects, so the project filter never hides it as a parent.
     if (
       !parent ||
+      isMobileTendWorkspace(worktree) !== isMobileTendWorkspace(parent) ||
+      (isMobileTendWorkspace(worktree) && worktree.repoId !== parent.repoId) ||
       !shown(worktree) ||
       (!shown(parent) && parent.workspaceKind !== 'folder-workspace')
     ) {

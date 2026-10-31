@@ -4023,6 +4023,8 @@
       "reopenDetail": "Este host muestra los espacios de trabajo en un formato que esta página aún no reconoce."
     },
     "workspaceListSections": {
+      "tendTasks": "Tareas de Tend",
+      "directories": "Directorios",
       "all": "Todos",
       "closed": "Cerrado",
       "done": "Hecho",

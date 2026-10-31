@@ -3921,6 +3921,8 @@
       "reopenDetail": "此页面尚无法识别此主机的工作区列表格式。"
     },
     "workspaceListSections": {
+      "tendTasks": "Tend 任务",
+      "directories": "目录",
       "all": "全部",
       "closed": "已关闭",
       "done": "已完成",

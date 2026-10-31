@@ -12,10 +12,7 @@ import {
   getWorkspaceStatusGroupKey,
   withDefaultWorkspaceStatuses
 } from '../../../src/shared/workspace-statuses'
-import {
-  getMobileOccurrenceRows,
-  getMobileWorkspaceLineageChildren
-} from './mobile-workspace-lineage'
+import { getMobileWorkspaceLineageChildren } from './mobile-workspace-lineage'
 import {
   getPRLaneKey,
   PR_GROUP_ORDER
@@ -28,7 +25,6 @@ import type {
 import { hostSortsByStamps, sortWorktrees } from './workspace-list-ordering'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 import { NO_WORKTREE_HOST_CONTEXT, resolveWorktreeHostId } from './worktree-host-context-labels'
-import type { WorktreeHostContextOf } from './worktree-host-context-labels'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import {
   buildProjectGroupingIndex,
@@ -42,6 +38,8 @@ import {
   filterWorkspaceRows,
   type WorkspaceRowFactReader
 } from '../../../src/shared/workspace-view/workspace-row-filters'
+import { buildMobileTendSections, isMobileTendWorkspace } from './tend-workspace-sections'
+import { renderMobileWorkspaceSections } from './workspace-section-projection'
 import { translate } from '../i18n/mobile-i18n'
 
 export type { FilterState, Section, SectionRepo, Worktree } from './workspace-list-types'
@@ -84,7 +82,7 @@ export function buildSectionRepoMap(
 export { getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
 
 // A section before lineage expansion: host rows only, no per-row view yet.
-type PlannedSection = Omit<Section, 'data'> & { data: Worktree[] }
+export type PlannedSection = Omit<Section, 'data'> & { data: Worktree[] }
 
 function makeSection(
   key: string,
@@ -198,12 +196,13 @@ export function buildMobileWorkspacePlan(
     rows: sorted,
     childrenByParentIdentity,
     identityOf: getWorktreeRowIdentity,
-    isPinned: (worktree) => isWorktreePinned(worktree, pinnedIds),
+    isPinned: (w) => isWorktreePinned(w, pinnedIds) && !isMobileTendWorkspace(w),
     duplicatePinned: showPinnedInGroups,
     owningSectionOf: (worktree) =>
       getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
     projectIdOf: (worktree) => worktree.repoId,
-    sectionsOf: ({ pinned, natural: canonicalGroupWorktrees, displayRootByIdentity }) => {
+    sectionsOf: ({ pinned, natural, displayRootByIdentity }) => {
+      const canonicalGroupWorktrees = natural.filter((row) => !isMobileTendWorkspace(row))
       const sections: PlannedSection[] = []
       if (pinned.length > 0) {
         sections.push(makeSection('pinned', groupLabels.pinned, pinned, { icon: 'pin' }))
@@ -294,6 +293,14 @@ export function buildMobileWorkspacePlan(
           }
         }
       }
+      sections.push(
+        ...buildMobileTendSections(
+          natural.filter(isMobileTendWorkspace),
+          projectCatalog,
+          repoMap,
+          projectIndex
+        )
+      )
       return sections.map((section): PlannedSection & WorktreeOccurrenceSection<Worktree> => ({
         ...section,
         items: section.data,
@@ -305,15 +312,8 @@ export function buildMobileWorkspacePlan(
     occurrencePlan,
     render: (
       collapsed: ReadonlySet<string>,
-      hostContextOf: WorktreeHostContextOf = NO_WORKTREE_HOST_CONTEXT
-    ): Section[] =>
-      occurrencePlan.sections.map((section) => ({
-        key: section.key,
-        title: section.title,
-        ...(section.icon ? { icon: section.icon } : {}),
-        ...(section.repo ? { repo: section.repo } : {}),
-        data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed, hostContextOf)
-      }))
+      hostContextOf: typeof NO_WORKTREE_HOST_CONTEXT = NO_WORKTREE_HOST_CONTEXT
+    ): Section[] => renderMobileWorkspaceSections(occurrencePlan, collapsed, hostContextOf)
   }
 }
 
