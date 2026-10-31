@@ -3911,6 +3911,8 @@
       "retrying": "worktree.ps 執行失敗（{{error}}），正在自動重試"
     },
     "workspaceListSections": {
+      "tendTasks": "Tend 任務",
+      "directories": "目錄",
       "all": "全部",
       "closed": "已關閉",
       "done": "已完成",

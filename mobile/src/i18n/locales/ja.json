@@ -3911,6 +3911,8 @@
       "retrying": "worktree.ps に失敗しました（{{error}}）。自動で再試行中です。"
     },
     "workspaceListSections": {
+      "tendTasks": "Tend のタスク",
+      "directories": "ディレクトリ",
       "all": "全て",
       "closed": "クローズ",
       "done": "完了",

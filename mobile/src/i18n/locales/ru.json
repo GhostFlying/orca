@@ -4133,6 +4133,8 @@
       "retrying": "Сбой worktree.ps ({{error}}) — автоматическая повторная попытка"
     },
     "workspaceListSections": {
+      "tendTasks": "Задачи Tend",
+      "directories": "Каталоги",
       "all": "Все",
       "closed": "Закрыто",
       "done": "Готово",

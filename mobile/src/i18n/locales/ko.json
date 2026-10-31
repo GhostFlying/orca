@@ -3911,6 +3911,8 @@
       "retrying": "worktree.ps가 실패했습니다({{error}}). 자동으로 다시 시도합니다."
     },
     "workspaceListSections": {
+      "tendTasks": "Tend 작업",
+      "directories": "디렉터리",
       "all": "모두",
       "closed": "닫힘",
       "done": "완료",
