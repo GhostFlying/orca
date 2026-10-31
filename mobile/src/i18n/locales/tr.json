@@ -3915,6 +3915,8 @@
       "retrying": "worktree.ps tamamlanamadı ({{error}}) — otomatik olarak yeniden deneniyor"
     },
     "workspaceListSections": {
+      "tendTasks": "Tend görevleri",
+      "directories": "Dizinler",
       "all": "Tümü",
       "closed": "Kapalı",
       "done": "Tamamlandı",

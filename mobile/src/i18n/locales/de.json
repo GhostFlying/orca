@@ -3915,6 +3915,8 @@
       "retrying": "worktree.ps fehlgeschlagen ({{error}}) – wird automatisch erneut versucht"
     },
     "workspaceListSections": {
+      "tendTasks": "Tend-Aufgaben",
+      "directories": "Verzeichnisse",
       "all": "Alle",
       "closed": "Geschlossen",
       "done": "Erledigt",

@@ -16,6 +16,7 @@ import { buildHostFeedSections, buildPreFeedSections } from './host-sidebar-feed
 import { useHostRepoIconDataUrls } from './use-host-repo-icon-data-urls'
 import type { HostSidebarFeed } from './use-host-sidebar-feed'
 import type { HostScreenState } from './use-host-screen-state'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
@@ -99,6 +100,7 @@ function useFeedHostListSections({
   hostPlatform,
   state
 }: HostListSectionsInputs): HostListSections {
+  const t = useMobileTranslation()
   const collapsedGroups = useCollapsedGroups(state)
   const domains = feed?.kind === 'ready' ? feed.domains : null
   // The catalog installed with the rows; a desktop that predates it answers mobileRelay.projectSections.
@@ -152,7 +154,8 @@ function useFeedHostListSections({
       state.view,
       state.repoHostIdByRepoId,
       state.search,
-      lastVisited
+      lastVisited,
+      t
     ]
   )
 

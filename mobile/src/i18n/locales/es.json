@@ -4024,6 +4024,8 @@
       "retrying": "worktree.ps falló ({{error}}) — reintentando automáticamente"
     },
     "workspaceListSections": {
+      "tendTasks": "Tareas de Tend",
+      "directories": "Directorios",
       "all": "Todos",
       "closed": "Cerrado",
       "done": "Hecho",

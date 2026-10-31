@@ -809,6 +809,8 @@
       "reopenDetail": "This host lists workspaces in a way this page does not know yet."
     },
     "workspaceListSections": {
+      "tendTasks": "Tend tasks",
+      "directories": "Directories",
       "pinned": "Pinned",
       "all": "All",
       "inReview": "In review",

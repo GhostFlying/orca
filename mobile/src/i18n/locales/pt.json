@@ -4024,6 +4024,8 @@
       "retrying": "worktree.ps falhou ({{error}}) — tentando novamente automaticamente"
     },
     "workspaceListSections": {
+      "tendTasks": "Tarefas do Tend",
+      "directories": "Diretórios",
       "all": "Todos",
       "closed": "Fechados",
       "done": "Concluídos",
