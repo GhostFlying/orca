@@ -11,6 +11,7 @@ import {
 } from '../../../../src/shared/execution-host/execution-host'
 import { resolveLineageParentsByPolicy } from '../../../../src/shared/worktree/lineage/workspace-lineage-graph'
 import type { WorkspaceLineageEdge } from '../../../../src/shared/worktree/lineage-types'
+import { isTendWorkspaceComment } from '../../../../src/shared/tend-workspace-comment'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   buildCrossStoreLineageViewOfRows,
@@ -43,6 +44,7 @@ export type MobileLineageRow = Pick<
   | 'parentWorktreeInstanceId'
   | 'crossStoreParent'
   | 'workspaceLineage'
+  | 'comment'
 >
 
 function hasValidLineageParent(worktree: MobileLineageRow, parent: MobileLineageRow): boolean {
@@ -160,6 +162,9 @@ export function getMobileWorkspaceLineageChildren<Row extends MobileLineageRow>(
     // A folder workspace spans projects, so the project filter never hides it as a parent.
     if (
       !parent ||
+      isTendWorkspaceComment(worktree.comment ?? '') !==
+        isTendWorkspaceComment(parent.comment ?? '') ||
+      (isTendWorkspaceComment(worktree.comment ?? '') && worktree.repoId !== parent.repoId) ||
       !shown(worktree) ||
       (!shown(parent) && parent.workspaceKind !== 'folder-workspace')
     ) {

@@ -33,6 +33,7 @@ import { useHostBotSections } from '../../bots/use-host-bot-sections'
 import type { LastVisitedWorktreeOnHost } from '../../worktree/row-presentation/host-list-highlight'
 import { indexHiddenProjects } from '../../../../src/shared/project/catalog/hidden-projects'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
@@ -155,6 +156,7 @@ function useFeedHostListSections({
   botListedIdentities,
   lastVisited
 }: BaseListInputs): HostListSections {
+  const t = useMobileTranslation()
   const collapsedGroups = useCollapsedGroups(state)
   const domains = feed?.kind === 'ready' ? feed.domains : null
   // The catalog installed with the rows; a desktop that predates it answers mobileRelay.projectSections.
@@ -219,7 +221,8 @@ function useFeedHostListSections({
       state.view,
       state.repoHostIdByRepoId,
       state.search,
-      lastVisited
+      lastVisited,
+      t
     ]
   )
 

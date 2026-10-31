@@ -12,10 +12,7 @@ import {
   withDefaultWorkspaceStatuses
 } from '../../../../src/shared/workspace/status/workspace-statuses'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../../src/shared/workspace/status/workspace-status-defaults'
-import {
-  getMobileOccurrenceRows,
-  getMobileWorkspaceLineageChildren
-} from '../agent-lineage/mobile-workspace-lineage'
+import { getMobileWorkspaceLineageChildren } from '../agent-lineage/mobile-workspace-lineage'
 import {
   getPRLaneKey,
   PR_GROUP_ORDER
@@ -51,11 +48,12 @@ import { buildSectionRepoMap } from './section-repo-map'
 import { keepHiddenRowsBelowFolders } from '../../../../src/shared/sidebar-list/folders/folder-workspace-occurrences'
 import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 import {
-  placeInProjectGroupTree,
   planProjectGroupTree,
   bindGroupFolderRows,
   type GroupTreePlacement
 } from '../project-sections/project-group-tree-sections'
+import { buildMobileTendSections, isMobileTendWorkspace } from '../tend-workspace-sections'
+import { renderMobileWorkspaceSections } from '../workspace-section-projection'
 
 export type ProjectSectionCatalog = {
   /** Catalog repos of the hosts the list shows; each without rows gets an empty section. */
@@ -78,7 +76,7 @@ export const NO_PROJECT_SECTION_CATALOG: ProjectSectionCatalog = {
 }
 
 // A section before lineage expansion: host rows only, no per-row view yet.
-type PlannedSection = Omit<Section, 'data'> & { data: Worktree[] }
+export type PlannedSection = Omit<Section, 'data'> & { data: Worktree[] }
 
 function makeSection(
   key: string,
@@ -152,12 +150,14 @@ export function buildMobileWorkspacePlan(
     rows: sorted,
     childrenByParentIdentity,
     identityOf: getWorktreeRowIdentity,
-    isPinned: (worktree) => isWorktreePinned(worktree, pinnedIds),
+    isPinned: (worktree) =>
+      isWorktreePinned(worktree, pinnedIds) && !isMobileTendWorkspace(worktree),
     duplicatePinned: showPinnedInGroups,
     owningSectionOf: (worktree) =>
       getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
     projectIdOf: (worktree) => worktree.repoId,
-    sectionsOf: ({ pinned, natural: canonicalGroupWorktrees, displayRootByIdentity }) => {
+    sectionsOf: ({ pinned, natural, displayRootByIdentity }) => {
+      const canonicalGroupWorktrees = natural.filter((row) => !isMobileTendWorkspace(row))
       const sections: PlannedSection[] = []
       if (pinned.length > 0) {
         sections.push(makeSection('pinned', groupLabels.pinned, pinned, { icon: 'pin' }))
@@ -267,6 +267,14 @@ export function buildMobileWorkspacePlan(
           }
         }
       }
+      sections.push(
+        ...buildMobileTendSections(
+          natural.filter(isMobileTendWorkspace),
+          projectCatalog,
+          repoMap,
+          projectIndex
+        )
+      )
       return sections.map((section): PlannedSection & WorktreeOccurrenceSection<Worktree> => ({
         ...section,
         items: section.data,
@@ -280,17 +288,13 @@ export function buildMobileWorkspacePlan(
       collapsed: ReadonlySet<string>,
       hostContextOf: WorktreeHostContextOf = NO_WORKTREE_HOST_CONTEXT
     ): Section[] =>
-      occurrencePlan.sections.flatMap(({ items: _items, placement: _placement, ...section }) => {
-        const listed = placeInProjectGroupTree(
-          {
-            ...section,
-            data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed, hostContextOf)
-          },
-          groupTreePlacements.get(section.key),
-          collapsed
-        )
-        return listed ? [listed] : []
-      })
+      renderMobileWorkspaceSections(
+        occurrencePlan,
+        occurrencePlan.sections,
+        groupTreePlacements,
+        collapsed,
+        hostContextOf
+      )
   }
 }
 

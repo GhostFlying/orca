@@ -4805,6 +4805,8 @@
       "retryingAutomatically": "Tentando novamente automaticamente."
     },
     "workspaceListSections": {
+      "tendTasks": "Tarefas do Tend",
+      "directories": "Diretórios",
       "all": "Todos",
       "closed": "Fechados",
       "done": "Concluídos",
