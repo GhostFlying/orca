@@ -3875,6 +3875,8 @@
       "reopenDetail": "Cet hôte fournit une liste d'espaces de travail dans un format que cette page ne reconnaît pas encore."
     },
     "workspaceListSections": {
+      "tendTasks": "Tâches Tend",
+      "directories": "Répertoires",
       "all": "Tous",
       "closed": "Fermés",
       "done": "Terminés",

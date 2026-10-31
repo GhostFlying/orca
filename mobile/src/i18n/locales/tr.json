@@ -3777,6 +3777,8 @@
       "reopenDetail": "Bu sunucu, çalışma alanlarını bu sayfanın henüz tanımadığı bir biçimde listeliyor."
     },
     "workspaceListSections": {
+      "tendTasks": "Tend görevleri",
+      "directories": "Dizinler",
       "all": "Tümü",
       "closed": "Kapalı",
       "done": "Tamamlandı",

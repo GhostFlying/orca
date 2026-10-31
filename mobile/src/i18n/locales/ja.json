@@ -3773,6 +3773,8 @@
       "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。"
     },
     "workspaceListSections": {
+      "tendTasks": "Tend のタスク",
+      "directories": "ディレクトリ",
       "all": "全て",
       "closed": "クローズ",
       "done": "完了",
