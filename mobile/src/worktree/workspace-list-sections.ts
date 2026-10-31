@@ -12,10 +12,7 @@ import {
   getWorkspaceStatusGroupKey,
   withDefaultWorkspaceStatuses
 } from '../../../src/shared/workspace-statuses'
-import {
-  getMobileOccurrenceRows,
-  getMobileWorkspaceLineageChildren
-} from './mobile-workspace-lineage'
+import { getMobileWorkspaceLineageChildren } from './mobile-workspace-lineage'
 import {
   getPRLaneKey,
   PR_GROUP_ORDER
@@ -41,6 +38,8 @@ import {
   filterWorkspaceRows,
   type WorkspaceRowFactReader
 } from '../../../src/shared/workspace-view/workspace-row-filters'
+import { buildMobileTendSections, isMobileTendWorkspace } from './tend-workspace-sections'
+import { renderMobileWorkspaceSections } from './workspace-section-projection'
 import { translate } from '../i18n/mobile-i18n'
 
 export type { FilterState, Section, SectionRepo, Worktree } from './workspace-list-types'
@@ -193,12 +192,14 @@ export function buildMobileWorkspacePlan(
     rows: sorted,
     childrenByParentIdentity,
     identityOf: getWorktreeRowIdentity,
-    isPinned: (worktree) => isWorktreePinned(worktree, pinnedIds),
+    isPinned: (worktree) =>
+      isWorktreePinned(worktree, pinnedIds) && !isMobileTendWorkspace(worktree),
     duplicatePinned: showPinnedInGroups,
     owningSectionOf: (worktree) =>
       getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
     projectIdOf: (worktree) => worktree.repoId,
-    sectionsOf: ({ pinned, natural: canonicalGroupWorktrees, displayRootByIdentity }) => {
+    sectionsOf: ({ pinned, natural, displayRootByIdentity }) => {
+      const canonicalGroupWorktrees = natural.filter((row) => !isMobileTendWorkspace(row))
       const sections: Section[] = []
       if (pinned.length > 0) {
         sections.push(makeSection('pinned', groupLabels.pinned, pinned, { icon: 'pin' }))
@@ -289,6 +290,14 @@ export function buildMobileWorkspacePlan(
           }
         }
       }
+      sections.push(
+        ...buildMobileTendSections(
+          natural.filter(isMobileTendWorkspace),
+          projectCatalog,
+          repoMap,
+          projectIndex
+        )
+      )
       return sections.map((section): Section & WorktreeOccurrenceSection<Worktree> => ({
         ...section,
         items: section.data,
@@ -299,13 +308,7 @@ export function buildMobileWorkspacePlan(
   return {
     occurrencePlan,
     render: (collapsed: ReadonlySet<string>): Section[] =>
-      occurrencePlan.sections.map((section) => ({
-        key: section.key,
-        title: section.title,
-        ...(section.icon ? { icon: section.icon } : {}),
-        ...(section.repo ? { repo: section.repo } : {}),
-        data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed)
-      }))
+      renderMobileWorkspaceSections(occurrencePlan, collapsed)
   }
 }
 

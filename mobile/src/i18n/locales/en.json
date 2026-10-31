@@ -844,6 +844,8 @@
       "retryingAutomatically": "Retrying automatically."
     },
     "workspaceListSections": {
+      "tendTasks": "Tend tasks",
+      "directories": "Directories",
       "pinned": "Pinned",
       "all": "All",
       "inReview": "In review",

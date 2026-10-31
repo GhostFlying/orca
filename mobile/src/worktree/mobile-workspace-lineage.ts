@@ -5,6 +5,7 @@ import {
 } from '../../../src/shared/worktree-occurrence-plan'
 import type { Worktree } from './workspace-list-types'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
+import { isMobileTendWorkspace } from './tend-workspace-sections'
 
 type WorktreeLineageIdentitySource = Pick<Worktree, 'worktreeId' | 'hostId'>
 
@@ -46,6 +47,8 @@ export function getMobileWorkspaceLineageChildren(
       !parentIdentity ||
       parentIdentity === worktreeId ||
       !parent ||
+      isMobileTendWorkspace(worktree) !== isMobileTendWorkspace(parent) ||
+      (isMobileTendWorkspace(worktree) && worktree.repoId !== parent.repoId) ||
       !hasValidLineageParent(worktree, parent)
     ) {
       continue

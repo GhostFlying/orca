@@ -3719,6 +3719,8 @@
       "reopenDetail": "Dieser Host listet Arbeitsbereiche in einem Format auf, das diese Seite noch nicht unterstützt."
     },
     "workspaceListSections": {
+      "tendTasks": "Tend-Aufgaben",
+      "directories": "Verzeichnisse",
       "all": "Alle",
       "closed": "Geschlossen",
       "done": "Erledigt",

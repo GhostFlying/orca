@@ -18,6 +18,8 @@ import {
 import { resolveWorktreeHostId } from '../worktree/worktree-host-context-labels'
 import { filterWorktrees } from '../worktree/workspace-list-sections'
 import { rowFiltersForView, type MobileViewState } from '../worktree/workspace-view-settings'
+import { TEND_WORKSPACE_GROUP_KEY } from '../../../src/shared/tend-workspace-comment'
+import { mobileTendSectionTitle } from '../worktree/tend-workspace-sections'
 
 export type HostFeedListSources = {
   rows: readonly HostSectionRow[]
@@ -30,6 +32,9 @@ export type HostFeedListSources = {
 
 // Clients name Pinned/All/PR lanes themselves; the builder names data headers.
 function headerTitle(row: GroupHeaderRow): string {
+  if (row.key === TEND_WORKSPACE_GROUP_KEY) {
+    return mobileTendSectionTitle()
+  }
   switch (row.icon.kind) {
     case 'pinned':
       return row.label ?? 'Pinned'
