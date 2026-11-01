@@ -78,6 +78,7 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
     {
       store: reloaded,
       scanRepo: async () => ({ ok: true, worktrees }),
+      lastSuccessfulScan: () => null,
       listFolderWorkspaces: () => []
     },
     repo,
