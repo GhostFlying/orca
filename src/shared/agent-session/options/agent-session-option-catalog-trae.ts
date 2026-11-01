@@ -1,5 +1,5 @@
 import { removeAgentArgOption } from './agent-session-option-agent-args'
-import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-types'
+import type { AgentSessionOptionCatalog, CatalogOption } from './agent-session-option-catalog-types'
 
 function removeTraeConfig(tokens: readonly string[], key: string): string[] {
   return removeAgentArgOption('trae', tokens, ['-c', '--config'], (value) =>
@@ -7,36 +7,31 @@ function removeTraeConfig(tokens: readonly string[], key: string): string[] {
   )
 }
 
+const TRAE_EFFORT: CatalogOption = {
+  id: 'effort',
+  label: 'Reasoning effort',
+  category: 'thought_level',
+  kind: {
+    type: 'select',
+    choices: [
+      { value: 'low', label: 'Low' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'high', label: 'High' },
+      { value: 'xhigh', label: 'Extra high' }
+    ],
+    defaultValue: 'medium'
+  },
+  apply: {
+    launchArgs: (value) => ['-c', `model_reasoning_effort=${JSON.stringify(value)}`],
+    removeAgentArgs: (tokens) => removeTraeConfig(tokens, 'model_reasoning_effort'),
+    midSession: { kind: 'unsupported' }
+  }
+}
+
 export const TRAE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
-  models: [
-    {
-      id: 'gpt-6.1-sol',
-      label: 'GPT-6.1-Sol',
-      options: [
-        {
-          id: 'effort',
-          label: 'Reasoning effort',
-          category: 'thought_level',
-          kind: {
-            type: 'select',
-            choices: [
-              { value: 'low', label: 'Low' },
-              { value: 'medium', label: 'Medium' },
-              { value: 'high', label: 'High' },
-              { value: 'xhigh', label: 'Extra high' }
-            ],
-            defaultValue: 'medium'
-          },
-          apply: {
-            launchArgs: (value) => ['-c', `model_reasoning_effort=${JSON.stringify(value)}`],
-            removeAgentArgs: (tokens) => removeTraeConfig(tokens, 'model_reasoning_effort'),
-            midSession: { kind: 'unsupported' }
-          }
-        }
-      ]
-    }
-  ],
+  models: [{ id: 'gpt-6.1-sol', label: 'GPT-6.1-Sol', options: [TRAE_EFFORT] }],
+  unknownModelOptions: [TRAE_EFFORT],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
     removeAgentArgs: (tokens) =>

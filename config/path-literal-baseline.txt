@@ -1,8 +1,6 @@
 # This is a RATCHET: the list may only SHRINK. Fix the reference, then prune:
 # `<file> <src/... literal>` pairs in config/, .github/ and tests/ that name no tracked file.
 # pnpm check:path-literal-ratchet --prune
-.github/workflows/agent-state-rules-publish.yml src/main/runtime/readiness-census
-.github/workflows/zcode-credential-contract.yml src/shared/windows-security-descriptor
 config/scripts/performance/session-search/session-search-tool-heavy-corpus.ts src/main/ai-vault/session-transcript-reader.ts
 config/scripts/runtime-verification/desktop-transport/run-linux-lid-sleep-assertion-docker.mjs src/main/linux-lid-sleep-assertion.ts
 config/scripts/runtime-verification/desktop-transport/run-ssh-staged-upload-reliability.mjs src/main/ssh/ssh-relay-install-namespace.test.ts

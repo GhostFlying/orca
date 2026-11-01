@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../../../../../../shared/agent-session/options/agent-session-option-catalog'
-import { resolveAgentSessionOptionLaunch } from '../../../../../../shared/agent-session/options/agent-session-option-launch'
+import {
+  removeOverriddenAgentSessionArgs,
+  resolveAgentSessionOptionLaunch
+} from '../../../../../../shared/agent-session/options/agent-session-option-launch'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
@@ -12,6 +15,34 @@ import {
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 
 describe('orchestration worker launch preferences', () => {
+  it.each(['deepseek-v4.1-flash', 'account-scoped-future-model'])(
+    'passes Trae model %s and effort without a model-specific registration',
+    (model) => {
+      const launch = resolveWorkerLaunchPreferences({ agent: 'trae', model, effort: 'high' })
+      expect(launch.receipt).toEqual({
+        requested: { agent: 'trae', model, effort: 'high' },
+        effective: { agent: 'trae', model, effort: 'high' }
+      })
+      const trailingArgs = removeOverriddenAgentSessionArgs('trae', launch.preferences, [
+        '--model',
+        'old-model',
+        '-c',
+        'model_reasoning_effort="low"',
+        '--no-daemon'
+      ])
+      expect(trailingArgs).toEqual(['--no-daemon'])
+      expect(
+        resolveAgentSessionOptionLaunch('trae', launch.preferences, trailingArgs, false)
+      ).toEqual({
+        args: ['--model', model, '-c', 'model_reasoning_effort="high"'],
+        appliedValues: { model, effort: 'high' }
+      })
+      expect(() =>
+        resolveWorkerLaunchPreferences({ agent: 'trae', model, effort: 'unsupported-effort' })
+      ).toThrow('does not support effort unsupported-effort')
+    }
+  )
+
   it('passes a discovered OMP model through the existing launch arguments and receipt', () => {
     const model = 'google-vertex/claude-haiku-4-5@20251001'
     const launch = resolveWorkerLaunchPreferences({ agent: 'omp', model })
