@@ -1,4 +1,7 @@
-import { AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import {
+  AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TRAE_OPAQUE_EFFORT_RUNTIME_CAPABILITY
+} from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import type { CommandHandler } from '../dispatch'
@@ -157,7 +160,12 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         ...result,
         result: {
           ...result.result,
-          client: { capabilities: [AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY] },
+          client: {
+            capabilities: [
+              AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY,
+              AGENT_LAUNCH_TRAE_OPAQUE_EFFORT_RUNTIME_CAPABILITY
+            ]
+          },
           ...(caller ? { caller } : {})
         }
       },
