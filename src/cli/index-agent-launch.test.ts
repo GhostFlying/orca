@@ -49,7 +49,8 @@ import { okFixture, queueFixtures } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITIES,
-  AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TRAE_OPAQUE_EFFORT_RUNTIME_CAPABILITY
 } from '../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { agentLaunchFixture, agentLaunchHostFixture } from './agent-launch-test-fixtures'
 
@@ -143,6 +144,96 @@ describe('orca cli agent launch', () => {
     ])
     expect(JSON.parse(output).error.code).toBe('incompatible_runtime')
     expect(launchCalls()).toEqual([])
+  })
+
+  it('refuses opaque Trae effort on a host that would discard it', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('status', {
+        capabilities: AGENT_LAUNCH_RUNTIME_CAPABILITIES.filter(
+          (capability) => capability !== AGENT_LAUNCH_TRAE_OPAQUE_EFFORT_RUNTIME_CAPABILITY
+        )
+      })
+    )
+    const output = await runRefused([
+      'agent',
+      'launch',
+      '--agent',
+      'trae',
+      '--worktree',
+      `id:${WORKTREE_ID}`,
+      '--model',
+      'deepseek-v4.1-flash',
+      '--effort',
+      'high',
+      '--json'
+    ])
+    expect(JSON.parse(output).error.code).toBe('incompatible_runtime')
+    expect(launchCalls()).toEqual([])
+  })
+
+  it('passes opaque Trae effort to a host that applies it', async () => {
+    queueFixtures(callMock, agentLaunchHostFixture(), agentLaunchFixture(WORKTREE_ID))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(
+      [
+        'agent',
+        'launch',
+        '--agent',
+        'trae',
+        '--worktree',
+        `id:${WORKTREE_ID}`,
+        '--model',
+        'deepseek-v4.1-flash',
+        '--effort',
+        'high',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+    expect(callMock).toHaveBeenCalledWith(
+      'agent.launchReplay',
+      expect.objectContaining({
+        agent: 'trae',
+        sessionOptions: { model: 'deepseek-v4.1-flash', effort: 'high' }
+      })
+    )
+  })
+
+  it('retains known Trae effort support on the previous host capability', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('status', {
+        capabilities: AGENT_LAUNCH_RUNTIME_CAPABILITIES.filter(
+          (capability) => capability !== AGENT_LAUNCH_TRAE_OPAQUE_EFFORT_RUNTIME_CAPABILITY
+        )
+      }),
+      agentLaunchFixture(WORKTREE_ID)
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(
+      [
+        'agent',
+        'launch',
+        '--agent',
+        'trae',
+        '--worktree',
+        `id:${WORKTREE_ID}`,
+        '--model',
+        'gpt-6.1-sol',
+        '--effort',
+        'high',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+    expect(callMock).toHaveBeenCalledWith(
+      'agent.launchReplay',
+      expect.objectContaining({
+        agent: 'trae',
+        sessionOptions: { model: 'gpt-6.1-sol', effort: 'high' }
+      })
+    )
   })
 
   it('refuses an unadvertised Trae effort before contacting the host', async () => {
