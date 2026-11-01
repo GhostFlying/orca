@@ -11,13 +11,18 @@ import {
 } from '../../shared/agent-launch/contracts/agent-launch-surface'
 import { checkAgentLaunchModelPreferences } from '../../shared/agent-launch/choices/agent-launch-model-preferences'
 import {
+  findCatalogModel,
+  getAgentSessionOptionLaunchCatalog
+} from '../../shared/agent-session/options/agent-session-option-catalog'
+import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_TRAE_MODEL_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TRAE_OPAQUE_EFFORT_RUNTIME_CAPABILITY
 } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { parseAgentSessionOperationTimestamp } from '../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
@@ -137,6 +142,18 @@ export async function callAgentLaunch(
       'incompatible_runtime',
       'This Orca host cannot apply Trae launch model preferences. Update Orca on the execution host.'
     )
+  }
+  if (launch.agent === 'trae' && launch.sessionOptions?.effort) {
+    const catalog = getAgentSessionOptionLaunchCatalog('trae')
+    if (
+      (!catalog || !findCatalogModel(catalog, launch.sessionOptions.model)) &&
+      !capabilities.includes(AGENT_LAUNCH_TRAE_OPAQUE_EFFORT_RUNTIME_CAPABILITY)
+    ) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca host cannot apply Trae effort for unlisted models. Update Orca on the execution host.'
+      )
+    }
   }
   const replaySupported = capabilities.includes(AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY)
   if (launch.operationId && !replaySupported) {
