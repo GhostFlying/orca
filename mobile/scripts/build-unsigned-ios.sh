@@ -10,6 +10,8 @@ version="$(node -p "require('${mobile_root}/app.json').expo.version")"
 rm -rf "${build_root}"
 mkdir -p "${output_dir}/Payload"
 
+NODE_OPTIONS=--max-old-space-size=4096 \
+EXTRA_PACKAGER_ARGS="--max-workers 1" \
 xcodebuild \
   -workspace "${mobile_root}/ios/Orca.xcworkspace" \
   -scheme Orca \

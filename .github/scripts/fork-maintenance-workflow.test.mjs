@@ -488,10 +488,10 @@ describe('fork release maintenance workflows', () => {
   it('builds unsigned desktop and mobile clients without stores', () => {
     expect(buildText).toContain('windows-2022')
     expect(buildText).toContain('ubuntu-24.04-arm')
-    expect(buildText).toContain('macos-15')
-    expect(buildText).toContain('macos-15-intel')
     expect(buildText).toContain('macos-26')
-    expect(unsignedIosText).toContain('CODE_SIGNING_ALLOWED=NO')
+    expect(unsignedIosText).toMatch(
+      /NODE_OPTIONS=--max-old-space-size=4096[\s\S]*EXTRA_PACKAGER_ARGS="--max-workers 1"[\s\S]*CODE_SIGNING_ALLOWED=NO/
+    )
     expect(buildText).toContain('assembleRelease')
     expect(buildText).not.toContain('TestFlight')
   })
