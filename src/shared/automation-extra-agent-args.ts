@@ -42,7 +42,8 @@ const EXTRA_AGENT_ARG_OPTIONS: Partial<Record<TuiAgent, readonly ExtraAgentArgOp
   // Cursor composes effort into the model id, so only the model is a flag.
   cursor: [MODEL_OR_M_OPTION],
   grok: [MODEL_OR_M_OPTION, { kind: 'effort', aliases: ['--effort', '--reasoning-effort'] }],
-  omp: [MODEL_OPTION]
+  omp: [MODEL_OPTION],
+  trae: [MODEL_OR_M_OPTION]
 }
 
 export function supportsExtraAgentArgs(agent: TuiAgent): boolean {
