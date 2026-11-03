@@ -54,7 +54,8 @@ const EXTRA_AGENT_ARG_OPTIONS: Partial<Record<TuiAgent, readonly ExtraAgentArgOp
   pi: [
     { ...MODEL_OPTION, separateValue: true },
     { kind: 'effort', aliases: ['--thinking'], values: PI_THINKING_LEVELS, separateValue: true }
-  ]
+  ],
+  trae: [MODEL_OR_M_OPTION]
 }
 
 export function supportsExtraAgentArgs(agent: TuiAgent): boolean {
