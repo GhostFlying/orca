@@ -211,7 +211,8 @@ jobs:
 
   test:
     needs: candidate
-    runs-on: ubuntu-latest
+    # Match upstream's unit-test runner; ubuntu-latest (26.04) injects system OSC 133 traps.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
