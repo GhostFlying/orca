@@ -254,6 +254,7 @@ jobs:
           recognized_release_sync=false
           if [[ "$sync_subject" == "ci: sync release workflows with main for the $UPSTREAM_TAG cut" ||
             "$sync_subject" == "ci: sync workflows with main for the $UPSTREAM_TAG cut" ||
+            "$sync_subject" == "ci(release): sync main's workflows onto release/$UPSTREAM_TAG" ||
             "$sync_subject" == "ci: match main's workflow files so the release token can tag this branch" ]]; then
             recognized_release_sync=true
           elif [[ "$UPSTREAM_SHA" == f51e82c4c26745f6a15e215e4391f533327697e2 &&
@@ -287,6 +288,27 @@ jobs:
           else
             git rm --ignore-unmatch -- "$signing_contract"
           fi
+      - name: Repair v1.4.250 workflow sync fixtures
+        if: needs.candidate.outputs.upstream_sha == 'b98a0fba16561fadc06868fe3e8710781d705efd'
+        run: |
+          set -euo pipefail
+          sync_sha=151d5dda99c9fece70aa737507472746777391af
+          test "$(git rev-parse "$sync_sha^")" = 1688bb534a1efd7c055bcaca6440d5ffc117af49
+          test -z "$(git diff --name-only "$sync_sha^" "$sync_sha" -- . ':(exclude).github/workflows')"
+          # Why: the v1.4.250 cut synced newer main workflows after the release tests were written.
+          git checkout "$sync_sha^" -- $(git diff --name-only "$sync_sha^" "$sync_sha" -- .github/workflows)
+      - name: Repair v1.4.250 queued-public-read fixture
+        if: needs.candidate.outputs.upstream_sha == 'b98a0fba16561fadc06868fe3e8710781d705efd'
+        env:
+          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          stale_fixture=src/main/native-chat/agent-session-wire/structured-agent-session-queued-public-read.test.ts
+          test "$(git rev-parse "$UPSTREAM_SHA:$stale_fixture")" = e1a9522030fb2f970dc92d12f4f806ebba75a45d
+          test "$(git hash-object "$stale_fixture")" = e1a9522030fb2f970dc92d12f4f806ebba75a45d
+          # Why: upstream removed this low-value, over-30s queue test after the Release cut (#38444).
+          git rm -- "$stale_fixture"
+          test ! -e "$stale_fixture"
       - name: Repair v1.4.227 SSH listing fixture
         if: needs.candidate.outputs.upstream_sha == 'f51e82c4c26745f6a15e215e4391f533327697e2'
         env:

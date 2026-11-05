@@ -52,10 +52,11 @@ checked-in localization allowlist is unchanged.
 The release test gate restores upstream workflow definitions as fixtures for
 upstream's workflow contract tests. When the Release commit's parent is an
 upstream workflows-only `ci: sync release workflows with main for the vX.Y.Z
-cut` or `ci: sync workflows with main for the vX.Y.Z cut` commit, the gate
-restores the workflows from before that sync, because the synced definitions
-come from a newer `main` than the Release's tests. Add a per-Release fixture
-repair only for a mismatch that remains after that.
+cut`, `ci: sync workflows with main for the vX.Y.Z cut`, or `ci(release): sync
+main's workflows onto release/vX.Y.Z` commit, the gate restores the workflows
+from before that sync, because the synced definitions come from a newer `main`
+than the Release's tests. Add a per-Release fixture repair only for a mismatch
+that remains after that.
 The test job installs system ripgrep when absent because upstream release-audit
 fixtures execute the dependency-audit shell action, which invokes `rg`.
 
