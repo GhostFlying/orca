@@ -12,7 +12,10 @@ import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import { getFolderWorkspacePathStatusDescription } from '@/lib/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
+import {
+  isConfirmedStaleFolderPathStatus,
+  type FolderWorkspacePathStatus
+} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getFolderProjectGroupRefreshHandler } from './project-group-folder-refresh'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
@@ -21,6 +24,14 @@ import {
   stopRepoHeaderKeyboardToggle,
   stopRepoHeaderMenuEvent
 } from './header-event-guards'
+
+// The folder-scan project group whose parent path is gone can't create new workspaces.
+export function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
+  return (
+    status?.exists === false &&
+    (isConfirmedStaleFolderPathStatus(status) || status.reason === 'ambiguous-connection')
+  )
+}
 
 export function ProjectGroupHeaderMenu({
   groupId,

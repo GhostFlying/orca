@@ -10,10 +10,6 @@ import { cn } from '@/lib/utils'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 
-import {
-  type FolderWorkspacePathStatus,
-  isConfirmedStaleFolderPathStatus
-} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
 import {
   getHeaderDragRepo,
@@ -34,6 +30,7 @@ import {
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 import { RepoScanUnavailableIndicator } from './RepoScanUnavailableIndicator'
 import {
+  isFolderWorkspaceCreateDisabled,
   ProjectGroupCreateWorkspaceButton,
   ProjectGroupHeaderMenu
 } from './project-group-header-actions'
@@ -49,14 +46,6 @@ import {
 import { getWorktreeOptionId } from './option-dom'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { Translate } from '@/i18n/use-translate'
-
-// The folder-scan project group whose parent path is gone can't create new workspaces.
-function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
-  return (
-    status?.exists === false &&
-    (isConfirmedStaleFolderPathStatus(status) || status.reason === 'ambiguous-connection')
-  )
-}
 
 export function renderWorktreeSectionHeaderRow(
   args: {
