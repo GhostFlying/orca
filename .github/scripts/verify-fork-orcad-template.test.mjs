@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { writeOrcadTemplateTestFixture } from '../../config/scripts/orcad-template-test-fixture.mjs'
+import { writeOrcadTemplateTestFixture } from '../../config/scripts/orcad-distribution/template/orcad-template-test-fixture.mjs'
 import { packagedResourcesDir, verifyForkOrcadTemplate } from './verify-fork-orcad-template.mjs'
 
 const roots = []

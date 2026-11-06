@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path'
 const require = createRequire(import.meta.url)
 const {
   verifyPackagedOrcadTemplate
-} = require('../../config/scripts/verify-packaged-orcad-template.cjs')
+} = require('../../config/scripts/orcad-distribution/template/verify-packaged-orcad-template.cjs')
 
 export function verifyForkOrcadTemplate(resourcesDir) {
   verifyPackagedOrcadTemplate(resourcesDir)

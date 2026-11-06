@@ -7,7 +7,7 @@ import {
   collectLocalizationCandidates,
   isSkippedFile,
   main as auditLocalizationCoverage
-} from '../../config/scripts/audit-localization-coverage.mjs'
+} from '../../config/scripts/localization/source-extraction/audit-localization-coverage.mjs'
 import { inspectForkCandidate, isDirectExecution } from './fork-maintenance-state.mjs'
 
 function signature({ filePath, kind, text, dynamic }) {
@@ -46,7 +46,10 @@ export async function main(root = process.cwd()) {
   let offset = 0
   const reports = files.flatMap((file) => {
     const end = sources.indexOf('\n', offset)
-    const header = sources.subarray(offset, end).toString().match(/^[0-9a-f]{40} blob (\d+)$/)
+    const header = sources
+      .subarray(offset, end)
+      .toString()
+      .match(/^[0-9a-f]{40} blob (\d+)$/)
     if (!header) {
       throw new Error(`Could not read Release source: ${file}`)
     }

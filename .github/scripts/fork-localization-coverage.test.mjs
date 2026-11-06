@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   collectLocalizationCandidates,
   main as auditLocalizationCoverage
-} from '../../config/scripts/audit-localization-coverage.mjs'
+} from '../../config/scripts/localization/source-extraction/audit-localization-coverage.mjs'
 import { releaseLocalizationAllowlist } from './fork-localization-coverage.mjs'
 
 const roots = []
@@ -46,13 +46,15 @@ describe('fork localization coverage', () => {
   })
 
   it('retains the exact Release allowlist floor for temporarily absent text', async () => {
-    const allowlist = [{
-      filePath: 'src/renderer/src/view.tsx',
-      kind: 'jsx-text',
-      text: 'Reviewed exclusion',
-      dynamic: false,
-      count: 1
-    }]
+    const allowlist = [
+      {
+        filePath: 'src/renderer/src/view.tsx',
+        kind: 'jsx-text',
+        text: 'Reviewed exclusion',
+        dynamic: false,
+        count: 1
+      }
+    ]
     expect(await check('<span>Reviewed exclusion</span>', { allowlist })).toBe(0)
   })
 })

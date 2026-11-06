@@ -55,7 +55,7 @@ describe('fork release macOS build workflow', () => {
     expect(packageStep.uses).toBe('nick-fields/retry@v4')
     expect(packageStep.with.max_attempts).toBe(3)
     expect(packageStep.with.command).toContain(
-      `config/scripts/pinned-node-downloads.mjs darwin-${expression('matrix.mac_arch')}`
+      `config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs darwin-${expression('matrix.mac_arch')}`
     )
     expect(packageStep.with.command).toContain(
       `electron-builder --config config/scripts/fork-electron-builder-config.cjs --mac --${expression('matrix.mac_arch')} --publish never`

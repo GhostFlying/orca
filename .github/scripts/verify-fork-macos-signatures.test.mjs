@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { writeOrcadTemplateTestFixture } from '../../config/scripts/orcad-template-test-fixture.mjs'
+import { writeOrcadTemplateTestFixture } from '../../config/scripts/orcad-distribution/template/orcad-template-test-fixture.mjs'
 import {
   assertAdhocSignature,
   verifyForkMacApp,

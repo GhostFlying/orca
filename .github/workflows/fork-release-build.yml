@@ -230,7 +230,7 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
-      - run: node config/scripts/install-electron-package-binary.mjs
+      - run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
@@ -297,18 +297,6 @@ jobs:
           test -z "$(git diff --name-only "$sync_sha^" "$sync_sha" -- . ':(exclude).github/workflows')"
           # Why: the v1.4.250 cut synced newer main workflows after the release tests were written.
           git checkout "$sync_sha^" -- $(git diff --name-only "$sync_sha^" "$sync_sha" -- .github/workflows)
-      - name: Repair v1.4.250 queued-public-read fixture
-        if: needs.candidate.outputs.upstream_sha == 'b98a0fba16561fadc06868fe3e8710781d705efd'
-        env:
-          UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
-        run: |
-          set -euo pipefail
-          stale_fixture=src/main/native-chat/agent-session-wire/structured-agent-session-queued-public-read.test.ts
-          test "$(git rev-parse "$UPSTREAM_SHA:$stale_fixture")" = e1a9522030fb2f970dc92d12f4f806ebba75a45d
-          test "$(git hash-object "$stale_fixture")" = e1a9522030fb2f970dc92d12f4f806ebba75a45d
-          # Why: upstream removed this low-value, over-30s queue test after the Release cut (#38444).
-          git rm -- "$stale_fixture"
-          test ! -e "$stale_fixture"
       - name: Repair v1.4.227 SSH listing fixture
         if: needs.candidate.outputs.upstream_sha == 'f51e82c4c26745f6a15e215e4391f533327697e2'
         env:
@@ -924,7 +912,7 @@ jobs:
         run: |
           ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
           export ORCA_SHARD_SOURCE_SHA
-          node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
+          node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts \
             --retry=1 \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
 
@@ -1015,15 +1003,15 @@ jobs:
           bun-version-file: config/.bun-version
       - run: pnpm install --frozen-lockfile
         working-directory: mobile
-      - run: pnpm typecheck
+      - run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
         working-directory: mobile
       - name: Run release-compatible mobile tests
         env:
           UPSTREAM_SHA: ${{ needs.candidate.outputs.upstream_sha }}
         run: |
           set -euo pipefail
-          if test -f ../config/scripts/run-mobile-ci-tests.mjs; then
-            node ../config/scripts/run-mobile-ci-tests.mjs
+          if test -f ../config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs; then
+            node ../config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs
           elif test "$UPSTREAM_SHA" = f51e82c4c26745f6a15e215e4391f533327697e2; then
             pnpm test
           else
@@ -1117,18 +1105,18 @@ jobs:
         if: matrix.platform == 'windows-x64'
         shell: pwsh
         run: |
-          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --win --x64 --publish never
       - name: Package Linux x64 client
         if: matrix.platform == 'linux-x64'
         run: |
-          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
           pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --linux AppImage deb rpm --x64 --publish never
       - name: Package Linux arm64 client
         if: matrix.platform == 'linux-arm64'
         run: |
-          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
           ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --linux AppImage deb rpm --arm64 --publish never
       - name: Package ad-hoc macOS client
         if: runner.os == 'macOS'
@@ -1142,7 +1130,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 3
           retry_wait_seconds: 30
-          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-${{ matrix.mac_arch }} && node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --mac --${{ matrix.mac_arch }} --publish never
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs darwin-${{ matrix.mac_arch }} && node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/scripts/fork-electron-builder-config.cjs --mac --${{ matrix.mac_arch }} --publish never
       - name: Verify packaged server template
         run: node .github/scripts/verify-fork-orcad-template.mjs dist ${{ matrix.platform }}
       - name: Verify complete ad-hoc macOS signatures

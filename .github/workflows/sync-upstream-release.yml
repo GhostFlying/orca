@@ -145,7 +145,7 @@ jobs:
           )
           git checkout -B generated-upstream-release "$TARGET_SHA"
           find .github/workflows -maxdepth 1 -type f \
-            ! -name pr.yml ! -name mobile.yml ! -name e2e.yml -print0 | \
+            ! -name pr.yml ! -name mobile.yml ! -name e2e.yml ! -name unit-tests.yml -print0 | \
             xargs -0 -r git rm --
           git rm -r --ignore-unmatch -- "${maintenance_paths[@]}"
           git checkout "$SOURCE_FORK_SHA" -- "${maintenance_paths[@]}"
@@ -284,7 +284,8 @@ jobs:
               .github/workflows/fork-release-build.yml|\
               .github/workflows/fork-orcad-template.yml|\
               .github/workflows/pr.yml|\
-              .github/workflows/mobile.yml) desired=active ;;
+              .github/workflows/mobile.yml|\
+              .github/workflows/unit-tests.yml) desired=active ;;
               *) desired=disabled ;;
             esac
             if [[ "$desired" = active && "$workflow_state" != active ]]; then

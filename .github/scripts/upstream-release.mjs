@@ -2,7 +2,7 @@
 
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { DESKTOP_STABLE_TAG } from '../../config/scripts/release-tag-patterns.mjs'
+import { DESKTOP_STABLE_TAG } from '../../config/scripts/release/versioning/release-tag-patterns.mjs'
 
 const API_VERSION = '2022-11-28'
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/
