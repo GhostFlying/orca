@@ -1,3 +1,29 @@
+<!-- BEGIN FORK RELEASE MAINTENANCE -->
+# Fork Release Maintenance
+
+When working in `GhostFlying/orca` on an upstream Release sync, fork Release,
+maintenance workflow, or replay conflict, read
+[`.github/fork-maintenance-plan.md`](.github/fork-maintenance-plan.md) in full
+before changing commits, refs, Releases, or workflow state. Treat that document
+as the runbook and the maintenance scripts/workflows as the executable source
+of truth. Do not substitute a merge from upstream `main` or a generic rebase.
+
+In particular:
+
+- Only published stable upstream `vX.Y.Z` Releases are eligible.
+- Never push directly to `fork` or `upstream-release`. Upstream sync uses a
+  leased `sync/upstream-release` candidate; a product hotfix starts on `fix/...`
+  and uses `candidate/fork-hotfix`. Only the gated finalizer promotes production
+  refs.
+- Never rewrite `main` or any PR/fix branch. The protected branch list and the
+  required pre/post SHA audit are in the runbook.
+- Resolve replay conflicts semantically against the selected Release commit,
+  retaining only the intended fork patch stack. Do not take an entire side of
+  a conflict merely to make a cherry-pick complete.
+- Before declaring success, require a successful full Desktop/Mobile build, a
+  published GitHub prerelease with verified assets, and exact final ref checks.
+<!-- END FORK RELEASE MAINTENANCE -->
+
 # Checks
 
 - **Gate**: `pnpm check:changed` runs format, lint, typecheck, the tests that import your changes, and the ratchets your paths select, and prints only failures. Run it once when you are done editing (and again after a rebase or fix), then push. A pass is cached, so don't rerun it "to be sure", and don't also run `pnpm tc`, `pnpm lint`, or the full suite. Never `--no-verify`.
