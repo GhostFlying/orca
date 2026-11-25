@@ -17,6 +17,7 @@ const MAINTENANCE_PATHS = [
   '.github/scripts/fork-maintenance-state.test.mjs',
   '.github/scripts/fork-localization-coverage.mjs',
   '.github/scripts/fork-localization-coverage.test.mjs',
+  '.github/scripts/fork-orcad-template-test-fixture.mjs',
   '.github/scripts/fork-release-build-macos.test.mjs',
   '.github/scripts/fork-orcad-template-workflow.mjs',
   '.github/scripts/fork-orcad-template-workflow.test.mjs',
